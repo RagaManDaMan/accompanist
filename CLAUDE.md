@@ -15,6 +15,14 @@ to be useful to other Logic users (the owner's students), not just one person's 
 5. **Keep it generic.** Raga/scale logic will arrive later as a pluggable responder. Do not
    hard-wire it into the core.
 6. Config errors must be readable messages (`ConfigError`), not tracebacks.
+7. **Every tunable is declared once in a parameter registry** (key, type, min, max, step,
+   choices, group, label, help, live). Config validation, CLI help and any future UI are
+   generated from it. No magic numbers in engine code.
+8. **All control goes through one Controller** (set_param, get_state, panic, resume, lock,
+   unlock, tap_tempo). Keys, MIDI CCs and any future UI call it. No feature is CLI-only.
+   get_state() returns a dict; the status line is only a formatter of it.
+9. **Config layering:** defaults < preset (presets/*.toml) < config.toml < live overrides.
+10. **Harmony is a plug-in interface** (observe, propose). Never hard-wire a style.
 
 ## Dev loop
 - `pytest` (no hardware needed) and `accompanist simulate` for quick checks.
