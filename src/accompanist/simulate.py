@@ -8,8 +8,9 @@ with your real playing.
 """
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional, Union
 
 from .config import Config
 from .engine import Engine
@@ -37,6 +38,42 @@ def scripted_performance() -> tuple[Onsets, list[tuple[float, float]]]:
         truth.append((t, bpm))
         t += period
     return onsets, truth
+
+
+# A melody-like rhythm, in beats: quarters, eighth pairs, a dotted figure, held notes.
+MELODY_RHYTHM = [1, 1, 0.5, 0.5, 1, 2, 1, 0.5, 0.5, 1, 0.5, 0.5, 1, 1, 1.5, 0.5, 2]
+MELODY_NOTES = [62, 64, 66, 67, 69, 67, 66, 64, 62, 69, 71, 69, 67, 66, 64, 62, 62]
+
+
+def synthetic_melody(
+    bpm: Union[float, Callable[[float], float]],
+    duration: float,
+    jitter: float = 0.0,
+    seed: int = 0,
+    start: float = 0.0,
+    drift: float = 0.0,
+) -> tuple[Onsets, list[tuple[float, float]]]:
+    """A melody at `bpm` (a number, or a function of time for accelerando/rubato).
+
+    jitter: each note lands off its grid position by up to +-jitter of its own interval
+        (loose timing around a steady beat).
+    drift: each interval is stretched by a random factor in [1-drift, 1+drift] and the
+        error accumulates, so the beat itself wanders (free, rubato-like time).
+    Returns (onsets, truth) like scripted_performance().
+    """
+    rng = random.Random(seed)
+    bpm_at = bpm if callable(bpm) else (lambda _t, b=bpm: b)
+    onsets, truth = [], []
+    t, i = start, 0
+    while t < start + duration:
+        b = bpm_at(t - start)
+        ioi = MELODY_RHYTHM[i % len(MELODY_RHYTHM)] * 60.0 / b
+        played = max(start, t + rng.uniform(-jitter, jitter) * ioi)
+        onsets.append((played, MELODY_NOTES[i % len(MELODY_NOTES)], 70 + (i * 7) % 30))
+        truth.append((t, b))
+        t += ioi * (1 + rng.uniform(-drift, drift))
+        i += 1
+    return sorted(onsets), truth
 
 
 @dataclass

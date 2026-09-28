@@ -18,11 +18,7 @@ from .tempo import TempoEstimator
 class Engine:
     def __init__(self, cfg: Config, out: SafeOutput) -> None:
         self.cfg, self.out = cfg, out
-        t = cfg.tempo
-        self.tempo = TempoEstimator(
-            initial_bpm=t.initial_bpm, min_bpm=t.min_bpm, max_bpm=t.max_bpm, alpha=t.alpha,
-            tolerance=t.tolerance, min_ioi_s=t.min_ioi_s, max_gap_beats=t.max_gap_beats,
-        )
+        self.tempo = TempoEstimator(cfg.tempo)
         self.pitch = PitchClassTracker(cfg.harmony.half_life_s)
         self.clock = BeatClock(cfg.pulse.phase_gain)
         self.pad = PadResponder(cfg.pad, out)
@@ -35,16 +31,16 @@ class Engine:
     # ---- listening -------------------------------------------------------
     def on_note(self, t: float, note: int, velocity: int) -> None:
         """A note-on from a note_source input. Listening continues even while muted."""
-        ratio = self.tempo.on_onset(t)
+        self.tempo.on_onset(t)
         self.pitch.add(t, note, velocity)
         self.last_onset_t, self.last_note = t, note
-        self.clock.set_period(self.tempo.period)
-        if ratio is not None and ratio >= 1.0:
-            self.clock.hint(t)  # long intervals are the ones most likely to sit on the beat
+        self.clock.hint(t, self.cfg.pulse.hint_window)
 
     # ---- responding ------------------------------------------------------
     def tick(self, now: float) -> None:
         self.out.flush(now)
+        if self.tempo.update(now):
+            self.clock.set_period(self.tempo.period)
         if self.muted:
             return
         idle = float("inf") if self.last_onset_t is None else now - self.last_onset_t

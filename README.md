@@ -34,7 +34,9 @@ On exit, and on Ctrl-C, it always sends All Notes Off.
 `accompanist run --record` saves every note you play to `takes/take-<time>.jsonl`.
 `accompanist replay takes/<file>` feeds it through the engine offline and prints the
 tempo it inferred and when the pad changed, so you can change `config.toml` and rerun
-in seconds without playing again. Takes are gitignored by default; copy a short useful
+in seconds without playing again. If the file name contains the true tempo (e.g.
+`takes/melody-90bpm.jsonl`), replay also reports how far off the estimate was from
+30 s of playing on. Takes are gitignored by default; copy a short useful
 one into `tests/fixtures/` to keep it as a regression test.
 
 ## Logic Pro setup
@@ -56,11 +58,14 @@ one into `tests/fixtures/` to keep it as a regression test.
         └──► PitchClassTracker ─► choose_voicing ─► PadResponder ─┴─► SafeOutput ─► Logic
 ```
 
-- **Tempo** (`tempo.py`): each interval between your onsets is snapped to the nearest
-  of 1/4, 1/2, 1, 2, 4 beats and nudges the estimate. Intervals that fit nothing are
-  ignored (they lower confidence instead of corrupting the estimate). No fixed grid.
-- **Pulse** (`beatclock.py`): free-runs at the estimated beat; long-interval onsets pull its
-  phase toward you (a small phase-locked loop).
+- **Tempo** (`tempo.py`): about once a second, the last `window_s` (30 s) of onsets
+  (older ones weighted down, half-life `halflife_s`) are smoothed and autocorrelated.
+  Each candidate bpm is scored on how well the playing repeats at 1, 2, 3 and 4 beats,
+  times a gentle prior toward `prior_bpm`. The result is smoothed, and a different
+  tempo peak must clearly win for a few seconds before the estimate jumps to it.
+  Silence holds the tempo. No fixed grid, and no need to start near the right tempo.
+- **Pulse** (`beatclock.py`): free-runs at the estimated beat; onsets that land within
+  `hint_window` (15%) of a predicted beat pull its phase toward you (a small phase-locked loop).
 - **Harmony** (`harmony.py`): a decaying pitch-class memory picks a root; the third is
   only added if you've played it, otherwise you get an open root-fifth-octave voicing.
 - **Lag on purpose** (`responders.py`): a harmonic change must persist `lag_beats` before
@@ -71,7 +76,17 @@ one into `tests/fixtures/` to keep it as a regression test.
 ## Known limits
 
 - **Beat octave is a prior.** A steady stream of notes is ambiguous (quarters at 60 or
-  eighths at 120). `initial_bpm` and `min/max_bpm` decide.
+  eighths at 120). `prior_bpm` decides: with the default 80, a melody at 120 bpm is read
+  as 60 (half time), and a sudden doubling of your tempo looks like "more eighth notes".
+  If you play fast pieces, tell it so:
+
+  ```toml
+  [tempo]
+  prior_bpm = 110    # a 120 bpm melody now reads as 120, not 60
+  ```
+
+  The crossover sits near the geometric middle of the two readings (60 vs 120 flips
+  around prior_bpm 85). `accompanist replay takes/melody-120bpm.jsonl` shows which you get.
 - **No downbeat/meter detection.** The bar accent counts from when the pulse starts.
 - **Pitch memory is Western-pitch-class based** (12 classes, no microtones). For a
   piece with a fixed tonic, set `harmony.root`.

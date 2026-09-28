@@ -61,13 +61,28 @@ class OutputCfg:
 
 @dataclass
 class TempoCfg:
-    initial_bpm: float = 70.0   # also picks the "octave" of the beat (see README)
+    initial_bpm: float = 70.0   # the estimate before there is enough playing to go on
     min_bpm: float = 40.0
     max_bpm: float = 180.0
-    alpha: float = 0.25         # how fast the beat estimate follows you (0-1)
-    tolerance: float = 0.3      # how far off a beat multiple an interval may be (log2)
+    prior_bpm: float = 80.0     # picks the beat "octave" when the playing is ambiguous (see README)
+    prior_sigma_oct: float = 0.5  # how strongly: width of the prior, in octaves
+    window_s: float = 30.0      # how much recent playing the estimate looks at
+    halflife_s: float = 12.0    # older onsets count less: halve their weight every this many s
+    alpha: float = 0.25         # how fast the estimate follows you (0-1); higher = jumpier
+    switch_margin: float = 0.1  # a different tempo peak must score this much better to take over
+    switch_hold_s: float = 4.0  # ... and keep scoring better for this long
+    score_memory: float = 0.5   # 0-1: blend each tempo score curve with the previous one
+    peak_width: float = 0.06    # tempi within this fraction of the estimate count as the same peak
+    min_onsets: int = 8         # fewer onsets in the window: keep the previous estimate
+    update_s: float = 1.0       # recompute this often
+    confidence_scale: float = 0.3  # peak-above-median score that counts as full confidence
+    bin_s: float = 0.01         # onset signal resolution
+    smooth_s: float = 0.06      # Gaussian smoothing of the onset signal (timing slop)
+    bpm_step: float = 0.5       # resolution of the bpm search
     min_ioi_s: float = 0.06     # closer onsets count as one (chords, grace notes)
-    max_gap_beats: float = 6.0  # longer silences are phrase breaks, not tempo data
+    # Accepted so older config files still load; unused by the windowed estimator.
+    tolerance: float = 0.3
+    max_gap_beats: float = 6.0
 
 
 @dataclass
@@ -101,6 +116,7 @@ class PulseCfg:
     min_confidence: float = 0.5    # start pulsing once the tempo estimate is this sure
     idle_stop_s: float = 6.0       # stop pulsing after this much silence
     phase_gain: float = 0.3        # how hard the pulse nudges toward your onsets
+    hint_window: float = 0.15      # only onsets this close to a beat (fraction of it) nudge it
     note_length_s: float = 0.2
 
 
@@ -184,6 +200,8 @@ def from_dict(d: Optional[dict]) -> Config:
         raise ConfigError("[tempo] need 0 < min_bpm < max_bpm")
     if not (t.min_bpm <= t.initial_bpm <= t.max_bpm):
         raise ConfigError("[tempo] initial_bpm must lie between min_bpm and max_bpm")
+    if not (t.min_bpm <= t.prior_bpm <= t.max_bpm):
+        raise ConfigError("[tempo] prior_bpm must lie between min_bpm and max_bpm")
     cfg.root_pc  # validates harmony.root
     return cfg
 

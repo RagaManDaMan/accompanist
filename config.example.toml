@@ -17,9 +17,12 @@ role = "note_source"
 # channel = 1           # omit to listen on all channels
 
 [tempo]
-initial_bpm = 70        # also chooses the beat "octave": 70 reads a steady 140 stream as eighths
+initial_bpm = 70        # the reading before there is enough playing (8 notes) to go on
+prior_bpm = 80          # chooses the beat "octave": 80 reads a 120 melody as 60. Fast pieces: 110
 min_bpm = 40
 max_bpm = 180
+window_s = 30           # how much recent playing the estimate listens to
+halflife_s = 12         # older notes count less: their weight halves every this many seconds
 alpha = 0.25            # higher = follows you faster, but jumpier
 
 [harmony]

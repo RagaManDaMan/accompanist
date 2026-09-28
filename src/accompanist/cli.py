@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import queue
+import re
 import select
 import sys
 import time
@@ -163,6 +164,15 @@ def cmd_replay(args) -> int:
     if active:
         print(f"\nTempo while you played: min {min(active):.1f}, max {max(active):.1f}, "
               f"final {active[-1]:.1f} bpm")
+    m = re.search(r"(\d+(?:\.\d+)?)bpm", Path(args.take).stem)
+    if m and "to" not in Path(args.take).stem:  # e.g. melody-90bpm.jsonl: the true tempo is known
+        expected = float(m.group(1))
+        start = onsets[0][0]
+        late = [(t, b) for (t, b, _) in res.tempo_trace if start + 30 <= t <= onsets[-1][0]]
+        if late:
+            worst = max(abs(b / expected - 1) for _, b in late)
+            print(f"Expected {expected:g} bpm (from the file name). From 30 s of playing on: "
+                  f"worst error {worst:.1%} {'(OK, within 4%)' if worst <= 0.04 else '(outside 4%)'}")
     print(f"Notes still sounding at end: {len(res.engine.out.sounding)}")
     return 0
 

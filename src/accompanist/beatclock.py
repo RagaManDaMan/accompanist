@@ -30,13 +30,17 @@ class BeatClock:
     def set_period(self, period: float) -> None:
         self.period = period
 
-    def hint(self, t: float) -> None:
-        """An onset at time t probably fell on a beat: pull the phase toward it."""
+    def hint(self, t: float, window: float = 0.15) -> bool:
+        """An onset at time t: if it lands within `window` (a fraction of the period)
+        of a predicted beat, pull the phase toward it. Returns True if it did."""
         if self.next_beat is None:
-            return
+            return False
         n = round((t - self.next_beat) / self.period)
         err = t - (self.next_beat + n * self.period)
+        if abs(err) > window * self.period:
+            return False  # off the beat (a syncopation, an eighth): no phase information
         self.next_beat += self.phase_gain * err
+        return True
 
     def due(self, now: float) -> list[float]:
         """Beat times that have arrived since the last call."""
