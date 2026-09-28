@@ -1,5 +1,9 @@
 # Copy to config.toml and edit. Run `accompanist devices` to see your port names.
-# Channels are 1-16, as in Logic.
+# Channels are 1-16, as in Logic. `accompanist params` lists every setting.
+
+# Optional: start from a preset (see `accompanist params` for the list). Anything
+# you set below overrides it. `--preset NAME` on the command line wins over this.
+# preset = "ambient"
 
 [output]
 # Default: create a virtual MIDI source called "Accompanist". Logic should list it
@@ -45,7 +49,11 @@ velocity = 45
 accent = 25             # extra velocity on the first beat of each bar
 beats_per_bar = 4
 
-[panic]
-# Optional hardware kill switch: any controller number (value >= 64) on any input
-# triggers panic. e.g. a foot switch. Leave commented out to disable.
-# cc = 85
+[controls]
+# Optional: map MIDI controller numbers (from any input) to actions or settings.
+# Actions (panic, resume, tap_tempo) fire when the value is >= 64, e.g. a foot switch.
+# Settings follow the controller across their range, e.g. a knob on pad.velocity.
+# 85 = "panic"
+# 86 = "tap_tempo"
+# 7 = "pad.velocity"
+# 21 = "tempo.prior_bpm"

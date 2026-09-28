@@ -1,0 +1,20 @@
+# Ambient: a slow, wide pad that drifts along behind you, with no pulse.
+# Presets only set tunables; your ports and inputs stay in config.toml.
+# Use: accompanist run --preset ambient   (or preset = "ambient" at the top of config.toml)
+
+[tempo]
+alpha = 0.15            # tempo drifts gently rather than following every push
+
+[harmony]
+half_life_s = 30        # long memory: harmony moves with the phrase, not the note
+third_threshold = 0.5   # stay open (root-fifth) unless the third is really there
+
+[pad]
+velocity = 45
+lag_beats = 8
+min_change_beats = 32
+overlap_s = 2.0         # old chord tones fade out under the new ones
+idle_release_s = 60     # let it ring through pauses
+
+[pulse]
+enabled = false

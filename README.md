@@ -26,8 +26,22 @@ accompanist replay takes/<file>        # run a take through the engine offline
 If `pip install` fails building `python-rtmidi`, install Xcode command line tools
 (`xcode-select --install`) and retry.
 
-Keys while running: **space / p** = panic (silence and mute), **r** = resume, **q** = quit.
+Keys while running: **space / p** = panic (silence and mute), **r** = resume,
+**t** = tap tempo (4 taps set the tempo and its octave), **q** = quit.
 On exit, and on Ctrl-C, it always sends All Notes Off.
+
+## Settings, presets, controllers
+
+- `accompanist params` lists every setting with its range and meaning;
+  `accompanist params --json` prints the same as a schema (for building a UI).
+- Settings are layered, later wins: built-in defaults < preset < `config.toml` < live
+  changes (MIDI controllers now, a UI later).
+- **Presets** are partial configs: `accompanist run --preset ambient`, or
+  `preset = "ambient"` at the top of `config.toml`. Built in: `ambient` (slow wide pad,
+  no pulse) and `modal-drone` (a steady drone that barely moves, quiet pulse). Put your
+  own in `./presets/NAME.toml`; they may set anything except ports and inputs.
+- **[controls]** maps MIDI controllers to actions (`panic`, `resume`, `tap_tempo`) or to
+  any live setting (`7 = "pad.velocity"`). See `config.example.toml`.
 
 ## Tuning against your own playing
 
@@ -66,8 +80,13 @@ one into `tests/fixtures/` to keep it as a regression test.
   Silence holds the tempo. No fixed grid, and no need to start near the right tempo.
 - **Pulse** (`beatclock.py`): free-runs at the estimated beat; onsets that land within
   `hint_window` (15%) of a predicted beat pull its phase toward you (a small phase-locked loop).
-- **Harmony** (`harmony.py`): a decaying pitch-class memory picks a root; the third is
-  only added if you've played it, otherwise you get an open root-fifth-octave voicing.
+- **Harmony** (`harmony.py`): a plug-in (`observe(onset)`, `propose(now) -> voicing`),
+  chosen by `harmony.model`. The one model so far, `drone`: a decaying pitch-class memory
+  picks a root; the third is only added if you've played it, otherwise you get an open
+  root-fifth-octave voicing.
+- **Control** (`controller.py`): keys, MIDI controllers and any future UI go through one
+  Controller (`set_param`, `get_state`, `panic`, `resume`, `tap_tempo`). The status line
+  is just a formatting of `get_state()`.
 - **Lag on purpose** (`responders.py`): a harmonic change must persist `lag_beats` before
   the pad follows, and changes are rate-limited. This is the "recall can be delayed" behaviour.
 - **Safety** (`output.py`): every note goes through one place that knows what is

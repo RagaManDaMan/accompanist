@@ -1,0 +1,19 @@
+# Modal drone: a steady tonic drone that barely moves, with a quiet pulse once the
+# tempo is clear. For a piece with a fixed tonic, also set it in config.toml,
+# e.g. [harmony] root = "D".
+# Use: accompanist run --preset modal-drone
+
+[harmony]
+half_life_s = 60        # a very long memory: the drone follows the mode, not the melody
+switch_margin = 2.5     # a new root must clearly dominate before the drone moves
+third_threshold = 0.6   # mostly open fifths; the third only when it is insistent
+
+[pad]
+lag_beats = 16
+min_change_beats = 64
+idle_release_s = 120
+
+[pulse]
+velocity = 35
+accent = 10
+min_confidence = 0.6    # only pulse once the tempo is clearly established

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, Union
 
 from .config import Config
+from .controller import Controller, format_status
 from .engine import Engine
 from .output import RecordingPort, SafeOutput
 
@@ -83,6 +84,7 @@ class SimResult:
     log: list[tuple[float, str]]
     end_time: float
     tempo_trace: list[tuple[float, float, float]] = field(default_factory=list)  # (t, bpm, confidence) each second
+    controller: Optional[Controller] = None
 
 
 def run(
@@ -101,16 +103,16 @@ def run(
         total = last + max(cfg.pad.idle_release_s, cfg.pulse.idle_stop_s) + 5.0
 
     port = RecordingPort()
-    out = SafeOutput(port)
-    eng = Engine(cfg, out)
+    ctl = Controller(cfg, SafeOutput(port))
+    eng = ctl.engine
     log: list[tuple[float, str]] = []
     trace: list[tuple[float, float, float]] = []
     i, now, last_print, last_trace, last_chord = 0, 0.0, -1.0, -1.0, None
     while now <= total:
         while i < len(onsets) and onsets[i][0] <= now:
-            eng.on_note(onsets[i][0], onsets[i][1], onsets[i][2])
+            ctl.on_note(onsets[i][0], onsets[i][1], onsets[i][2])
             i += 1
-        eng.tick(now)
+        ctl.tick(now)
         chord = eng.pad.current.label() if eng.pad.current else None
         if chord != last_chord:
             log.append((now, f"pad -> {chord}"))
@@ -121,7 +123,7 @@ def run(
         if verbose and now - last_print >= 2.0:
             true = next((b for (tt, b) in reversed(truth) if tt <= now), None)
             true_s = f"(you: {true:5.1f})" if truth and true and now < truth[-1][0] + 1 else ""
-            print(f"t={now:6.1f}s  {eng.status(now)}  {true_s}")
+            print(f"t={now:6.1f}s  {format_status(ctl.get_state(now))}  {true_s}")
             last_print = now
         now += dt
-    return SimResult(eng, port, log, now, trace)
+    return SimResult(eng, port, log, now, trace, ctl)

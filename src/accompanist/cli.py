@@ -1,7 +1,8 @@
-"""accompanist devices | monitor | run [--record] | replay TAKE | simulate"""
+"""accompanist devices | monitor | run [--record] | replay TAKE | simulate | params [--json]"""
 from __future__ import annotations
 
 import argparse
+import json
 import queue
 import re
 import select
@@ -10,7 +11,8 @@ import time
 from pathlib import Path
 
 from . import config as cfgmod
-from .engine import Engine
+from . import params as registry
+from .controller import Controller, format_status
 from .midi_io import PortError, list_ports, open_inputs, open_output
 from .output import SafeOutput
 from .recording import Recorder, TakeError, auto_path, load_take
@@ -77,22 +79,27 @@ def cmd_monitor(args) -> int:
     return 0
 
 
+PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
+KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo"}
+
+
 def cmd_run(args) -> int:
-    cfg = cfgmod.load(args.config)
+    cfg = cfgmod.load(args.config, args.preset)
     q: queue.Queue = queue.Queue()
     in_ports = open_inputs(cfg, q)
     port = open_output(cfg.output)
     out = SafeOutput(port)
-    eng = Engine(cfg, out)
+    ctl = Controller(cfg, out)
     keys = KeyReader()
     rec = None
     if args.record:
         rec = Recorder(auto_path() if args.record == "auto" else args.record)
     where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
-    print(f"Listening on {len(in_ports)} input(s); playing to {where}.")
+    print(f"Listening on {len(in_ports)} input(s); playing to {where}."
+          + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     if rec:
         print(f"Recording your notes to {rec.path}")
-    print("Keys: [space] or [p] = PANIC (silence + mute)   [r] = resume   [q] = quit\n")
+    print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [t] = tap tempo   [q] = quit\n")
     last_print = 0.0
     try:
         while True:
@@ -103,22 +110,22 @@ def cmd_run(args) -> int:
                 except queue.Empty:
                     break
                 if msg.type == "note_on" and msg.velocity > 0 and icfg.role == "note_source":
-                    eng.on_note(t, msg.note, msg.velocity)
+                    ctl.on_note(t, msg.note, msg.velocity)
                     if rec:
                         rec.note_on(t, msg.note, msg.velocity, icfg.name or icfg.port)
-                elif (msg.type == "control_change" and cfg.panic.cc is not None
-                      and msg.control == cfg.panic.cc and msg.value >= 64):
-                    eng.panic()
+                elif msg.type == "control_change":
+                    try:
+                        ctl.on_cc(t, msg.control, msg.value)
+                    except cfgmod.ConfigError as e:
+                        sys.stdout.write(f"\r\x1b[K{e}\n")
             key = keys.poll()
-            if key in (" ", "p"):
-                eng.panic()
-            elif key == "r":
-                eng.resume()
-            elif key == "q":
+            if key == "q":
                 break
-            eng.tick(now)
+            if key in KEYS:
+                ctl.do(KEYS[key], now)
+            ctl.tick(now)
             if now - last_print >= 0.25:
-                sys.stdout.write("\r\x1b[K" + eng.status(now))
+                sys.stdout.write("\r\x1b[K" + format_status(ctl.get_state(now)))
                 sys.stdout.flush()
                 last_print = now
             time.sleep(0.005)
@@ -139,7 +146,7 @@ def cmd_run(args) -> int:
 def cmd_simulate(args) -> int:
     from . import simulate
 
-    cfg = cfgmod.load(args.config) if args.config else cfgmod.from_dict({})
+    cfg = cfgmod.load(args.config, args.preset) if args.config else cfgmod.from_dict({}, args.preset)
     res = simulate.run(cfg, verbose=True)
     print("\nPad changes:")
     for t, what in res.log:
@@ -152,10 +159,10 @@ def cmd_replay(args) -> int:
     from . import simulate
 
     cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
-    cfg = cfgmod.load(cfg_path) if cfg_path else cfgmod.from_dict({})
+    cfg = cfgmod.load(cfg_path, args.preset) if cfg_path else cfgmod.from_dict({}, args.preset)
     onsets = [(t + 1.0, n, v) for t, n, v in load_take(args.take)]
     print(f"Replaying {args.take}: {len(onsets)} notes over {onsets[-1][0] - 1.0:.1f}s "
-          f"(config: {cfg_path or 'defaults'})\n")
+          f"(config: {cfg_path or 'defaults'}{', preset: ' + cfg.preset if cfg.preset else ''})\n")
     res = simulate.run(cfg, verbose=True, onsets=onsets)
     active = [b for (t, b, c) in res.tempo_trace if onsets[0][0] <= t <= onsets[-1][0]]
     print("\nPad changes:")
@@ -177,6 +184,27 @@ def cmd_replay(args) -> int:
     return 0
 
 
+def cmd_params(args) -> int:
+    if args.json:
+        print(json.dumps({"params": registry.schema(), "actions": list(cfgmod.ACTIONS),
+                          "presets": cfgmod.available_presets()}, indent=2))
+        return 0
+    group = None
+    for p in registry.PARAMS:
+        if p.deprecated:
+            continue
+        if p.group != group:
+            group = p.group
+            print(f"\n{group}")
+        rng = f"{p.min:g}-{p.max:g}" if p.min is not None else (
+            "|".join(map(str, p.choices)) if p.choices else p.type.__name__)
+        flag = "" if p.live else "  (restart to change)"
+        print(f"  {p.key:<26} {str(p.default):<12} {rng:<14} {p.help}{flag}")
+    print(f"\nActions (keys, [controls] CCs): {', '.join(cfgmod.ACTIONS)}")
+    print(f"Presets (--preset NAME): {', '.join(cfgmod.available_presets()) or '(none)'}")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="accompanist", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -186,17 +214,22 @@ def main(argv=None) -> int:
         sp = sub.add_parser(name, help=helptext)
         sp.add_argument("-c", "--config", default="config.toml")
         if name == "run":
+            sp.add_argument("--preset", default=None, help=PRESET_HELP)
             sp.add_argument("--record", nargs="?", const="auto", default=None, metavar="FILE",
                             help="save your notes as a take (default: takes/take-<time>.jsonl)")
     sp = sub.add_parser("replay", help="run a recorded take through the engine offline (no hardware)")
     sp.add_argument("take", help="a take file made with `run --record`")
     sp.add_argument("-c", "--config", default=None, help="default: ./config.toml if present, else defaults")
+    sp.add_argument("--preset", default=None, help=PRESET_HELP)
     sp = sub.add_parser("simulate", help="dry-run against a scripted performance (no hardware)")
     sp.add_argument("-c", "--config", default=None)
+    sp.add_argument("--preset", default=None, help=PRESET_HELP)
+    sp = sub.add_parser("params", help="list every setting (with --json: the schema a UI is built from)")
+    sp.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
     try:
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
-                "replay": cmd_replay, "simulate": cmd_simulate}[args.cmd](args)
+                "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

@@ -23,7 +23,8 @@ class PadResponder:
         self._last_change = float("-inf")
 
     def update(self, now: float, candidate: Voicing, period_s: float) -> None:
-        if self.current is not None and candidate.key == self.current.key:
+        # Compare notes, not just (root, third): a live octave change must revoice too.
+        if self.current is not None and candidate.notes == self.current.notes:
             self._pending = None
             return
         # The lag clock is keyed on the ROOT: a wobbling third (major/minor/open) must not

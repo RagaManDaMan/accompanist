@@ -1,7 +1,14 @@
-"""What has the player been playing lately, and what pad voicing fits it?"""
+"""What has the player been playing lately, and what pad voicing fits it?
+
+Harmony is a plug-in: anything with observe(onset) and propose(now) -> Voicing
+can drive the pad (see HarmonyModel). The engine never assumes a style. The
+only model so far is DroneModel: a root plus open fifth, with the third added
+once you have played it.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Optional, Protocol
 
 
 class PitchClassTracker:
@@ -60,3 +67,62 @@ def choose_voicing(hist: list[float], root_pc: int, octave: int = 3, third_thres
     if third is not None:
         notes.append(base + 12 + third)
     return Voicing(root_pc, third, tuple(notes))
+
+
+@dataclass(frozen=True)
+class Onset:
+    t: float
+    note: int
+    velocity: int
+
+
+class HarmonyModel(Protocol):
+    """A harmony plug-in. It listens to every onset and, when asked, proposes a voicing.
+
+    propose() may return None ("nothing to say yet"). The pad adds its own lag and
+    rate limit on top, so a model can propose freely; it need not smooth its output.
+    Models read their settings from the live config object they were given, so
+    parameter changes apply at the next call.
+    """
+
+    def observe(self, onset: Onset) -> None: ...
+
+    def propose(self, now: float) -> Optional[Voicing]: ...
+
+
+class DroneModel:
+    """Decaying pitch-class memory -> dominant root -> open voicing (+ third if played)."""
+
+    def __init__(self, cfg: Any) -> None:
+        self.cfg = cfg                     # the whole Config: harmony.* and pad.octave
+        self.pitch = PitchClassTracker(cfg.harmony.half_life_s)
+        self.root_pc: Optional[int] = cfg.root_pc
+
+    def observe(self, onset: Onset) -> None:
+        self.pitch.half_life = self.cfg.harmony.half_life_s
+        self.pitch.add(onset.t, onset.note, onset.velocity)
+
+    def propose(self, now: float) -> Optional[Voicing]:
+        self.pitch.half_life = self.cfg.harmony.half_life_s
+        hist = self.pitch.snapshot(now)
+        if sum(hist) <= 0:
+            return None
+        root = self._select_root(hist)
+        return choose_voicing(hist, root, self.cfg.pad.octave, self.cfg.harmony.third_threshold)
+
+    def _select_root(self, hist: list[float]) -> int:
+        fixed = self.cfg.root_pc
+        if fixed is not None:
+            self.root_pc = fixed
+            return fixed
+        dominant = max(range(12), key=lambda pc: hist[pc])
+        if self.root_pc is None or hist[dominant] > hist[self.root_pc] * self.cfg.harmony.switch_margin:
+            self.root_pc = dominant
+        return self.root_pc
+
+
+MODELS = {"drone": DroneModel}
+
+
+def make_model(cfg: Any) -> HarmonyModel:
+    return MODELS[cfg.harmony.model](cfg)

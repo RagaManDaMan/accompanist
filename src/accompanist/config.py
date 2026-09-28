@@ -1,13 +1,22 @@
 """Configuration: everything device- or player-specific lives here, never in code.
 
+The tunables themselves are declared in params.py; the section classes below
+(TempoCfg, PadCfg, ...) are generated from that registry, so a parameter exists
+in exactly one place.
+
+Layering (later wins): registry defaults < preset (presets/NAME.toml) <
+config.toml < live overrides (Controller.set_param).
+
 Channels are 1-16 in the config file (as in Logic) and 0-15 internally (as in MIDI).
 """
 from __future__ import annotations
 
-import dataclasses
-from dataclasses import dataclass, field
+import copy
+from dataclasses import dataclass, field, make_dataclass
 from pathlib import Path
 from typing import Any, Optional
+
+from . import params as registry
 
 try:
     import tomllib
@@ -21,6 +30,14 @@ _FLATS = {"DB": 1, "EB": 3, "GB": 6, "AB": 8, "BB": 10}
 # roles are declared so config files written today stay valid later.
 VALID_ROLES = ("note_source",)
 PLANNED_ROLES = ("pitch_contour", "voice")
+
+# Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
+ACTIONS = ("panic", "resume", "tap_tempo")
+
+BUILTIN_PRESETS = Path(__file__).parent / "presets"
+USER_PRESETS = Path("presets")
+# Sections a preset may set. Ports and inputs are per-machine, so presets never touch them.
+PRESET_SECTIONS = tuple(s for s in registry.SECTIONS if s not in ("output", "panic"))
 
 
 class ConfigError(ValueError):
@@ -43,6 +60,22 @@ def note_name(note: int) -> str:
     return f"{NOTE_NAMES[note % 12]}{note // 12 - 1}"
 
 
+def _section_class(section: str):
+    fields = [(p.name, Any, field(default=p.default)) for p in registry.section_params(section)]
+    return make_dataclass(f"{section.capitalize()}Cfg", fields)
+
+
+OutputCfg = _section_class("output")
+TempoCfg = _section_class("tempo")
+HarmonyCfg = _section_class("harmony")
+PadCfg = _section_class("pad")
+PulseCfg = _section_class("pulse")
+PanicCfg = _section_class("panic")
+SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
+                   "pad": PadCfg, "pulse": PulseCfg, "panic": PanicCfg}
+assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
+
+
 @dataclass
 class InputCfg:
     port: str                       # substring of the MIDI input port name
@@ -52,114 +85,119 @@ class InputCfg:
 
 
 @dataclass
-class OutputCfg:
-    # Default: create a virtual MIDI source that Logic sees automatically.
-    virtual_name: Optional[str] = "Accompanist"
-    # Or send to an existing port (e.g. "IAC Driver Bus 1"); this overrides virtual_name.
-    port: Optional[str] = None
-
-
-@dataclass
-class TempoCfg:
-    initial_bpm: float = 70.0   # the estimate before there is enough playing to go on
-    min_bpm: float = 40.0
-    max_bpm: float = 180.0
-    prior_bpm: float = 80.0     # picks the beat "octave" when the playing is ambiguous (see README)
-    prior_sigma_oct: float = 0.5  # how strongly: width of the prior, in octaves
-    window_s: float = 30.0      # how much recent playing the estimate looks at
-    halflife_s: float = 12.0    # older onsets count less: halve their weight every this many s
-    alpha: float = 0.25         # how fast the estimate follows you (0-1); higher = jumpier
-    switch_margin: float = 0.1  # a different tempo peak must score this much better to take over
-    switch_hold_s: float = 4.0  # ... and keep scoring better for this long
-    score_memory: float = 0.5   # 0-1: blend each tempo score curve with the previous one
-    peak_width: float = 0.06    # tempi within this fraction of the estimate count as the same peak
-    min_onsets: int = 8         # fewer onsets in the window: keep the previous estimate
-    update_s: float = 1.0       # recompute this often
-    confidence_scale: float = 0.3  # peak-above-median score that counts as full confidence
-    bin_s: float = 0.01         # onset signal resolution
-    smooth_s: float = 0.06      # Gaussian smoothing of the onset signal (timing slop)
-    bpm_step: float = 0.5       # resolution of the bpm search
-    min_ioi_s: float = 0.06     # closer onsets count as one (chords, grace notes)
-    # Accepted so older config files still load; unused by the windowed estimator.
-    tolerance: float = 0.3
-    max_gap_beats: float = 6.0
-
-
-@dataclass
-class HarmonyCfg:
-    root: str = "auto"          # "auto", or lock the tonic: "D", "F#", "Bb"
-    half_life_s: float = 12.0   # how long the ear remembers what you played
-    third_threshold: float = 0.35  # third must reach this share of the root's weight
-    switch_margin: float = 1.25    # a new root must beat the old by this factor
-
-
-@dataclass
-class PadCfg:
-    enabled: bool = True
-    channel: int = 1
-    octave: int = 3
-    velocity: int = 55
-    lag_beats: float = 4.0         # a new harmony must persist this long before we follow
-    min_change_beats: float = 8.0  # never change chords faster than this
-    overlap_s: float = 0.25        # old notes ring this long under the new chord
-    idle_release_s: float = 20.0   # release the pad after this much silence
-
-
-@dataclass
-class PulseCfg:
-    enabled: bool = True
-    channel: int = 2
-    octave: int = 2
-    velocity: int = 45
-    accent: int = 25
-    beats_per_bar: int = 4
-    min_confidence: float = 0.5    # start pulsing once the tempo estimate is this sure
-    idle_stop_s: float = 6.0       # stop pulsing after this much silence
-    phase_gain: float = 0.3        # how hard the pulse nudges toward your onsets
-    hint_window: float = 0.15      # only onsets this close to a beat (fraction of it) nudge it
-    note_length_s: float = 0.2
-
-
-@dataclass
-class PanicCfg:
-    cc: Optional[int] = None  # optional: this controller (value >= 64) on any input = panic
-
-
-@dataclass
 class Config:
-    output: OutputCfg = field(default_factory=OutputCfg)
+    output: Any = field(default_factory=OutputCfg)
     inputs: list[InputCfg] = field(default_factory=list)
-    tempo: TempoCfg = field(default_factory=TempoCfg)
-    harmony: HarmonyCfg = field(default_factory=HarmonyCfg)
-    pad: PadCfg = field(default_factory=PadCfg)
-    pulse: PulseCfg = field(default_factory=PulseCfg)
-    panic: PanicCfg = field(default_factory=PanicCfg)
+    tempo: Any = field(default_factory=TempoCfg)
+    harmony: Any = field(default_factory=HarmonyCfg)
+    pad: Any = field(default_factory=PadCfg)
+    pulse: Any = field(default_factory=PulseCfg)
+    panic: Any = field(default_factory=PanicCfg)
+    controls: dict[int, str] = field(default_factory=dict)   # CC number -> action or param key
+    preset: Optional[str] = None
 
     @property
     def root_pc(self) -> Optional[int]:
         return parse_root(self.harmony.root)
 
+    def section(self, name: str):
+        return getattr(self, name)
 
-def _section(cls, data: Optional[dict], name: str):
-    data = dict(data or {})
-    allowed = {f.name for f in dataclasses.fields(cls)}
-    unknown = set(data) - allowed
+
+def _section(name: str, data: Any):
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ConfigError(f"[{name}] must be a table of settings")
+    known = {p.name: p for p in registry.section_params(name)}
+    unknown = set(data) - set(known)
     if unknown:
-        raise ConfigError(f"[{name}] unknown key(s) {sorted(unknown)}; allowed: {sorted(allowed)}")
-    try:
-        return cls(**data)
-    except TypeError as e:
-        raise ConfigError(f"[{name}] {e}") from e
+        allowed = sorted(k for k, p in known.items() if not p.deprecated)
+        raise ConfigError(f"[{name}] unknown key(s) {sorted(unknown)}; allowed: {allowed}")
+    values = {}
+    for k, v in data.items():
+        try:
+            values[k] = registry.coerce(known[k], v)
+        except ValueError as e:
+            raise ConfigError(f"[{name}] {k}: {e}") from None
+    return SECTION_CLASSES[name](**values)
+
+
+def _controls(data: Any) -> dict[int, str]:
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ConfigError("[controls] must map controller numbers to actions or parameters")
+    out = {}
+    for k, target in data.items():
+        try:
+            cc = int(k)
+        except ValueError:
+            raise ConfigError(f"[controls] '{k}' is not a controller number (0-127)") from None
+        if not 0 <= cc <= 127:
+            raise ConfigError(f"[controls] controller {cc} must be 0-127")
+        if target in ACTIONS:
+            out[cc] = target
+            continue
+        p = registry.REGISTRY.get(target) if isinstance(target, str) else None
+        if p is None or p.deprecated:
+            raise ConfigError(f"[controls] {cc} = {target!r}: not an action {list(ACTIONS)} "
+                              f"or a parameter (see `accompanist params`)")
+        if not p.live:
+            raise ConfigError(f"[controls] {cc} = '{target}': this parameter can't change while running")
+        if p.type in (int, float) and (p.min is None or p.max is None):
+            raise ConfigError(f"[controls] {cc} = '{target}': parameter has no range to map a CC onto")
+        out[cc] = target
+    return out
 
 
 def _check_channel(ch: Optional[int], where: str) -> None:
-    if ch is not None and not (isinstance(ch, int) and 1 <= ch <= 16):
+    if ch is not None and not (isinstance(ch, int) and not isinstance(ch, bool) and 1 <= ch <= 16):
         raise ConfigError(f"{where}: channel must be 1-16, got {ch!r}")
 
 
-def from_dict(d: Optional[dict]) -> Config:
+def merge(base: dict, over: dict) -> dict:
+    """Deep-merge two config dicts: tables merge key by key, anything else is replaced."""
+    out = copy.deepcopy(base)
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = merge(out[k], v)
+        else:
+            out[k] = copy.deepcopy(v)
+    return out
+
+
+def available_presets() -> list[str]:
+    names = {p.stem for d in (BUILTIN_PRESETS, USER_PRESETS) if d.is_dir() for p in d.glob("*.toml")}
+    return sorted(names)
+
+
+def load_preset(name: str) -> dict:
+    """A preset is a partial config: only tunable sections. ./presets/ overrides the built-ins."""
+    for d in (USER_PRESETS, BUILTIN_PRESETS):
+        p = d / f"{name}.toml"
+        if p.is_file():
+            data = _read_toml(p)
+            bad = set(data) - set(PRESET_SECTIONS)
+            if bad:
+                raise ConfigError(f"preset '{name}' ({p}): may only set {list(PRESET_SECTIONS)}, "
+                                  f"not {sorted(bad)}")
+            return data
+    raise ConfigError(f"unknown preset '{name}'; available: {', '.join(available_presets()) or '(none)'}")
+
+
+def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
+    """Build a Config from a config.toml-shaped dict, layered over a preset if one is named
+    (argument first, else a top-level `preset = "..."` in the dict)."""
     d = dict(d or {})
-    allowed = {"output", "inputs", "tempo", "harmony", "pad", "pulse", "panic"}
+    name = preset or d.pop("preset", None)
+    d.pop("preset", None)
+    if name is not None:
+        if not isinstance(name, str):
+            raise ConfigError("preset must be a name, e.g. preset = \"ambient\"")
+        d = merge(load_preset(name), d)
+
+    allowed = set(registry.SECTIONS) | {"inputs", "controls", "preset"}
     unknown = set(d) - allowed
     if unknown:
         raise ConfigError(f"unknown top-level key(s) {sorted(unknown)}; allowed: {sorted(allowed)}")
@@ -167,13 +205,21 @@ def from_dict(d: Optional[dict]) -> Config:
     out_data = dict(d.get("output") or {})
     if "port" in out_data and "virtual_name" not in out_data:
         out_data["virtual_name"] = None  # naming a real port means: don't create a virtual one
-    output = _section(OutputCfg, out_data, "output")
+    output = _section("output", out_data)
     if not output.port and not output.virtual_name:
         raise ConfigError("[output] needs either virtual_name or port")
 
     inputs = []
     for i, item in enumerate(d.get("inputs") or []):
-        inp = _section(InputCfg, item, f"inputs[{i}]")
+        if not isinstance(item, dict):
+            raise ConfigError(f"inputs[{i}] must be a table ([[inputs]])")
+        allowed_in = {"port", "role", "name", "channel"}
+        if set(item) - allowed_in:
+            raise ConfigError(f"inputs[{i}] unknown key(s) {sorted(set(item) - allowed_in)}; "
+                              f"allowed: {sorted(allowed_in)}")
+        if "port" not in item:
+            raise ConfigError(f"inputs[{i}] needs a port (part of the MIDI input's name)")
+        inp = InputCfg(**item)
         if inp.role in PLANNED_ROLES:
             raise ConfigError(
                 f"inputs[{i}]: role '{inp.role}' is planned but not implemented yet "
@@ -187,28 +233,41 @@ def from_dict(d: Optional[dict]) -> Config:
     cfg = Config(
         output=output,
         inputs=inputs,
-        tempo=_section(TempoCfg, d.get("tempo"), "tempo"),
-        harmony=_section(HarmonyCfg, d.get("harmony"), "harmony"),
-        pad=_section(PadCfg, d.get("pad"), "pad"),
-        pulse=_section(PulseCfg, d.get("pulse"), "pulse"),
-        panic=_section(PanicCfg, d.get("panic"), "panic"),
+        tempo=_section("tempo", d.get("tempo")),
+        harmony=_section("harmony", d.get("harmony")),
+        pad=_section("pad", d.get("pad")),
+        pulse=_section("pulse", d.get("pulse")),
+        panic=_section("panic", d.get("panic")),
+        controls=_controls(d.get("controls")),
+        preset=name,
     )
-    _check_channel(cfg.pad.channel, "[pad]")
-    _check_channel(cfg.pulse.channel, "[pulse]")
-    t = cfg.tempo
-    if not (0 < t.min_bpm < t.max_bpm):
-        raise ConfigError("[tempo] need 0 < min_bpm < max_bpm")
-    if not (t.min_bpm <= t.initial_bpm <= t.max_bpm):
-        raise ConfigError("[tempo] initial_bpm must lie between min_bpm and max_bpm")
-    if not (t.min_bpm <= t.prior_bpm <= t.max_bpm):
-        raise ConfigError("[tempo] prior_bpm must lie between min_bpm and max_bpm")
-    cfg.root_pc  # validates harmony.root
+    if cfg.panic.cc is not None:
+        cfg.controls.setdefault(cfg.panic.cc, "panic")
+    check(cfg)
     return cfg
 
 
-def load(path: str | Path) -> Config:
+def check(cfg: Config) -> None:
+    """Rules that involve more than one parameter. Also run after every live change."""
+    t = cfg.tempo
+    if not (t.min_bpm < t.max_bpm):
+        raise ConfigError("[tempo] need min_bpm < max_bpm")
+    for k in ("initial_bpm", "prior_bpm"):
+        if not (t.min_bpm <= getattr(t, k) <= t.max_bpm):
+            raise ConfigError(f"[tempo] {k} must lie between min_bpm and max_bpm")
+    cfg.root_pc  # validates harmony.root
+
+
+def _read_toml(p: Path) -> dict:
+    try:
+        with open(p, "rb") as f:
+            return tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"{p}: not valid TOML ({e})") from None
+
+
+def load(path: str | Path, preset: Optional[str] = None) -> Config:
     p = Path(path)
     if not p.exists():
         raise ConfigError(f"config file not found: {p} (copy config.example.toml to start)")
-    with open(p, "rb") as f:
-        return from_dict(tomllib.load(f))
+    return from_dict(_read_toml(p), preset)
