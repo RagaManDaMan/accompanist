@@ -30,6 +30,16 @@ from .config import TempoCfg
 HARMONIC_WEIGHTS = (1.0, 0.7, 0.5, 0.4)
 # Lags need at least this share of the signal overlapping to be trusted.
 MIN_OVERLAP = 0.25
+# Timing slop allowed when fitting the beat phase, as a fraction of the beat.
+PHASE_SIGMA = 0.08
+# A wholesale realign of the pulse needs the new phase to fit this much better than the
+# current one; otherwise equally plausible phases (even eighths) would flip it back and forth.
+REALIGN_ADVANTAGE = 1.5
+# How far back the phase fit listens, as a half-life in beats.
+PHASE_HALFLIFE_BEATS = 4.0
+# Grid fit (refine): period step (log) and number of phases tried per period.
+REFINE_STEP = 0.001
+PHASE_STEPS = 64
 
 
 class TempoEstimator:
@@ -51,6 +61,10 @@ class TempoEstimator:
         return 60.0 / self._bpm
 
     @property
+    def onsets(self) -> tuple[float, ...]:
+        return tuple(self._onsets)
+
+    @property
     def bpm(self) -> float:
         return self._bpm
 
@@ -69,8 +83,12 @@ class TempoEstimator:
         self._onsets.append(t)
 
     # ---- estimation -------------------------------------------------------
-    def update(self, now: float, rate: float = 1.0) -> bool:
+    def update(self, now: float, rate: float = 1.0, locked: bool = False) -> bool:
         """Recompute if update_s has passed. `rate` (0-1) scales how far the estimate may move.
+
+        locked=True: the beat level is settled (groove lock). No jumps to another tempo or
+        octave; instead the estimate is refined by fitting a beat grid to the onsets
+        (refine()), which is more precise than the autocorrelation peak. Confidence is held.
 
         Returns True if the estimate was recomputed.
         """
@@ -86,6 +104,11 @@ class TempoEstimator:
             # Nothing new to go on: hold the tempo (silence must not move it); trust fades.
             self.confidence *= 0.5 ** (dt / c.halflife_s)
             return False
+        if locked and self._locked_on_peak:
+            target = 60.0 / self.refine(now)[0]
+            a = c.alpha * rate
+            self._bpm = math.exp(math.log(self._bpm) + a * (math.log(target) - math.log(self._bpm)))
+            return True
         scored = self.scores(now)
         if scored is None:
             return False
@@ -124,6 +147,59 @@ class TempoEstimator:
         median = float(np.median(score[finite]))
         self.confidence = float(min(max((score[target] - median) / c.confidence_scale, 0.0), 1.0))
         return True
+
+    def beat_reference(self, now: float, period: Optional[float] = None,
+                       current: Optional[float] = None) -> Optional[tuple[float, float]]:
+        """(beat time, advantage): the phase of the beat grid that the last few beats of
+        onsets line up with best. Beats are that time + k * period.
+
+        More notes start on the beat than between beats in most music, so the best-fitting
+        grid is taken as the beat. `advantage` is how much better it fits than a grid
+        through `current` (1.0 if not given): a caller can ignore a phase that is only
+        marginally better. None if there are no onsets in the window."""
+        if not self._onsets:
+            return None
+        c = self.cfg
+        p = period or self.period
+        t = np.fromiter(self._onsets, dtype=float)
+        # Only the last few beats: an older onset's phase is blurred by any small tempo error.
+        w = 0.5 ** ((now - t) / (PHASE_HALFLIFE_BEATS * p))
+        sigma = max(c.smooth_s, PHASE_SIGMA * p)
+
+        def fit(phases: np.ndarray) -> np.ndarray:
+            d = (t[None, :] - phases[:, None]) % p
+            d = np.minimum(d, p - d)
+            return (w[None, :] * np.exp(-0.5 * (d / sigma) ** 2)).sum(axis=1)
+
+        phases = np.arange(0.0, p, c.bin_s)
+        scores = fit(phases)
+        i = int(np.argmax(scores))
+        ref = float(phases[i] + math.floor(t[-1] / p) * p)
+        advantage = 1.0
+        if current is not None:
+            here = float(fit(np.array([current % p]))[0])
+            advantage = float(scores[i]) / here if here > 0 else float("inf")
+        return ref, advantage
+
+    def refine(self, now: float) -> tuple[float, float]:
+        """(period, beat time): the beat grid within peak_width of the estimate that best
+        fits the recent onsets (recency-weighted). Used once the beat level is settled."""
+        c = self.cfg
+        t = np.fromiter(self._onsets, dtype=float)
+        w = 0.5 ** ((now - t) / c.halflife_s)
+        p0 = self.period
+        periods = p0 * np.exp(np.arange(-c.peak_width, c.peak_width + 1e-9, REFINE_STEP))
+        frac = np.arange(PHASE_STEPS) / PHASE_STEPS
+        best = (p0, float(t[-1]), -1.0)
+        for p in periods:
+            sigma = max(c.smooth_s, PHASE_SIGMA * p)
+            d = (t[None, :] - frac[:, None] * p) % p
+            d = np.minimum(d, p - d)
+            fit = (w[None, :] * np.exp(-0.5 * (d / sigma) ** 2)).sum(axis=1)
+            i = int(np.argmax(fit))
+            if fit[i] > best[2]:
+                best = (float(p), float(frac[i] * p + math.floor(t[-1] / p) * p), float(fit[i]))
+        return best[0], best[1]
 
     def scores(self, now: float) -> Optional[tuple[np.ndarray, np.ndarray]]:
         """(bpm candidates, score) for the onsets currently in the window. NaN = not scorable."""

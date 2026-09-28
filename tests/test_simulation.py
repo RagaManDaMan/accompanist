@@ -2,9 +2,12 @@ import pytest
 from accompanist import config as c, simulate
 
 
+UNLOCKED = {"lock": {"auto": False}}   # these tests are about the free (unlocked) behaviour
+
+
 @pytest.fixture(scope="module")
 def result():
-    return simulate.run(c.from_dict({}), total=105.0)
+    return simulate.run(c.from_dict(UNLOCKED), total=105.0)
 
 
 def test_tempo_tracks_the_performance(result):
@@ -12,7 +15,7 @@ def test_tempo_tracks_the_performance(result):
     # Re-run to the end of the performance. The windowed estimate lags on purpose (it
     # looks at ~30 s of playing): it must match what you played within the last 10 s.
     end = truth[-1][0] + 0.5
-    res = simulate.run(c.from_dict({}), total=end)
+    res = simulate.run(c.from_dict(UNLOCKED), total=end)
     recent = [b for t, b in truth if t >= end - 10]
     assert any(res.engine.tempo.bpm == pytest.approx(b, rel=0.03) for b in recent)
 
@@ -38,7 +41,7 @@ def test_pad_released_after_silence_and_nothing_hangs(result):
 
 
 def test_panic_mutes_and_resume_recovers():
-    res = simulate.run(c.from_dict({}), total=30.0)
+    res = simulate.run(c.from_dict(UNLOCKED), total=30.0)
     eng = res.engine
     eng.panic()
     assert eng.muted and eng.out.sounding == set()

@@ -48,6 +48,13 @@ octave = 2
 velocity = 45
 accent = 25             # extra velocity on the first beat of each bar
 beats_per_bar = 4
+min_confidence = 0.5    # start pulsing once the tempo is this clear...
+stop_confidence = 0.15  # ...and only stop again if it falls below this
+
+[lock]                  # groove lock: see README
+auto = true             # lock by itself once the tempo has been clear for a while
+# confidence = 0.8
+# after_s = 25
 
 [controls]
 # Optional: map MIDI controller numbers (from any input) to actions or settings.
@@ -55,5 +62,7 @@ beats_per_bar = 4
 # Settings follow the controller across their range, e.g. a knob on pad.velocity.
 # 85 = "panic"
 # 86 = "tap_tempo"
+# 87 = "lock"
+# 88 = "unlock"
 # 7 = "pad.velocity"
 # 21 = "tempo.prior_bpm"

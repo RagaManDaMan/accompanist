@@ -32,8 +32,9 @@ def test_replay_of_a_recorded_take_matches_the_live_simulation(tmp_path):
         rec.note_on(t, n, v)
     rec.close()
     replayed = [(t + 1.0, n, v) for t, n, v in load_take(f)]
-    a = simulate.run(c.from_dict({}), onsets=onsets)
-    b = simulate.run(c.from_dict({}), onsets=replayed)
+    unlocked = {"lock": {"auto": False}}  # so the pad releases in the silence at the end
+    a = simulate.run(c.from_dict(unlocked), onsets=onsets)
+    b = simulate.run(c.from_dict(unlocked), onsets=replayed)
     assert [w for _, w in a.log] == [w for _, w in b.log]
     assert b.engine.out.sounding == set()
 
@@ -68,7 +69,8 @@ def test_replay_command_end_to_end(tmp_path, capsys, monkeypatch):
     assert main(["replay", str(f)]) == 0
     out = capsys.readouterr().out
     assert "Pad changes" in out and "Tempo while you played" in out
-    assert "Notes still sounding at end: 0" in out
+    # A steady take locks the groove by default, and silence never ends a lock.
+    assert "LOCKED" in out and "Still LOCKED at the end" in out
 
 
 def test_replay_command_reports_bad_take_cleanly(tmp_path, capsys):

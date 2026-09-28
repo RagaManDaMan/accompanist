@@ -80,7 +80,7 @@ def cmd_monitor(args) -> int:
 
 
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
-KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo"}
+KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock", "u": "unlock"}
 
 
 def cmd_run(args) -> int:
@@ -99,7 +99,7 @@ def cmd_run(args) -> int:
           + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     if rec:
         print(f"Recording your notes to {rec.path}")
-    print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [t] = tap tempo   [q] = quit\n")
+    print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l]/[u] = lock/unlock   [t] = tap   [q] = quit\n")
     last_print = 0.0
     try:
         while True:
@@ -165,7 +165,7 @@ def cmd_replay(args) -> int:
           f"(config: {cfg_path or 'defaults'}{', preset: ' + cfg.preset if cfg.preset else ''})\n")
     res = simulate.run(cfg, verbose=True, onsets=onsets)
     active = [b for (t, b, c) in res.tempo_trace if onsets[0][0] <= t <= onsets[-1][0]]
-    print("\nPad changes:")
+    print("\nPad changes and groove lock:")
     for t, what in res.log:
         print(f"  t={t:6.1f}s  {what}")
     if active:
@@ -180,6 +180,9 @@ def cmd_replay(args) -> int:
             worst = max(abs(b / expected - 1) for _, b in late)
             print(f"Expected {expected:g} bpm (from the file name). From 30 s of playing on: "
                   f"worst error {worst:.1%} {'(OK, within 4%)' if worst <= 0.04 else '(outside 4%)'}")
+    if res.engine.locked:
+        print("Still LOCKED at the end: live, pad and pulse would keep playing until you "
+              "unlock ([u], a controller, or panic).")
     print(f"Notes still sounding at end: {len(res.engine.out.sounding)}")
     return 0
 

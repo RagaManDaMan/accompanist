@@ -27,7 +27,8 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 (`xcode-select --install`) and retry.
 
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
-**t** = tap tempo (4 taps set the tempo and its octave), **q** = quit.
+**l / u** = lock / unlock the groove, **t** = tap tempo (4 taps set the tempo and its
+octave), **q** = quit.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
 ## Settings, presets, controllers
@@ -42,6 +43,18 @@ On exit, and on Ctrl-C, it always sends All Notes Off.
   own in `./presets/NAME.toml`; they may set anything except ports and inputs.
 - **[controls]** maps MIDI controllers to actions (`panic`, `resume`, `tap_tempo`) or to
   any live setting (`7 = "pad.velocity"`). See `config.example.toml`.
+
+## Groove lock
+
+Once the tempo has been clear (confidence >= `lock.confidence`, 0.8) for `lock.after_s`
+(25 s), or when you press **l** (or a `lock` controller), the groove **locks**:
+the pad's harmony is frozen as it was, pad and pulse keep going through silence, and the
+tempo follows you only slowly (`lock.tempo_rate`) and never jumps to another tempo or
+octave. Only **u**, an `unlock` controller or panic ends a lock; stopping playing never
+does. `LOCKED` shows in the status line. Set `[lock] auto = false` to lock only by hand.
+
+Unlocked, the pulse starts once confidence reaches `pulse.min_confidence` and stops only
+if it falls below `pulse.stop_confidence` (or after `pulse.idle_stop_s` of silence).
 
 ## Tuning against your own playing
 
@@ -78,8 +91,10 @@ one into `tests/fixtures/` to keep it as a regression test.
   times a gentle prior toward `prior_bpm`. The result is smoothed, and a different
   tempo peak must clearly win for a few seconds before the estimate jumps to it.
   Silence holds the tempo. No fixed grid, and no need to start near the right tempo.
-- **Pulse** (`beatclock.py`): free-runs at the estimated beat; onsets that land within
-  `hint_window` (15%) of a predicted beat pull its phase toward you (a small phase-locked loop).
+- **Pulse** (`beatclock.py`): free-runs at the estimated beat. It starts on the phase your
+  recent notes fit best (most notes fall on beats), and is realigned if it is clearly off;
+  onsets within `hint_window` (15%) of a predicted beat pull its phase toward you (a small
+  phase-locked loop). While locked, the tempo is refined by fitting a beat grid to your notes.
 - **Harmony** (`harmony.py`): a plug-in (`observe(onset)`, `propose(now) -> voicing`),
   chosen by `harmony.model`. The one model so far, `drone`: a decaying pitch-class memory
   picks a root; the third is only added if you've played it, otherwise you get an open

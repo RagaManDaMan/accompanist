@@ -156,6 +156,8 @@ PARAMS: list[Param] = [
     P("pulse.beats_per_bar", int, 4, "Beats per bar", "Accent every this many beats.", "Pulse", 1, 16, 1),
     P("pulse.min_confidence", float, 0.5, "Pulse start confidence",
       "Start pulsing once the tempo confidence reaches this.", "Pulse", 0, 1, 0.05),
+    P("pulse.stop_confidence", float, 0.15, "Pulse stop confidence",
+      "Once pulsing, stop only if the tempo confidence falls below this.", "Pulse", 0, 1, 0.05),
     P("pulse.idle_stop_s", float, 6.0, "Pulse stop after",
       "Stop pulsing after this much silence (seconds).", "Pulse", 0.5, 36000, 0.5),
     P("pulse.phase_gain", float, 0.3, "Phase pull",
@@ -163,6 +165,20 @@ PARAMS: list[Param] = [
     P("pulse.hint_window", float, 0.15, "On-beat window",
       "Only notes within this fraction of a beat from the pulse nudge it.", "Pulse", 0, 0.5, 0.01),
     P("pulse.note_length_s", float, 0.2, "Pulse note length", "Seconds.", "Pulse", 0.01, 2, 0.01),
+
+    # ---- lock ------------------------------------------------------------------
+    P("lock.auto", bool, True, "Auto lock",
+      "Lock the groove by itself once the tempo has been clear for a while.", "Groove lock"),
+    P("lock.confidence", float, 0.8, "Lock confidence",
+      "Auto lock needs the tempo confidence at or above this...", "Groove lock", 0, 1, 0.05),
+    P("lock.after_s", float, 25.0, "Lock after",
+      "...for this many seconds in a row.", "Groove lock", 1, 600, 1),
+    P("lock.tempo_rate", float, 0.1, "Tempo follow while locked",
+      "While locked, the tempo follows you this much as fast as usual (0 = frozen).",
+      "Groove lock", 0, 1, 0.05),
+    P("lock.phase_rate", float, 0.3, "Phase follow while locked",
+      "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
+      "Groove lock", 0, 1, 0.05),
 
     # ---- panic ----------------------------------------------------------------
     P("panic.cc", int, None, "Panic CC",

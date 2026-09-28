@@ -85,6 +85,11 @@ class SimResult:
     end_time: float
     tempo_trace: list[tuple[float, float, float]] = field(default_factory=list)  # (t, bpm, confidence) each second
     controller: Optional[Controller] = None
+    timeline: list[tuple[float, object]] = field(default_factory=list)  # (t, MIDI message) as sent
+
+    def notes_on(self, channel_1_16: int) -> list[float]:
+        """Times of the note-ons sent on a channel (1-16, as in the config)."""
+        return [t for t, m in self.timeline if m.type == "note_on" and m.channel == channel_1_16 - 1]
 
 
 def run(
@@ -93,7 +98,9 @@ def run(
     dt: float = 0.005,
     total: Optional[float] = None,
     onsets: Optional[Onsets] = None,
+    actions: Optional[list[tuple[float, str]]] = None,
 ) -> SimResult:
+    """actions: [(t, action)] performed through the Controller, e.g. [(30.0, "lock")]."""
     truth: list[tuple[float, float]] = []
     if onsets is None:
         onsets, truth = scripted_performance()
@@ -107,16 +114,25 @@ def run(
     eng = ctl.engine
     log: list[tuple[float, str]] = []
     trace: list[tuple[float, float, float]] = []
-    i, now, last_print, last_trace, last_chord = 0, 0.0, -1.0, -1.0, None
+    pending = sorted(actions or [])
+    timeline: list[tuple[float, object]] = []
+    i, now, last_print, last_trace, last_chord, last_locked = 0, 0.0, -1.0, -1.0, None, False
     while now <= total:
         while i < len(onsets) and onsets[i][0] <= now:
             ctl.on_note(onsets[i][0], onsets[i][1], onsets[i][2])
             i += 1
+        while pending and pending[0][0] <= now:
+            ctl.do(pending.pop(0)[1], now)
+        sent = len(port.sent)
         ctl.tick(now)
+        timeline.extend((now, m) for m in port.sent[sent:])
         chord = eng.pad.current.label() if eng.pad.current else None
         if chord != last_chord:
             log.append((now, f"pad -> {chord}"))
             last_chord = chord
+        if eng.locked != last_locked:
+            log.append((now, "LOCKED" if eng.locked else "unlocked"))
+            last_locked = eng.locked
         if now - last_trace >= 1.0:
             trace.append((now, eng.tempo.bpm, eng.tempo.confidence))
             last_trace = now
@@ -126,4 +142,4 @@ def run(
             print(f"t={now:6.1f}s  {format_status(ctl.get_state(now))}  {true_s}")
             last_print = now
         now += dt
-    return SimResult(eng, port, log, now, trace, ctl)
+    return SimResult(eng, port, log, now, trace, ctl, timeline)

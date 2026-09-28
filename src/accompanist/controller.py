@@ -4,7 +4,7 @@
     ctl.on_note(t, note, vel); ctl.on_cc(t, cc, value); ctl.tick(now)
     ctl.set_param("pad.velocity", 70)      # validated; applies at the next tick
     ctl.get_state(now)                     # a plain dict; the status line formats it
-    ctl.panic(); ctl.resume(); ctl.tap_tempo(now)
+    ctl.panic(); ctl.resume(); ctl.lock(now); ctl.unlock(); ctl.tap_tempo(now)
 
 Like the engine, it is clock-agnostic: callers pass the time.
 """
@@ -86,8 +86,8 @@ class Controller:
     def do(self, action: str, now: float) -> None:
         if action not in ACTIONS:
             raise ConfigError(f"unknown action '{action}'; use one of {list(ACTIONS)}")
-        if action == "tap_tempo":
-            self.tap_tempo(now)
+        if action in ("tap_tempo", "lock"):
+            getattr(self, action)(now)
         else:
             getattr(self, action)()
 
@@ -96,6 +96,12 @@ class Controller:
 
     def resume(self) -> None:
         self.engine.resume()
+
+    def lock(self, now: float) -> bool:
+        return self.engine.lock(now)
+
+    def unlock(self) -> None:
+        self.engine.unlock()
 
     def tap_tempo(self, now: float) -> Optional[float]:
         """Tap the beat. After TAP_COUNT taps, sets the tempo, and its octave (prior_bpm), to
