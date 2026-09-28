@@ -1,0 +1,48 @@
+# Copy to config.toml and edit. Run `accompanist devices` to see your port names.
+# Channels are 1-16, as in Logic.
+
+[output]
+# Default: create a virtual MIDI source called "Accompanist". Logic should list it
+# as a MIDI input automatically, with no IAC setup.
+virtual_name = "Accompanist"
+# Or send to a port that already exists (this replaces the virtual one):
+# port = "IAC Driver Bus 1"
+
+# One block per input. V0 supports role = "note_source" (discrete MIDI notes:
+# EWI, keyboard, MIDI guitar). Audio roles (voice, lap steel) come later.
+[[inputs]]
+name = "wind"
+port = "EWI"            # any distinctive part of the port name
+role = "note_source"
+# channel = 1           # omit to listen on all channels
+
+[tempo]
+initial_bpm = 70        # also chooses the beat "octave": 70 reads a steady 140 stream as eighths
+min_bpm = 40
+max_bpm = 180
+alpha = 0.25            # higher = follows you faster, but jumpier
+
+[harmony]
+root = "auto"           # or lock the tonic, e.g. "D" (recommended for a fixed-Sa piece)
+half_life_s = 12        # how long it remembers what you played
+
+[pad]                   # slow atmospheric harmony
+enabled = true
+channel = 1
+octave = 3
+velocity = 55
+lag_beats = 4           # deliberate delay before following a harmonic change
+min_change_beats = 8
+
+[pulse]                 # soft note on every beat, tempo-locked
+enabled = true
+channel = 2             # different channel so Logic can route it to another track
+octave = 2
+velocity = 45
+accent = 25             # extra velocity on the first beat of each bar
+beats_per_bar = 4
+
+[panic]
+# Optional hardware kill switch: any controller number (value >= 64) on any input
+# triggers panic. e.g. a foot switch. Leave commented out to disable.
+# cc = 85

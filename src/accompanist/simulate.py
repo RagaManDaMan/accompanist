@@ -1,0 +1,90 @@
+"""Run the engine offline in virtual time: against a scripted performance, or a recorded take.
+
+The scripted performance: a D-major phrase that accelerates 70 -> 95 bpm, then a
+G-minor phrase that relaxes 95 -> 75 bpm, then silence. It exercises tempo
+following, snapping of eighth-note pairs, lagged harmonic response, pulse
+start/stop and pad release. A recorded take (see recording.py) does the same job
+with your real playing.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+from .config import Config
+from .engine import Engine
+from .output import RecordingPort, SafeOutput
+
+PHRASE_D = [62, 64, 66, 62, 67, 69, 66, 62]   # D major-ish, D is home
+PHRASE_G = [67, 70, 69, 67, 72, 74, 70, 67]   # G minor-ish, G is home
+
+Onsets = list[tuple[float, int, int]]
+
+
+def scripted_performance() -> tuple[Onsets, list[tuple[float, float]]]:
+    """Returns (onsets, truth) where onsets = [(t, note, vel)], truth = [(t, true_bpm)]."""
+    onsets, truth = [], []
+    t = 1.0
+    for b in range(72):
+        if b < 32:
+            bpm, note = 70 + 25 * b / 32, PHRASE_D[b % 8]
+        else:
+            bpm, note = 95 - 20 * (b - 32) / 40, PHRASE_G[b % 8]
+        period = 60.0 / bpm
+        onsets.append((t, note, 90))
+        if b % 4 == 3:                       # an eighth-note pair on every 4th beat
+            onsets.append((t + period / 2, note, 70))
+        truth.append((t, bpm))
+        t += period
+    return onsets, truth
+
+
+@dataclass
+class SimResult:
+    engine: Engine
+    port: RecordingPort
+    log: list[tuple[float, str]]
+    end_time: float
+    tempo_trace: list[tuple[float, float, float]] = field(default_factory=list)  # (t, bpm, confidence) each second
+
+
+def run(
+    cfg: Config,
+    verbose: bool = False,
+    dt: float = 0.005,
+    total: Optional[float] = None,
+    onsets: Optional[Onsets] = None,
+) -> SimResult:
+    truth: list[tuple[float, float]] = []
+    if onsets is None:
+        onsets, truth = scripted_performance()
+    onsets = sorted(onsets)
+    if total is None:  # long enough to see the pad release after the last note
+        last = onsets[-1][0] if onsets else 0.0
+        total = last + max(cfg.pad.idle_release_s, cfg.pulse.idle_stop_s) + 5.0
+
+    port = RecordingPort()
+    out = SafeOutput(port)
+    eng = Engine(cfg, out)
+    log: list[tuple[float, str]] = []
+    trace: list[tuple[float, float, float]] = []
+    i, now, last_print, last_trace, last_chord = 0, 0.0, -1.0, -1.0, None
+    while now <= total:
+        while i < len(onsets) and onsets[i][0] <= now:
+            eng.on_note(onsets[i][0], onsets[i][1], onsets[i][2])
+            i += 1
+        eng.tick(now)
+        chord = eng.pad.current.label() if eng.pad.current else None
+        if chord != last_chord:
+            log.append((now, f"pad -> {chord}"))
+            last_chord = chord
+        if now - last_trace >= 1.0:
+            trace.append((now, eng.tempo.bpm, eng.tempo.confidence))
+            last_trace = now
+        if verbose and now - last_print >= 2.0:
+            true = next((b for (tt, b) in reversed(truth) if tt <= now), None)
+            true_s = f"(you: {true:5.1f})" if truth and true and now < truth[-1][0] + 1 else ""
+            print(f"t={now:6.1f}s  {eng.status(now)}  {true_s}")
+            last_print = now
+        now += dt
+    return SimResult(eng, port, log, now, trace)
