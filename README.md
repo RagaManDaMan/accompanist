@@ -95,6 +95,14 @@ markings are reported and ignored for now).
   `harmony.melody_min_notes`, `melody_max_tensions`, or `melody_colors = false` to turn it off.
 - `charts/` is ignored by git, like `takes/`: your charts stay on your machine.
 
+## Call and response
+
+`[response] enabled = true` adds a voice (channel 4, e.g. a guitar track) that answers you:
+when you pause for about a beat after a phrase of 3+ notes, it plays a short line made from
+what you just played (moved a scale step, upside down, or backwards), in the key, ending on
+a chord tone. It answers most pauses, not all (`response.chance`), and stops the moment you
+play again. `accompanist params` lists the rest (`gap_beats`, `octave`, `max_notes`, ...).
+
 ## Dynamics
 
 The pad's level rides on MIDI Expression (CC11, `pad.expression_cc`) so a held chord can

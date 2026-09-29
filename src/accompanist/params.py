@@ -259,6 +259,27 @@ PARAMS: list[Param] = [
       "Drum note for the chart count-in clicks (37 = side stick, 75 = claves), on the drums "
       "channel.", "Drums", 0, 127, 1),
 
+    # ---- response (call and response) -----------------------------------------
+    P("response.enabled", bool, False, "Answer your phrases",
+      "When you pause after a phrase, answer it with a short line on its own channel.",
+      "Response"),
+    P("response.channel", int, 4, "Response channel", "MIDI channel (1-16), e.g. a guitar track.",
+      "Response", 1, 16, 1, live=False),
+    P("response.octave", int, 4, "Response octave", "The answer is centred around this octave.",
+      "Response", 1, 7, 1),
+    P("response.velocity", float, 0.8, "Response loudness",
+      "Relative to how loudly you played the phrase (and your dynamics).", "Response", 0.1, 1.5, 0.05),
+    P("response.gap_beats", float, 1.0, "Answer after",
+      "Answer once you have paused this many beats...", "Response", 0.25, 8, 0.25),
+    P("response.min_gap_s", float, 0.4, "...but at least",
+      "...and at least this many seconds.", "Response", 0.1, 3, 0.05),
+    P("response.min_notes", int, 3, "Phrase at least",
+      "Only answer phrases of at least this many notes.", "Response", 1, 16, 1),
+    P("response.max_notes", int, 6, "Answer at most",
+      "The answer uses at most this many notes (the end of your phrase).", "Response", 1, 16, 1),
+    P("response.chance", float, 0.7, "How often",
+      "Share of your pauses that get an answer (0-1).", "Response", 0, 1, 0.05),
+
     # ---- dynamics --------------------------------------------------------------
     P("dynamics.follow", float, 0.5, "Follow your loudness",
       "How much pad and bass get louder or softer with you (0 = fixed levels).",

@@ -17,6 +17,7 @@ from .config import Config, note_name, NOTE_NAMES
 from .harmony import Onset, Voicing, make_model
 from .output import SafeOutput
 from .responders import DrumResponder, PadResponder, PulseResponder
+from .response import ResponseResponder
 from .tempo import REALIGN_ADVANTAGE, TempoEstimator
 
 # Pad expression: resend when it moves this many steps (of 127), at most this often.
@@ -33,6 +34,7 @@ class Engine:
         self.pad = PadResponder(cfg.pad, out, cfg.harmony.seed)
         self.pulse = PulseResponder(cfg.pulse, out)
         self.drums = DrumResponder(cfg.drums, out)
+        self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
         self.beat_count = 0                       # beats since the clock started (bar position)
         # A chart is a song: silent until started (count-in), then it plays until panic.
         self.is_chart = hasattr(self.harmony, "restart")
@@ -62,6 +64,7 @@ class Engine:
         self.dynamics.observe(t, velocity)
         self.last_onset_t, self.last_note = t, note
         self.clock.hint(t, self.cfg.pulse.hint_window)
+        self.response.hear(t, note, velocity, self.tempo.period)   # stops any answer at once
 
     # ---- responding ------------------------------------------------------
     def tick(self, now: float) -> None:
@@ -92,6 +95,12 @@ class Engine:
             self.pad.release_all()
         elif voicing is not None:
             self.pad.update(now, voicing, period, beat_known=self.clock.running)
+
+        if not waiting:
+            chord = self.pad.current or voicing
+            self.response.tick(now, period, None if chord is None else {n % 12 for n in chord.notes},
+                               self._scale_pcs(), self.dynamics.follow_gain(),
+                               self.clock.next_beat if self.clock.running else None)
 
         # The beat clock runs while bass (pulse) or drums need it, or a chart is counting in.
         if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.is_chart):
@@ -157,6 +166,16 @@ class Engine:
                 self.beat_count += 1
             self.drums.tick(now)
 
+    def _scale_pcs(self) -> Optional[set[int]]:
+        """The key's scale, when the harmony model knows one (modal); else None."""
+        key = getattr(self.harmony, "key", None)
+        if not key:
+            return None
+        from .modal import SCALES
+
+        tonic, mode = key
+        return {(tonic + i) % 12 for i in SCALES[mode]}
+
     def _shape_pad(self, now: float) -> None:
         """Ride the pad's level on its expression controller: follow your loudness, step back
         while you're busy. Sent only when it moves by EXPRESSION_STEP, at most every
@@ -211,6 +230,7 @@ class Engine:
         self.pad.reset()
         self.pulse.reset()
         self.drums.reset()
+        self.response.reset()
         self.clock.stop()
 
     def resume(self) -> None:

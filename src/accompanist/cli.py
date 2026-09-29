@@ -207,8 +207,10 @@ def voices_summary(cfg) -> str:
     bass = f"bass ch {cfg.pulse.channel}" if cfg.pulse.enabled else "bass: off"
     drums = (f"drums ch {cfg.drums.channel} ({cfg.drums.pattern})" if cfg.drums.enabled
              else "drums: off ([drums] enabled = true)")
+    response = (f"response ch {cfg.response.channel}" if cfg.response.enabled
+                else "response: off")
     lock = "tempo lock: auto" if cfg.lock.auto else "tempo lock: manual (l)"
-    return f"Voices: {pad} | {bass} | {drums} | {lock}"
+    return f"Voices: {pad} | {bass} | {drums} | {response} | {lock}"
 
 
 def chart_overrides(args) -> dict:
