@@ -12,11 +12,16 @@ from __future__ import annotations
 from typing import Optional
 
 from .beatclock import BeatClock
+from .dynamics import Dynamics
 from .config import Config, note_name, NOTE_NAMES
 from .harmony import Onset, Voicing, make_model
 from .output import SafeOutput
 from .responders import PadResponder, PulseResponder
 from .tempo import REALIGN_ADVANTAGE, TempoEstimator
+
+# Pad expression: resend when it moves this many steps (of 127), at most this often.
+EXPRESSION_STEP = 2
+EXPRESSION_INTERVAL_S = 0.05
 
 
 class Engine:
@@ -27,6 +32,9 @@ class Engine:
         self.clock = BeatClock(cfg.pulse.phase_gain)
         self.pad = PadResponder(cfg.pad, out, cfg.harmony.seed)
         self.pulse = PulseResponder(cfg.pulse, out)
+        self.dynamics = Dynamics(cfg.dynamics)
+        self._expression_sent: Optional[tuple[int, int]] = None   # (cc, value) last sent to the pad
+        self._expression_t = float("-inf")
         self.muted = False
         self.last_onset_t: Optional[float] = None
         self.last_note: Optional[int] = None
@@ -42,6 +50,7 @@ class Engine:
         """A note-on from a note_source input. Listening continues even while muted."""
         self.tempo.on_onset(t)
         self.harmony.observe(Onset(t, note, velocity))
+        self.dynamics.observe(t, velocity)
         self.last_onset_t, self.last_note = t, note
         self.clock.hint(t, self.cfg.pulse.hint_window)
 
@@ -66,6 +75,7 @@ class Engine:
         period = self.tempo.period
         voicing = self.frozen if self.chord_held else self.proposal
 
+        self._shape_pad(now)
         if not self.cfg.pad.enabled:
             self.pad.release_all()
         elif idle > self.cfg.pad.idle_release_s and not (self.locked or self.chord_held):
@@ -99,7 +109,20 @@ class Engine:
                     self.pad.on_beat(now, self.pulse.beat_count % max(1, p.beats_per_bar))
                     if self.pad.current and not self.chord_held:
                         pulse_root = self.pad.current.root_pc
-                self.pulse.on_beat(now, pulse_root)
+                self.pulse.on_beat(now, pulse_root, self.dynamics.follow_gain())
+
+    def _shape_pad(self, now: float) -> None:
+        """Ride the pad's level on its expression controller: follow your loudness, step back
+        while you're busy. Sent only when it moves by EXPRESSION_STEP, at most every
+        EXPRESSION_INTERVAL_S."""
+        cc = self.cfg.pad.expression_cc
+        if cc is None or now - self._expression_t < EXPRESSION_INTERVAL_S:
+            return
+        value = round(127 * self.dynamics.pad_level(now))
+        last = self._expression_sent
+        if last is None or last[0] != cc or abs(last[1] - value) >= EXPRESSION_STEP:
+            self.out.control_change(self.cfg.pad.channel - 1, cc, value)
+            self._expression_sent, self._expression_t = (cc, value), now
 
     def _realign(self, now: float) -> None:
         """Compare the pulse with the beat your last few notes imply. Clearly off (e.g. it
@@ -136,6 +159,7 @@ class Engine:
         self.release_chord()
         self.muted = True
         self.out.panic()
+        self._expression_sent = None           # re-send the pad level after resume
         self.pad.reset()
         self.pulse.reset()
         self.clock.stop()
@@ -202,6 +226,9 @@ class Engine:
             "muted": self.muted,
             "locked": self.locked,
             "chord_held": self.chord_held,
+            "your_velocity": self.dynamics.loudness(),
+            "busy": self.dynamics.busyness(now),
+            "pad_level": None if self._expression_sent is None else self._expression_sent[1] / 127,
             "lock_in_s": None if self.locked or self._confident_since is None else
                          max(0.0, self.cfg.lock.after_s - (now - self._confident_since)),
             "harmony_model": self.cfg.harmony.model,

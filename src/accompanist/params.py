@@ -179,6 +179,9 @@ PARAMS: list[Param] = [
       "Pad", 0, 1, 0.05),
     P("pad.revoice_bars", int, 4, "Re-voice after",
       "Re-voice a chord that has stood still for this many bars (0 = never).", "Pad", 0, 64, 1),
+    P("pad.expression_cc", int, 11, "Pad level controller",
+      "Controller that shapes the pad's level continuously (11 = Expression, 7 = Volume; "
+      "unset = fixed level).", "Pad", 0, 127, 1, nullable=True),
     P("pad.overlap_s", float, 0.25, "Pad overlap",
       "Old notes ring this long under a new chord.", "Pad", 0, 5, 0.05),
     P("pad.idle_release_s", float, 20.0, "Pad release after",
@@ -203,6 +206,22 @@ PARAMS: list[Param] = [
     P("pulse.hint_window", float, 0.15, "On-beat window",
       "Only notes within this fraction of a beat from the pulse nudge it.", "Pulse", 0, 0.5, 0.01),
     P("pulse.note_length_s", float, 0.2, "Pulse note length", "Seconds.", "Pulse", 0.01, 2, 0.01),
+
+    # ---- dynamics --------------------------------------------------------------
+    P("dynamics.follow", float, 0.5, "Follow your loudness",
+      "How much pad and bass get louder or softer with you (0 = fixed levels).",
+      "Dynamics", 0, 1, 0.05),
+    P("dynamics.duck", float, 0.5, "Step back when busy",
+      "How far the pad drops while you play busily (0 = never; 1 = down to pad_floor).",
+      "Dynamics", 0, 1, 0.05),
+    P("dynamics.pad_floor", float, 0.25, "Pad floor",
+      "The quietest the pad gets (share of full expression).", "Dynamics", 0, 1, 0.05),
+    P("dynamics.busy_notes_per_s", float, 4.0, "Busy at",
+      "Notes per second that count as fully busy.", "Dynamics", 0.5, 20, 0.5),
+    P("dynamics.reference_velocity", float, 80.0, "Your normal velocity",
+      "Playing at this velocity leaves the levels as set.", "Dynamics", 10, 127, 1),
+    P("dynamics.memory_s", float, 3.0, "Dynamics memory",
+      "How quickly the levels react to you (half-life, seconds).", "Dynamics", 0.5, 30, 0.5),
 
     # ---- lock ------------------------------------------------------------------
     P("lock.auto", bool, True, "Auto lock",

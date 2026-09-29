@@ -63,6 +63,14 @@ The status line shows `LOCKED` and `CHORD HELD`.
 Unlocked, the pulse starts once confidence reaches `pulse.min_confidence` and stops only
 if it falls below `pulse.stop_confidence` (or after `pulse.idle_stop_s` of silence).
 
+## Dynamics
+
+The pad's level rides on MIDI Expression (CC11, `pad.expression_cc`) so a held chord can
+swell and fade: it follows how loudly you play (`dynamics.follow`) and steps back while you
+play busily (`dynamics.duck`, never below `dynamics.pad_floor`), coming forward again when
+you pause. The bass (pulse) velocity follows your loudness too, but never ducks. Most Logic
+instruments respond to CC11; if yours doesn't, set `expression_cc = 7` (volume).
+
 ## Tuning against your own playing
 
 `accompanist run --record` saves every note you play to `takes/take-<time>.jsonl`.

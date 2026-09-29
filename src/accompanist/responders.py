@@ -125,9 +125,9 @@ class PulseResponder:
         self.cfg, self.out = cfg, out
         self.beat_count = 0
 
-    def on_beat(self, now: float, root_pc: int) -> None:
+    def on_beat(self, now: float, root_pc: int, gain: float = 1.0) -> None:
         pos = self.beat_count % max(1, self.cfg.beats_per_bar)
-        vel = self.cfg.velocity + (self.cfg.accent if pos == 0 else 0)
+        vel = round(self.cfg.velocity * gain) + (self.cfg.accent if pos == 0 else 0)
         vel = min(max(vel, 1), 127)
         note = 12 * (self.cfg.octave + 1) + root_pc
         ch = self.cfg.channel - 1

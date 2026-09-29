@@ -205,6 +205,11 @@ def clock(seconds: Optional[float]) -> str:
     return f"{m}:{t // 10:02d}.{t % 10}"
 
 
+def pad_level(s: dict) -> str:
+    lvl = s.get("pad_level")
+    return "" if lvl is None else f" {lvl:4.0%}"
+
+
 def format_status(s: dict) -> str:
     """The one-line status display. Only a formatter of get_state().
 
@@ -213,6 +218,6 @@ def format_status(s: dict) -> str:
     flags = (("MUTED " if s["muted"] else "") + ("LOCKED " if s.get("locked") else "")
              + ("CHORD HELD " if s.get("chord_held") else ""))
     return (f"{clock(s.get('elapsed_s'))}  {flags}{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  "
-            f"pad {s['pad'] or '--':<7} pulse {'on ' if s['pulse'] else 'off'}  "
+            f"pad {s['pad'] or '--':<7}{pad_level(s)} pulse {'on ' if s['pulse'] else 'off'}  "
             f"{'key ' + s['key'] + '  ' if s.get('key') else ''}"
             f"root {s['root'] or '--':<2}  heard {heard}")
