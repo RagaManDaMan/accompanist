@@ -25,7 +25,7 @@ class Engine:
         self.tempo = TempoEstimator(cfg.tempo)
         self.harmony = make_model(cfg)
         self.clock = BeatClock(cfg.pulse.phase_gain)
-        self.pad = PadResponder(cfg.pad, out)
+        self.pad = PadResponder(cfg.pad, out, cfg.harmony.seed)
         self.pulse = PulseResponder(cfg.pulse, out)
         self.muted = False
         self.last_onset_t: Optional[float] = None
@@ -71,7 +71,7 @@ class Engine:
         elif idle > self.cfg.pad.idle_release_s and not (self.locked or self.chord_held):
             self.pad.release_all()
         elif voicing is not None:
-            self.pad.update(now, voicing, period)
+            self.pad.update(now, voicing, period, beat_known=self.clock.running)
 
         if not self.cfg.pulse.enabled:
             self.clock.stop()
@@ -95,6 +95,10 @@ class Engine:
             # pulse never disagree while the pad is still catching up.
             pulse_root = self.pad.current.root_pc if self.pad.current else voicing.root_pc
             for _ in self.clock.due(now):
+                if self.cfg.pad.enabled:
+                    self.pad.on_beat(now, self.pulse.beat_count % max(1, p.beats_per_bar))
+                    if self.pad.current and not self.chord_held:
+                        pulse_root = self.pad.current.root_pc
                 self.pulse.on_beat(now, pulse_root)
 
     def _realign(self, now: float) -> None:

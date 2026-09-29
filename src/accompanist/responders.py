@@ -1,31 +1,45 @@
-"""The two V0 voices: a slow-moving pad and a tempo-locked pulse."""
+"""The voices: a slow-moving pad and a tempo-locked pulse."""
 from __future__ import annotations
 
+import random
 from typing import Optional
 
 from .config import PadCfg, PulseCfg
 from .harmony import Voicing
 from .output import SafeOutput
 
+# Pad voicing range (MIDI notes) and how many semitones of voice movement variation=1 may
+# trade for novelty.
+VOICE_LOW, VOICE_HIGH = 36, 88
+VARIATION_SEMITONES = 6.0
+
 
 class PadResponder:
     """Sustained harmony that follows what you've been playing, with deliberate lag.
 
-    A new voicing must stay the leading candidate for `lag_beats` before we move,
-    and we never move more often than `min_change_beats`. Common tones are held,
-    not retriggered, so changes feel like the harmony shifting, not restarting.
+    A new chord must stay the leading candidate for `lag_beats` before we move, and we
+    never move more often than `min_change_beats`. When the beat is known, the change
+    lands on the next beat or bar (`change_on`). Common tones are held, not retriggered,
+    so changes feel like the harmony shifting, not restarting.
+
+    The pad also chooses its own voicing of each chord: root in the bass, the other
+    chord tones above in some inversion and spacing. It prefers smooth voice-leading from
+    what is sounding, with `variation` adding randomness, and re-voices a chord that has
+    stood still for `revoice_bars`, so a static harmony still moves.
     """
 
-    def __init__(self, cfg: PadCfg, out: SafeOutput) -> None:
+    def __init__(self, cfg: PadCfg, out: SafeOutput, seed: int = 0) -> None:
         self.cfg, self.out = cfg, out
+        self.rng = random.Random(seed)
         self.current: Optional[Voicing] = None
         self._pending: Optional[tuple[Voicing, float]] = None
+        self._ready: Optional[Voicing] = None       # passed its lag: waiting for the beat/bar
         self._last_change = float("-inf")
+        self._bars_since_change = 0
 
-    def update(self, now: float, candidate: Voicing, period_s: float) -> None:
-        # Compare notes, not just (root, third): a live octave change must revoice too.
-        if self.current is not None and candidate.notes == self.current.notes:
-            self._pending = None
+    def update(self, now: float, candidate: Voicing, period_s: float, beat_known: bool = False) -> None:
+        if self.current is not None and self._same_chord(candidate, self.current):
+            self._pending = self._ready = None
             return
         # The lag clock is keyed on the ROOT: a wobbling third (major/minor/open) must not
         # restart it. The latest voicing wins when the lag expires.
@@ -35,9 +49,54 @@ class PadResponder:
         self._pending = (candidate, self._pending[1])
         waited = now - self._pending[1]
         if waited >= self.cfg.lag_beats * period_s and now - self._last_change >= self.cfg.min_change_beats * period_s:
-            self._apply(now, candidate)
+            if beat_known and self.cfg.change_on != "now":
+                self._ready = candidate
+            else:
+                self._apply(now, candidate)
 
-    def _apply(self, now: float, new: Voicing) -> None:
+    def on_beat(self, now: float, bar_position: int) -> None:
+        """The beat clock ticked: apply a waiting change, or re-voice a static chord."""
+        if bar_position == 0:
+            self._bars_since_change += 1
+        if self._ready is not None and (self.cfg.change_on == "beat" or bar_position == 0):
+            self._apply(now, self._ready)
+        elif (bar_position == 0 and self.current is not None and self.cfg.revoice_bars > 0
+              and self._bars_since_change >= self.cfg.revoice_bars):
+            self._apply(now, self.current, force_new=True)
+
+    @staticmethod
+    def _same_chord(a: Voicing, b: Voicing) -> bool:
+        return (a.root_pc, a.label(), {n % 12 for n in a.notes}, min(a.notes) // 12) == \
+               (b.root_pc, b.label(), {n % 12 for n in b.notes}, min(b.notes) // 12)
+
+    def _voicings(self, chord: Voicing) -> list[tuple[int, ...]]:
+        """Ways to voice the chord: root in the bass at pad.octave, the other tones above it
+        in each inversion, close or with one voice dropped an octave (open)."""
+        bass = 12 * (self.cfg.octave + 1) + chord.root_pc
+        pcs = sorted({n % 12 for n in chord.notes})
+        options = []
+        for start in range(bass + 7, bass + 19):          # where the upper structure begins
+            upper = sorted(start + (pc - start) % 12 for pc in pcs)
+            options.append(tuple([bass] + upper))
+            if len(upper) >= 3:                           # open: second voice up an octave
+                opened = sorted(upper[:1] + [upper[1] + 12] + upper[2:])
+                options.append(tuple([bass] + opened))
+        return [o for o in dict.fromkeys(options) if all(VOICE_LOW <= n <= VOICE_HIGH for n in o)]
+
+    def _choose(self, chord: Voicing, force_new: bool) -> tuple[int, ...]:
+        options = self._voicings(chord) or [chord.notes]
+        prev = self.current.notes if self.current else chord.notes
+        if force_new and len(options) > 1:
+            options = [o for o in options if o != prev] or options
+
+        def cost(notes: tuple[int, ...]) -> float:
+            move = sum(min(abs(n - p) for p in prev) for n in notes) / len(notes)
+            return move + self.cfg.variation * VARIATION_SEMITONES * self.rng.random()
+
+        return min(options, key=cost)
+
+    def _apply(self, now: float, chord: Voicing, force_new: bool = False) -> None:
+        new = Voicing(chord.root_pc, chord.third, self._choose(chord, force_new), chord.name)
         ch = self.cfg.channel - 1
         old_notes = set(self.current.notes) if self.current else set()
         new_notes = set(new.notes)
@@ -45,7 +104,8 @@ class PadResponder:
             self.out.note_on(ch, n, self.cfg.velocity)
         for n in sorted(old_notes - new_notes):
             self.out.note_off_at(now + self.cfg.overlap_s, ch, n)
-        self.current, self._pending, self._last_change = new, None, now
+        self.current, self._pending, self._ready, self._last_change = new, None, None, now
+        self._bars_since_change = 0
 
     def release_all(self) -> None:
         if self.current is not None:
@@ -54,7 +114,8 @@ class PadResponder:
         self.reset()
 
     def reset(self) -> None:
-        self.current, self._pending, self._last_change = None, None, float("-inf")
+        self.current, self._pending, self._ready, self._last_change = None, None, None, float("-inf")
+        self._bars_since_change = 0
 
 
 class PulseResponder:

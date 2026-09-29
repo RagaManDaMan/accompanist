@@ -20,6 +20,7 @@ sets, so other scale systems can be added as further modes or models.
 """
 from __future__ import annotations
 
+import random
 from typing import Any, Optional
 
 from .harmony import Onset, PitchClassTracker, Voicing
@@ -56,6 +57,7 @@ OUTSIDE_COST = 0.3     # per unit of what you played that the chord leaves out
 ROOT_BONUS = 0.3       # extra credit when the chord's root is what you played
 UNHEARD_COST = 0.03    # per chord tone you haven't played (scaled down by color)
 TONIC_BONUS = 0.03     # a slight pull home, toward chords on the tonic
+WANDER_SCALE = 0.2     # score noise at wander = 1 (roughly the gap between near-equal fits)
 MIN_KEY_EVIDENCE = 1.0  # weight of notes needed before auto key detection trusts itself
 
 
@@ -97,6 +99,9 @@ class ModalModel:
         self.chord_memory = PitchClassTracker(h.chord_memory_s)
         self.key: Optional[tuple[int, str]] = None        # (tonic, 'major'|'minor'|'chromatic')
         self.current: Optional[tuple[int, str]] = None    # (root, suffix) last proposed
+        self.rng = random.Random(h.seed)
+        self._noise: dict[tuple[int, str], float] = {}
+        self._noise_until: Optional[float] = None
 
     @property
     def key_label(self) -> Optional[str]:
@@ -143,6 +148,9 @@ class ModalModel:
         scale = {(tonic + i) % 12 for i in SCALES[mode]}
         share = [x / total for x in recent]
         plain = 1.0 - h.color
+        if self._noise_until is None or now >= self._noise_until:   # a new wandering choice
+            self._noise = {}
+            self._noise_until = now + h.wander_every_s
         best, best_score = None, float("-inf")
         for root in range(12):
             if root not in scale:
@@ -158,6 +166,10 @@ class ModalModel:
                     score += TONIC_BONUS
                 if (root, suffix) == self.current:
                     score += h.chord_stickiness
+                if h.wander > 0:
+                    if (root, suffix) not in self._noise:
+                        self._noise[(root, suffix)] = self.rng.random()
+                    score += h.wander * WANDER_SCALE * self._noise[(root, suffix)]
                 if score > best_score:
                     best, best_score = (root, suffix, ivs), score
         root, suffix, ivs = best

@@ -200,8 +200,9 @@ def clock(seconds: Optional[float]) -> str:
     """Playing time as m:ss.s (the clock recorded takes and `replay` use)."""
     if seconds is None:
         return "-:--.-"
-    m, sec = divmod(max(seconds, 0.0), 60)
-    return f"{int(m)}:{sec:04.1f}"
+    tenths = round(max(seconds, 0.0) * 10)          # round first, so 59.96 s shows as 1:00.0
+    m, t = divmod(tenths, 600)
+    return f"{m}:{t // 10:02d}.{t % 10}"
 
 
 def format_status(s: dict) -> str:

@@ -10,7 +10,8 @@ C, Cs, D, Eb, E, F, Fs, G, Gs, A, Bb, B = range(60, 72)
 
 
 def chord(notes, **harmony):
-    m = make_model(c.from_dict({"harmony": {"model": "modal", **harmony}}))
+    """The best-fitting chord (wander off: these tests are about the fit itself)."""
+    m = make_model(c.from_dict({"harmony": {"model": "modal", "wander": 0.0, **harmony}}))
     t = 0.0
     for n in notes:
         m.observe(Onset(t, n, 90))
