@@ -81,7 +81,7 @@ def cmd_monitor(args) -> int:
 
 
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
-KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock", "u": "unlock",
+KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_toggle",
         "c": "chord_toggle"}
 
 
@@ -108,8 +108,8 @@ def cmd_run(args) -> int:
           + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     if rec:
         print(f"Recording your notes to {rec.path}")
-    print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock tempo   [u] = unlock tempo\n"
-          "      [c] = hold / release the chord   [t] = tap tempo   [q] = quit\n")
+    print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
+          "      [c] = hold / release chord   [t] = tap tempo   [q] = quit\n")
     last_print = 0.0
     try:
         while True:
@@ -209,7 +209,7 @@ def cmd_replay(args) -> int:
                   f"worst error {worst:.1%} {'(OK, within 4%)' if worst <= 0.04 else '(outside 4%)'}")
     if res.engine.locked:
         print("Still LOCKED at the end: live, pad and pulse would keep playing until you "
-              "unlock ([u], a controller, or panic).")
+              "unlock ([l], a controller, or panic).")
     if res.engine.chord_held:
         print(f"Chord still HELD at the end ({res.engine.frozen.label()}).")
     print(f"Notes still sounding at end: {len(res.engine.out.sounding)}")

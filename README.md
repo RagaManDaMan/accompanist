@@ -27,7 +27,7 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 (`xcode-select --install`) and retry.
 
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
-**l / u** = lock / unlock the tempo, **c** = hold / release the chord, **t** = tap tempo
+**l** = lock / unlock the tempo, **c** = hold / release the chord, **t** = tap tempo
 (4 taps set the tempo and its octave), **q** = quit. Every key press prints what it did.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
@@ -49,11 +49,11 @@ On exit, and on Ctrl-C, it always sends All Notes Off.
 
 Two separate locks, so the beat can stay put while the harmony keeps moving:
 
-- **Tempo lock** (**l**, or a `lock` controller; automatic once the tempo has been clear,
+- **Tempo lock** (**l** toggles; `lock` / `unlock` / `lock_toggle` controllers; automatic once the tempo has been clear,
   confidence >= `lock.confidence`, for `lock.after_s`, unless `[lock] auto = false`): pad and
   pulse keep going through silence, and the tempo follows you only slowly
   (`lock.tempo_rate`), never jumping to another tempo or octave. Chords still follow you.
-  Only **u**, an `unlock` controller or panic ends it; stopping playing never does.
+  Only **l**, an `unlock` / `lock_toggle` controller or panic ends it; stopping playing never does.
 - **Chord hold** (**c** toggles; `chord_hold` / `chord_release` / `chord_toggle` controllers):
   the pad (and the pulse's note) stay on the current chord, whatever you play, until you
   release it or panic.

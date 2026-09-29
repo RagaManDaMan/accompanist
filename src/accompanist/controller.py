@@ -104,14 +104,16 @@ class Controller:
             was = eng.muted
             self.resume()
             return "resumed" if was else "not muted"
+        if action == "lock_toggle":
+            action = "unlock" if eng.locked else "lock"
         if action == "lock":
             if eng.locked:
-                return "already LOCKED (u = unlock)"
+                return "already LOCKED"
             if eng.muted:
                 return "can't lock while muted (r = resume first)"
             if not self.lock(now):
                 return "can't lock yet: nothing heard"
-            return f"tempo LOCKED at {eng.tempo.bpm:.1f} bpm (u = unlock)"
+            return f"tempo LOCKED at {eng.tempo.bpm:.1f} bpm"
         if action == "unlock":
             was = eng.locked
             self.unlock()
@@ -120,12 +122,12 @@ class Controller:
             action = "chord_release" if eng.chord_held else "chord_hold"
         if action == "chord_hold":
             if eng.chord_held:
-                return f"already holding {eng.frozen.label()} (c = release)"
+                return f"already holding {eng.frozen.label()}"
             if eng.muted:
                 return "can't hold a chord while muted (r = resume first)"
             if not self.hold_chord():
                 return "can't hold a chord yet: nothing heard"
-            return f"chord HELD: {eng.frozen.label()} (c = release)"
+            return f"chord HELD: {eng.frozen.label()}"
         if action == "chord_release":
             was = eng.chord_held
             self.release_chord()
