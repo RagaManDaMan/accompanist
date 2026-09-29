@@ -85,7 +85,8 @@ def voices_summary(cfg) -> str:
     reach config.toml is visible before you play."""
     h = cfg.harmony
     if h.model == "chart":
-        harmony = f"chart {Path(h.chart).name}" + (f", transposed {h.transpose:+d}" if h.transpose else "")
+        harmony = (f"chart {Path(h.chart).name}" + (f", transposed {h.transpose:+d}" if h.transpose else "")
+                   + (f", {h.chart_bpm:g} bpm" if h.chart_bpm else ""))
     elif h.model == "modal":
         harmony = f"modal, root {h.root}, mode {h.mode}"
     else:
@@ -105,6 +106,8 @@ def chart_overrides(args) -> dict:
         h.update(model="chart", chart=args.chart)
     if getattr(args, "transpose", None) is not None:
         h["transpose"] = args.transpose
+    if getattr(args, "tempo", None) is not None:
+        h["chart_bpm"] = args.tempo
     return {"harmony": h} if h else {}
 
 
@@ -113,6 +116,8 @@ def add_chart_args(sp) -> None:
                     help="play a chord chart (MusicXML, e.g. exported from iReal Pro)")
     sp.add_argument("--transpose", type=int, default=None, metavar="N",
                     help="transpose the chart N semitones (-11..11)")
+    sp.add_argument("--tempo", type=float, default=None, metavar="BPM",
+                    help="the chart's count-in tempo (default: typical for its style)")
 
 
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
@@ -146,7 +151,7 @@ def cmd_run(args) -> int:
         print(f"Recording your notes to {rec.path}")
     print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
           "      [c] = hold / release chord   [t] = tap tempo (with a chart: 4 taps = count-in)"
-          "   [s] = chart from the top   [q] = quit\n")
+          "   [s] = chart: count in + play from the top   [q] = quit\n")
     last_print = 0.0
     try:
         while True:

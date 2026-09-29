@@ -140,6 +140,10 @@ PARAMS: list[Param] = [
     P("harmony.chart", str, None, "Chart",
       "chart model: a MusicXML chord chart (e.g. exported from iReal Pro); or `--chart FILE`.",
       "Harmony", nullable=True, live=False),
+    P("harmony.chart_bpm", float, None, "Chart tempo",
+      "chart model: the count-in tempo (or `--tempo N`). Unset: a typical tempo for the "
+      "chart's style (Ballad 60, Medium Swing 120, ...), else the tempo you last played.",
+      "Harmony", 20, 300, 1, nullable=True),
     P("harmony.transpose", int, 0, "Transpose",
       "chart model: play the chart this many semitones up (+) or down (-).", "Harmony", -11, 11, 1),
     P("harmony.mode", str, "auto", "Mode",
@@ -239,6 +243,9 @@ PARAMS: list[Param] = [
       "Delay every second step by this share of a step (0 = straight, 0.33 = triplet swing).",
       "Drums", 0, 0.5, 0.01),
     P("drums.note_length_s", float, 0.1, "Drum note length", "Seconds.", "Drums", 0.01, 1, 0.01),
+    P("drums.count_in_note", int, 37, "Count-in click",
+      "Drum note for the chart count-in clicks (37 = side stick, 75 = claves), on the drums "
+      "channel.", "Drums", 0, 127, 1),
 
     # ---- dynamics --------------------------------------------------------------
     P("dynamics.follow", float, 0.5, "Follow your loudness",

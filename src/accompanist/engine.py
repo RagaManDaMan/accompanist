@@ -34,6 +34,12 @@ class Engine:
         self.pulse = PulseResponder(cfg.pulse, out)
         self.drums = DrumResponder(cfg.drums, out)
         self.beat_count = 0                       # beats since the clock started (bar position)
+        # A chart is a song: silent until started (count-in), then it plays until panic.
+        self.is_chart = hasattr(self.harmony, "restart")
+        self.song_playing = False
+        self._count_in_left = 0
+        if self.is_chart and getattr(self.harmony, "default_bpm", None):
+            self.tempo.set_bpm(self.harmony.default_bpm)
         self.dynamics = Dynamics(cfg.dynamics)
         self._expression_sent: Optional[tuple[int, int]] = None   # (cc, value) last sent to the pad
         self._expression_t = float("-inf")
@@ -76,29 +82,33 @@ class Engine:
         idle = float("inf") if self.last_onset_t is None else now - self.last_onset_t
         period = self.tempo.period
         voicing = self.frozen if self.chord_held else self.proposal
+        waiting = self.is_chart and not self.song_playing   # before the chart starts: no band
 
         self._shape_pad(now)
-        if not self.cfg.pad.enabled:
+        if not self.cfg.pad.enabled or waiting:
             self.pad.release_all()
         elif idle > self.cfg.pad.idle_release_s and not (self.locked or self.chord_held):
             self.pad.release_all()
         elif voicing is not None:
             self.pad.update(now, voicing, period, beat_known=self.clock.running)
 
-        # The beat clock runs while bass (pulse) or drums need it.
-        if not (self.cfg.pulse.enabled or self.cfg.drums.enabled):
+        # The beat clock runs while bass (pulse) or drums need it, or a chart is counting in.
+        if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.is_chart):
             self.clock.stop()
             self.drums.reset()
             return
         p = self.cfg.pulse
-        if self.locked:
+        if self.is_chart:
+            active = self.song_playing or self._count_in_left > 0   # a song never stops by itself
+        elif self.locked:
             active = voicing is not None                      # silence never stops a locked groove
         elif self.clock.running:                              # hysteresis: stop only well below start
             active = self.tempo.confidence >= p.stop_confidence and idle <= p.idle_stop_s
         else:
             active = self.tempo.confidence >= p.min_confidence and idle <= p.idle_stop_s
-        active = active and voicing is not None
-        if active and not self.clock.running and self.last_onset_t is not None:
+        if not self.is_chart:
+            active = active and voicing is not None
+        if active and not self.clock.running and self.last_onset_t is not None and not self.is_chart:
             self.restart_form()
             fit = self.tempo.beat_reference(now)
             self.clock.start(fit[0] if fit else self.last_onset_t, period, now)
@@ -108,11 +118,20 @@ class Engine:
         if self.clock.running:
             # The pulse follows the harmony that is actually sounding, so pad and
             # pulse never disagree while the pad is still catching up.
-            pulse_root = self.pad.current.root_pc if self.pad.current else voicing.root_pc
+            pulse_root = (self.pad.current.root_pc if self.pad.current
+                          else voicing.root_pc if voicing is not None else 0)
             gain = self.dynamics.follow_gain()
             bpb = max(1, getattr(self.harmony, "beats_per_bar", None) or p.beats_per_bar)
             for beat_t in self.clock.due(now):
+                if self._count_in_left > 0:                   # count-in click: 1, 2, 3, 4
+                    self._click(beat_t, first=self._count_in_left == bpb)
+                    self._count_in_left -= 1
+                    if self._count_in_left == 0:
+                        self.restart_form()                   # the next beat is bar 1
+                        self.song_playing = True
+                    continue
                 if hasattr(self.harmony, "on_beat"):          # a chart: its chord for this beat
+
                     self.harmony.on_beat(beat_t)
                     self.proposal = self.harmony.propose(now)
                     chord = self.frozen if self.chord_held else self.proposal
@@ -174,7 +193,9 @@ class Engine:
 
     # ---- control (called by the Controller) --------------------------------
     def panic(self) -> None:
-        """Kill switch: silence now and stay silent until resume(). Also ends both locks."""
+        """Kill switch: silence now and stay silent until resume(). Also ends both locks, and
+        stops a chart (start it again with a count-in)."""
+        self.song_playing, self._count_in_left = False, 0
         self.unlock()
         self.release_chord()
         self.muted = True
@@ -233,16 +254,44 @@ class Engine:
             self.harmony.restart()
 
     def count_in(self, last_tap: float) -> None:
-        """After tapping the tempo: the next beat after the last tap is bar 1, and the tempo
-        locks so the band keeps playing before you do."""
+        """After tapping the tempo: the taps were the count-in, the next beat is bar 1, and
+        the tempo locks so the band keeps playing before you do."""
         if self.muted:
             return
         if self.clock.running:
             self.clock.next_beat = last_tap + self.tempo.period
         else:
             self.clock.start(last_tap, self.tempo.period)
+        self._count_in_left = 0
         self.restart_form()
+        self.song_playing = True
         self.lock(last_tap)
+
+    def start_song(self, now: float) -> Optional[float]:
+        """Chart: count in one bar of clicks, then play from bar 1, tempo locked (like pressing
+        play in iReal Pro). The tempo: harmony.chart_bpm / --tempo, else the tempo you have
+        been playing if it is clear, else a typical tempo for the chart's style.
+        Returns the count-in tempo, or None if muted."""
+        if self.muted:
+            return None
+        bpm = self.cfg.harmony.chart_bpm
+        if bpm is None and self.tempo.confidence < self.cfg.pulse.min_confidence:
+            bpm = getattr(self.harmony, "default_bpm", None)
+        if bpm is not None:
+            self.tempo.set_bpm(bpm)
+        self.clock.start(now, self.tempo.period)     # first click one beat from now
+        self.song_playing = False
+        self.pad.release_all()
+        self._count_in_left = max(1, getattr(self.harmony, "beats_per_bar", None)
+                                  or self.cfg.pulse.beats_per_bar)
+        self.lock(now)
+        return self.tempo.bpm
+
+    def _click(self, t: float, first: bool) -> None:
+        d = self.cfg.drums
+        vel = min(d.velocity + (d.accent if first else 0), 127)
+        self.out.note_on(d.channel - 1, d.count_in_note, vel)
+        self.out.note_off_at(t + d.note_length_s, d.channel - 1, d.count_in_note)
 
     def set_tempo(self, bpm: float, beat_t: Optional[float] = None) -> None:
         """Force the tempo (tap tempo). If beat_t is given, it was a beat: align the pulse to it
@@ -278,4 +327,7 @@ class Engine:
             "harmony_model": self.cfg.harmony.model,
             "key": getattr(self.harmony, "key_label", None),
             "chart": getattr(self.harmony, "position", None),
+            "song": None if not self.is_chart else
+                    "playing" if self.song_playing else
+                    f"count-in {self._count_in_left}" if self._count_in_left else "waiting",
         }

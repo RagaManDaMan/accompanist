@@ -118,10 +118,12 @@ class Controller:
             self.unlock()
             return "tempo unlocked" if was else "tempo not locked"
         if action == "chart_restart":
-            if not hasattr(eng.harmony, "restart"):
-                return "no chart loaded (harmony.model = \"chart\")"
-            eng.restart_form()
-            return "chart restarts at bar 1 on the next beat"
+            if not eng.is_chart:
+                return "no chart loaded (--chart FILE)"
+            bpm = eng.start_song(now)
+            if bpm is None:
+                return "can't start while muted (r = resume first)"
+            return f"counting in at {bpm:.0f} bpm: 1 2 3 4, then bar 1 (tempo LOCKED)"
         if action == "chord_toggle":
             action = "chord_release" if eng.chord_held else "chord_hold"
         if action == "chord_hold":
@@ -220,6 +222,11 @@ def clock(seconds: Optional[float]) -> str:
 
 
 def chart_position(s: dict) -> str:
+    song = s.get("song")
+    if song == "waiting":
+        return "chart ready: s = count in, or tap t x4  "
+    if song and song.startswith("count-in"):
+        return f"{song}  "
     c = s.get("chart")
     if not c:
         return ""

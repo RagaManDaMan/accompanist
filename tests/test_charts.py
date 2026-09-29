@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from accompanist import charts, config as c, simulate
-from accompanist.controller import Controller
+from accompanist.controller import Controller, format_status
 from accompanist.output import RecordingPort, SafeOutput
 
 CHART = str(Path(__file__).parent / "fixtures" / "charts" / "form-test.musicxml")
@@ -76,15 +76,52 @@ def test_count_in_then_the_pad_plays_the_chart_on_the_beat():
     assert s["chart"]["bar"] == 1 and s["chart"]["title"] == "Form Test"
 
 
-def test_restart_puts_bar_one_on_the_next_beat():
-    period = 60 / 100
-    taps = [(1.0 + i * period, "tap_tempo") for i in range(4)]
-    restart_at = 1.0 + 9.5 * period                               # mid-way through bar 2
+def pad_changes(res):
+    return [(t, w[7:]) for t, w in res.log if w.startswith("pad -> ")]
+
+
+def test_the_band_waits_for_the_count_in():
+    cfg = c.from_dict({"harmony": {"model": "chart", "chart": CHART}, "drums": {"enabled": True}})
+    notes = [(i * 0.6, 60 + i % 5, 90) for i in range(40)]              # you play; no count-in
+    res = simulate.run(cfg, onsets=notes, total=25.0)
+    assert not [m for _, m in res.timeline if m.type == "note_on"]    # silent: waiting
+    assert "s = count in" in format_status(res.controller.get_state(25.0))
+
+
+def test_s_counts_in_a_bar_of_clicks_then_plays_from_bar_one_locked():
+    cfg = c.from_dict({"harmony": {"model": "chart", "chart": CHART, "chart_bpm": 100}})
+    res = simulate.run(cfg, onsets=[], actions=[(2.0, "chart_restart")], total=2.0 + 14 * 0.6)
+    clicks = [t for t, m in res.timeline if m.type == "note_on" and m.channel == 9 and m.note == 37]
+    assert [t - 2.0 for t in clicks] == pytest.approx([0.6, 1.2, 1.8, 2.4], abs=0.011)  # 1 2 3 4
+    first_chord = pad_changes(res)[0]
+    assert first_chord[1] == "Cmaj7" and first_chord[0] == pytest.approx(2.0 + 5 * 0.6, abs=0.011)
+    assert res.engine.locked and res.controller.get_state(res.end_time)["song"] == "playing"
+
+
+def test_style_sets_the_default_count_in_tempo():
+    assert charts.load(CHART).style == "Medium Swing"
+    assert charts.style_bpm("Ballad") == 60 and charts.style_bpm("Medium Up Swing") == 160
     cfg = c.from_dict({"harmony": {"model": "chart", "chart": CHART}})
-    res = simulate.run(cfg, onsets=[], actions=taps + [(restart_at, "chart_restart")],
-                       total=restart_at + 2 * period)
-    assert res.controller.get_state(res.end_time)["chart"]["bar"] == 1
-    assert [w for _, w in res.log if w.startswith("pad")][-1] == "pad -> Cmaj7"
+    ctl = Controller(cfg, SafeOutput(RecordingPort()))
+    assert ctl.do("chart_restart", 0.0) == "counting in at 120 bpm: 1 2 3 4, then bar 1 (tempo LOCKED)"
+
+
+def test_unlocking_a_playing_chart_never_stops_the_band():
+    cfg = c.from_dict({"harmony": {"model": "chart", "chart": CHART, "chart_bpm": 100}})
+    res = simulate.run(cfg, onsets=[], actions=[(1.0, "chart_restart"), (6.0, "lock_toggle")],
+                       total=40.0)
+    assert not res.engine.locked                                      # unlocked at 6 s...
+    bass = [t for t, m in res.timeline if m.type == "note_on" and m.channel == 1]
+    assert max(b - a for a, b in zip(bass, bass[1:])) < 0.7           # ...and never a gap
+    assert bass[-1] > 39.0
+
+
+def test_panic_stops_the_song():
+    cfg = c.from_dict({"harmony": {"model": "chart", "chart": CHART, "chart_bpm": 100}})
+    res = simulate.run(cfg, onsets=[], actions=[(1.0, "chart_restart"), (10.0, "panic"),
+                                                (11.0, "resume")], total=20.0)
+    late = [m for t, m in res.timeline if t > 11.0 and m.type == "note_on"]
+    assert not late and res.controller.get_state(20.0)["song"] == "waiting"
 
 
 def test_transpose_is_live():

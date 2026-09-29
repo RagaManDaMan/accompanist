@@ -71,12 +71,26 @@ class Bar:
     section: str = ""
 
 
+# Typical tempi by iReal Pro style name (a starting point when the chart has no tempo:
+# iReal's MusicXML carries the style but not the tempo). Checked in order; override with
+# --tempo or harmony.chart_bpm.
+STYLE_BPM = (("ballad", 60), ("slow", 80), ("medium up", 160), ("up tempo", 220),
+             ("medium", 120), ("bossa", 130), ("samba", 180), ("latin", 150), ("waltz", 140),
+             ("even 8", 110), ("rock", 110), ("funk", 100))
+
+
+def style_bpm(style: str) -> Optional[float]:
+    s = style.lower()
+    return next((float(b) for key, b in STYLE_BPM if key in s), None)
+
+
 @dataclass
 class Chart:
     title: str
     beats_per_bar: int
     bars: list[Bar]                 # the form unrolled: repeats and endings already applied
     notes: list[str] = field(default_factory=list)   # things we could not follow, for the user
+    style: str = ""                 # e.g. "Ballad" (iReal Pro writes it as the lyricist)
 
     def chord_at(self, beat: int) -> tuple[Chord, int, Bar]:
         """(chord, bar index, bar) sounding on beat `beat` of the (looping) form."""
@@ -233,7 +247,8 @@ def load(path: str | Path) -> Chart:
         raw.append((bar, forward, backward, endings, ending_ends))
     if not any(b.changes for b, *_ in raw):
         raise ConfigError(f"{p}: no chord symbols (<harmony>) found")
-    return Chart(title, beats, _unroll(raw), notes)
+    style = (root.findtext("identification/creator[@type='lyricist']") or "").strip()
+    return Chart(title, beats, _unroll(raw), notes, style)
 
 
 def _unroll(raw) -> list[Bar]:
@@ -285,6 +300,11 @@ class ChartModel:
         self.beats_per_bar = self.chart.beats_per_bar
         self._next = 0
         self.pos: Optional[int] = None          # the current beat of the form (None: not started)
+
+    @property
+    def default_bpm(self) -> Optional[float]:
+        """--tempo / harmony.chart_bpm, else a typical tempo for the chart's style."""
+        return self.cfg.harmony.chart_bpm or style_bpm(self.chart.style)
 
     # ---- HarmonyModel ---------------------------------------------------------------
     def observe(self, onset) -> None:

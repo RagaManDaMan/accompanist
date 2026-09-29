@@ -29,7 +29,7 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
 **l** = lock / unlock the tempo, **c** = hold / release the chord, **t** = tap tempo
 (4 taps set the tempo and its octave; with a chart they are the count-in), **s** = chart
-from the top, **q** = quit. Every key press prints what it did. Keys are commands, not music: apart from
+count in and play from the top, **q** = quit. Every key press prints what it did. Keys are commands, not music: apart from
 panic and a chart count-in, a key press never moves the beat.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
@@ -68,7 +68,7 @@ if it falls below `pulse.stop_confidence` (or after `pulse.idle_stop_s` of silen
 ## Playing with a chord chart
 
 ```bash
-accompanist run --chart charts/Misty.musicxml          # add --transpose -2 etc. to change key
+accompanist run --chart charts/Misty.musicxml --tempo 64   # --transpose -2 etc. changes key
 ```
 
 Export a tune from iReal Pro as **MusicXML** (other MusicXML lead sheets work too; `.mxl`
@@ -77,11 +77,16 @@ as well) and pass it with `--chart`, or set `[harmony] model = "chart"` and
 the beat, following repeats and 1st/2nd endings and looping the form (segno/coda/D.C.
 markings are reported and ignored for now).
 
-- **Count in:** tap **t** four times ("1 2 3 4"): the chart starts at bar 1 on the next beat,
-  and the tempo locks so the band keeps going before you play. Or just start playing: the
-  chart starts when the beat is found. **s** restarts from the top on the next beat.
-- Your playing sets and steers the tempo (unless locked); the pad still varies its voicings;
-  **c** holds a chord, as usual. The status line shows `bar 5/32 [A] beat 1`.
+- **Start the song:** press **s**: one bar of count-in clicks (side stick on the drums
+  channel), then the band plays from bar 1 with the tempo locked, like pressing play in
+  iReal Pro. The tempo is `--tempo N` (or `[harmony] chart_bpm`), else the tempo you have
+  just been playing if it is clear, else a typical tempo for the chart's style (iReal Pro
+  exports the style, e.g. Ballad = 60, but not the tempo). Or tap **t** four times: the taps
+  are the count-in. Until you start, the band stays silent.
+- **While it plays** the band never stops by itself: **l** only switches between keeping
+  the tempo (locked) and following yours (unlocked). **s** counts in again from the top;
+  panic stops the song. **c** holds a chord, as usual. The status line shows
+  `bar 5/32 [A] beat 1`.
 - `charts/` is ignored by git, like `takes/`: your charts stay on your machine.
 
 ## Dynamics
