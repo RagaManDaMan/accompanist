@@ -30,8 +30,13 @@ halflife_s = 12         # older notes count less: their weight halves every this
 alpha = 0.25            # higher = follows you faster, but jumpier
 
 [harmony]
+model = "drone"         # "drone" (root + fifth) or "modal" (chords from a key, following you)
 root = "auto"           # or lock the tonic, e.g. "D" (recommended for a fixed-Sa piece)
-half_life_s = 12        # how long it remembers what you played
+half_life_s = 12        # how long it remembers what you played (modal: decides the key)
+# modal only:
+# mode = "auto"         # "major", "minor" (raised 7th), "chromatic" (any chord), "auto"
+# color = 0.5           # 0 = plain triads ... 1 = 7ths, add9, sus, dim freely
+# chord_memory_s = 4    # the chord follows about this much of your playing
 
 [pad]                   # slow atmospheric harmony
 enabled = true
@@ -65,4 +70,6 @@ auto = true             # lock by itself once the tempo has been clear for a whi
 # 87 = "lock"
 # 88 = "unlock"
 # 7 = "pad.velocity"
+# 20 = "harmony.color"
+# 22 = "harmony.mode"
 # 21 = "tempo.prior_bpm"

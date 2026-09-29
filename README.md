@@ -95,10 +95,16 @@ one into `tests/fixtures/` to keep it as a regression test.
   recent notes fit best (most notes fall on beats), and is realigned if it is clearly off;
   onsets within `hint_window` (15%) of a predicted beat pull its phase toward you (a small
   phase-locked loop). While locked, the tempo is refined by fitting a beat grid to your notes.
-- **Harmony** (`harmony.py`): a plug-in (`observe(onset)`, `propose(now) -> voicing`),
-  chosen by `harmony.model`. The one model so far, `drone`: a decaying pitch-class memory
-  picks a root; the third is only added if you've played it, otherwise you get an open
-  root-fifth-octave voicing.
+- **Harmony** (`harmony.py`, `modal.py`): a plug-in (`observe(onset)`, `propose(now) -> voicing`),
+  chosen by `harmony.model`:
+  - `drone`: a decaying pitch-class memory picks a root; the third is only added if you've
+    played it, otherwise an open root-fifth-octave voicing.
+  - `modal`: chords from a key. `harmony.root` is the tonic and `harmony.mode` is `major`,
+    `minor` (with the raised 7th), `chromatic` (any chord) or `auto` (major/minor detected
+    from your playing). Each moment it picks the chord of that key (5, triads, sus2/4, dim,
+    aug, add9, 7ths, m7b5, dim7) that best fits the last few seconds you played;
+    `harmony.color` (0-1) sets how readily it goes past plain triads. Mode, root and colour
+    can change while running (a `[controls]` knob, later a UI).
 - **Control** (`controller.py`): keys, MIDI controllers and any future UI go through one
   Controller (`set_param`, `get_state`, `panic`, `resume`, `tap_tempo`). The status line
   is just a formatting of `get_state()`.

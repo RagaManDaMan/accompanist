@@ -124,16 +124,35 @@ PARAMS: list[Param] = [
 
     # ---- harmony --------------------------------------------------------------
     P("harmony.model", str, "drone", "Harmony model",
-      "Which harmony model drives the pad.", "Harmony", choices=("drone",), live=False),
+      "Which harmony model drives the pad: 'drone' (root + fifth, third if played) or "
+      "'modal' (chords from a key and mode, following what you play).",
+      "Harmony", choices=("drone", "modal"), live=False),
+    P("harmony.mode", str, "auto", "Mode",
+      "modal model: 'major', 'minor' (with raised 7th), 'chromatic' (any chord), or 'auto' "
+      "(major or minor, detected from your playing).", "Harmony",
+      choices=("auto", "major", "minor", "chromatic")),
+    P("harmony.color", float, 0.5, "Colour",
+      "modal model: how readily it reaches past plain triads for 7ths, add9, sus, dim "
+      "(0 = plain, 1 = adventurous).", "Harmony", 0, 1, 0.05),
+    P("harmony.chord_memory_s", float, 4.0, "Chord memory",
+      "modal model: the chord follows roughly this many seconds of your playing (half-life).",
+      "Harmony", 0.5, 60, 0.5),
+    P("harmony.chord_stickiness", float, 0.05, "Chord stickiness",
+      "modal model: the current chord wins ties by this much (higher = changes less).",
+      "Harmony", 0, 0.5, 0.01),
+    P("harmony.key_margin", float, 0.1, "Key stickiness",
+      "modal model, auto: a new key must fit this much better to take over.", "Harmony", 0, 1, 0.01),
     P("harmony.root", str, "auto", "Root",
-      "'auto' follows what you play; or fix the tonic, e.g. D, F#, Bb.", "Harmony",
+      "'auto' follows what you play; or fix the tonic, e.g. D, F#, Bb. (modal: the key's tonic)", "Harmony",
       choices=NOTE_CHOICES, check=_check_root),
     P("harmony.half_life_s", float, 12.0, "Pitch memory",
-      "How long it remembers what you played (half-life, seconds).", "Harmony", 1, 300, 1),
+      "How long it remembers what you played (half-life, seconds). modal: decides the key.",
+      "Harmony", 1, 300, 1),
     P("harmony.third_threshold", float, 0.35, "Third threshold",
-      "The third is added once it reaches this share of the root's weight.", "Harmony", 0, 1, 0.05),
+      "drone model: the third is added once it reaches this share of the root's weight.",
+      "Harmony", 0, 1, 0.05),
     P("harmony.switch_margin", float, 1.25, "Root stickiness",
-      "A new root must outweigh the old one by this factor.", "Harmony", 1, 4, 0.05),
+      "drone model: a new root must outweigh the old one by this factor.", "Harmony", 1, 4, 0.05),
 
     # ---- pad ------------------------------------------------------------------
     P("pad.enabled", bool, True, "Pad on", "Play the sustained pad.", "Pad"),

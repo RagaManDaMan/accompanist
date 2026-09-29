@@ -189,5 +189,6 @@ def format_status(s: dict) -> str:
     heard = "--" if s["heard"] is None else f"{s['heard']} ({s['heard_ago_s']:0.1f}s ago)"
     flags = ("MUTED " if s["muted"] else "") + ("LOCKED " if s.get("locked") else "")
     return (f"{clock(s.get('elapsed_s'))}  {flags}{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  "
-            f"pad {s['pad'] or '--':<4} pulse {'on ' if s['pulse'] else 'off'}  "
+            f"pad {s['pad'] or '--':<7} pulse {'on ' if s['pulse'] else 'off'}  "
+            f"{'key ' + s['key'] + '  ' if s.get('key') else ''}"
             f"root {s['root'] or '--':<2}  heard {heard}")

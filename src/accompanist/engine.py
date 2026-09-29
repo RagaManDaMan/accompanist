@@ -188,4 +188,5 @@ class Engine:
             "lock_in_s": None if self.locked or self._confident_since is None else
                          max(0.0, self.cfg.lock.after_s - (now - self._confident_since)),
             "harmony_model": self.cfg.harmony.model,
+            "key": getattr(self.harmony, "key_label", None),
         }

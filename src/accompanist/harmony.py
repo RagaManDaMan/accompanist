@@ -1,9 +1,9 @@
 """What has the player been playing lately, and what pad voicing fits it?
 
 Harmony is a plug-in: anything with observe(onset) and propose(now) -> Voicing
-can drive the pad (see HarmonyModel). The engine never assumes a style. The
-only model so far is DroneModel: a root plus open fifth, with the third added
-once you have played it.
+can drive the pad (see HarmonyModel). The engine never assumes a style. Models:
+DroneModel (here): a root plus open fifth, with the third added once you have
+played it. ModalModel (modal.py): chords chosen from a key and mode.
 """
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ class Voicing:
     root_pc: int
     third: int | None          # 3 = minor, 4 = major, None = open (drone-like)
     notes: tuple[int, ...]
+    name: str | None = None    # chord label, when the model knows better than root+third
 
     @property
     def key(self) -> tuple[int, int | None]:
@@ -51,6 +52,8 @@ class Voicing:
     def label(self) -> str:
         from .config import NOTE_NAMES
 
+        if self.name:
+            return self.name
         q = {None: "5", 3: "m", 4: ""}[self.third]
         return f"{NOTE_NAMES[self.root_pc]}{q}"
 
@@ -121,8 +124,8 @@ class DroneModel:
         return self.root_pc
 
 
-MODELS = {"drone": DroneModel}
-
-
 def make_model(cfg: Any) -> HarmonyModel:
-    return MODELS[cfg.harmony.model](cfg)
+    from .modal import ModalModel
+
+    models = {"drone": DroneModel, "modal": ModalModel}
+    return models[cfg.harmony.model](cfg)
