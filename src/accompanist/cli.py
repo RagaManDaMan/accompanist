@@ -245,10 +245,12 @@ def say(message) -> None:
 
 
 def cmd_run(args) -> int:
+    from .audio_io import AudioInput, WavWriter
+    from .audio_notes import AudioFeed
+
     cfg = cfgmod.load(args.config, args.preset, chart_overrides(args))
-    if cfg.inputs and all(i.is_audio for i in cfg.inputs):
-        raise cfgmod.ConfigError("audio inputs can only be monitored for now (`accompanist monitor`, "
-                                 "`accompanist listen FILE.wav`); accompanying audio is the next step")
+    if args.record_audio and not any(i.is_audio for i in cfg.inputs):
+        raise cfgmod.ConfigError("--record-audio needs an audio input in the config ([[inputs]] audio = ...)")
     q: queue.Queue = queue.Queue()
     in_ports = open_inputs(cfg, q)
     port = open_output(cfg.output)
@@ -258,12 +260,33 @@ def cmd_run(args) -> int:
     rec = None
     if args.record:
         rec = Recorder(auto_path() if args.record == "auto" else args.record)
+
+    def heard(t, note, velocity, source):
+        ctl.on_note(t, note, velocity)
+        if rec:
+            rec.note_on(t, note, velocity, source)
+
+    audio_q: queue.Queue = queue.Queue()
+    audios, feeds, wav = [], {}, None
+    for icfg in cfg.inputs:
+        if icfg.is_audio and icfg.role == "note_source":
+            a = AudioInput(icfg, audio_q)
+            audios.append(a)
+            feeds[id(icfg)] = AudioFeed(cfg.audio, a.sample_rate, heard, icfg.name or icfg.audio)
+            print(f"Listening to audio '{a.name}' input {icfg.audio_channel} as '{icfg.name or icfg.audio}' "
+                  f"(gate {cfg.audio.gate_db:g} dB)")
+            if args.record_audio and wav is None:
+                wav = WavWriter(args.record_audio, a.sample_rate)
+    for icfg in cfg.inputs:
+        if not icfg.is_audio:
+            print(f"Listening to MIDI '{icfg.port}' as '{icfg.name or icfg.port}'")
     where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
-    print(f"Listening on {len(in_ports)} input(s); playing to {where}."
-          + (f" Preset: {cfg.preset}." if cfg.preset else ""))
+    print(f"Playing to {where}." + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     print(voices_summary(cfg))
     if rec:
         print(f"Recording your notes to {rec.path}")
+    if wav:
+        print(f"Recording the audio to {wav.path}")
     print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
           "      [c] = hold / release chord   [t] = tap tempo (with a chart: 4 taps = count-in)"
           "   [s] = chart: count in + play from the top   [q] = quit\n")
@@ -293,6 +316,14 @@ def cmd_run(args) -> int:
                     except cfgmod.ConfigError as e:
                         say(str(e))
                     last_print = 0.0
+            while True:
+                try:
+                    t, icfg, block = audio_q.get_nowait()
+                except queue.Empty:
+                    break
+                if wav is not None and icfg is audios[0].icfg:
+                    wav.write(block)
+                feeds[id(icfg)].process(block, t)
             key = keys.poll()
             if key == "q":
                 break
@@ -317,6 +348,10 @@ def cmd_run(args) -> int:
         keys.close()
         for p in in_ports:
             p.close()
+        for a in audios:
+            a.close()
+        if wav is not None:
+            wav.close()
         port.close()
         print("\nStopped. All notes off.")
     return 0
@@ -414,6 +449,8 @@ def main(argv=None) -> int:
         if name == "run":
             sp.add_argument("--preset", default=None, help=PRESET_HELP)
             add_chart_args(sp)
+            sp.add_argument("--record-audio", default=None, metavar="FILE.wav",
+                            help="also save the (first) audio input to a WAV file")
             sp.add_argument("--record", nargs="?", const="auto", default=None, metavar="FILE",
                             help="save your notes as a take (default: takes/take-<time>.jsonl)")
     sp = sub.add_parser("replay", help="run a recorded take through the engine offline (no hardware)")

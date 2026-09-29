@@ -39,12 +39,13 @@ to be useful to other Logic users (the owner's students), not just one person's 
 
 ## Audio input (started 2026-09-29, at the owner's request)
 `audio_notes.py` (pure: YIN pitch + onsets, sax first) and `audio_io.py` (the only audio
-hardware module). Listening only so far: `monitor` / `listen FILE.wav`; audio inputs do not
-drive `run` yet. Build it one step at a time, hardware-tested between steps. Tune against
+hardware module). Step A (listening: `monitor`, `listen FILE.wav`) is hardware-tested on the owner's tenor sax;
+step B feeds audio notes to the engine in `run` (AudioFeed). Build it one step at a time,
+hardware-tested between steps. Tune against
 recorded WAVs (`monitor --record-audio`, then `listen`), as with MIDI takes.
 
 ## Not yet built (do not start without being asked)
-Accompaniment driven by audio (next step, once listening is reliable); voice and lap steel
+Voice and lap steel
 (glides, gamakas: `pitch_contour`); call-and-response; raga-aware responder;
 environmental-texture layer; licence choice (undecided).
 

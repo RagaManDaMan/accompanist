@@ -218,3 +218,24 @@ class NoteTracker:
 # report onsets this fraction of half a window earlier than first seen.
 ONSET_BACKDATE = 0.5
 VELOCITY_MIN = 20
+
+
+class AudioFeed:
+    """Audio blocks in, notes out to a listener (e.g. Controller.on_note): how an audio
+    input plays the accompanist, exactly as a MIDI keyboard does.
+
+    Octave corrections are not passed on a second time: the note (by name, which is all the
+    harmony uses) and its onset (for the tempo) were already given when it began.
+    """
+
+    def __init__(self, cfg: Any, sample_rate: float, on_note, source: str = "") -> None:
+        self.tracker = NoteTracker(cfg, sample_rate)
+        self.on_note = on_note          # called as on_note(t, note, velocity, source)
+        self.source = source
+
+    def process(self, samples: np.ndarray, t0: float) -> list[AudioEvent]:
+        events = self.tracker.process(samples, t0)
+        for e in events:
+            if e.kind == "on" and not e.corrected:
+                self.on_note(e.t, e.note, e.velocity, self.source)
+        return events

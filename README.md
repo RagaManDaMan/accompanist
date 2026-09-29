@@ -125,10 +125,12 @@ shaker = "xg xg xg | xg xg | xg xg"
 
 The cycle restarts when the beat starts (there is no downbeat detection yet).
 
-## Audio input (sax first): listening only, for now
+## Audio input (sax first)
 
-The accompanist can hear notes in audio from an interface (voice and sax are how most gigs
-happen). In this version it **only listens**: check that it hears you before it accompanies.
+The accompanist hears notes in audio from an interface (voice and sax are how most gigs
+happen), and they play it exactly as a MIDI keyboard does: `accompanist run` with an audio
+input follows your tempo, harmony and dynamics, or plays a chart with you. Check first that it
+hears you (`monitor`), and set `[audio] gate_db` a few dB above your room's silence.
 
 ```toml
 [[inputs]]
@@ -138,13 +140,16 @@ audio_channel = 1         # which input of the interface
 ```
 
 ```bash
+accompanist run --record takes/gig-1.jsonl --record-audio takes/gig-1.wav   # play with it
 accompanist monitor --record-audio takes/sax-1.wav   # live: notes as heard, a level meter
 accompanist listen takes/sax-1.wav                   # offline: the same, from a recording
 accompanist listen takes/sax-1.wav --save-take takes/sax-1.jsonl   # ...then `replay` it
 ```
 
 It hears pitch with YIN, and a new note on a change of pitch (legato) or a fresh attack
-on the same pitch (tonguing). Notes are reported at their real start. The `[audio]` settings
+on the same pitch (tonguing). Notes are reported at their real start, and a note whose attack briefly reads an octave off
+(common on sax) is corrected rather than counted twice. Note names are concert pitch (a
+tenor's written C is a concert Bb). The `[audio]` settings
 (`accompanist params`) tune it: `gate_db` (what counts as silence; watch the meter),
 `min_note_ms`, `attack_db`, `cents_tolerance`.
 

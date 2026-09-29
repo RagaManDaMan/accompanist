@@ -135,3 +135,34 @@ def test_an_attack_that_reads_an_octave_high_is_corrected_not_a_new_note():
 def test_a_real_octave_leap_after_the_settle_time_is_a_new_note():
     ev = hear(rest(0.2), tone(60, 0.3), tone(72, 0.3), rest(0.3))
     assert ons(ev) == [(60, 0.2), (72, 0.5)] and not any(e.corrected for e in ev)
+
+
+def test_audio_plays_the_accompanist_like_a_keyboard():
+    """Sax-like audio -> AudioFeed -> Controller: the pad follows the notes heard."""
+    from accompanist.audio_notes import AudioFeed
+    from accompanist.controller import Controller
+    from accompanist.output import RecordingPort, SafeOutput
+
+    ctl = Controller(c.from_dict({"harmony": {"root": "D"}, "lock": {"auto": False}}),
+                     SafeOutput(RecordingPort()))
+    heard = []
+    feed = AudioFeed(ctl.cfg.audio, SR, lambda t, n, v, src: (heard.append((round(t, 2), n)),
+                                                                ctl.on_note(t, n, v)), "sax")
+    sig = np.concatenate([rest(0.2)] + [tone(n, 0.4) for n in (62, 66, 69, 62, 66, 69)] + [rest(0.5)])
+    for i in range(0, len(sig), 512):
+        feed.process(sig[i:i + 512], i / SR)
+        ctl.tick(i / SR)
+    assert [n for _, n in heard] == [62, 66, 69, 62, 66, 69]
+    assert heard[0][0] == pytest.approx(0.2, abs=0.02)
+    assert ctl.get_state(len(sig) / SR)["heard"] == "A4"
+
+
+def test_octave_corrections_are_not_played_twice():
+    from accompanist.audio_notes import AudioFeed
+
+    got = []
+    feed = AudioFeed(c.from_dict({}).audio, SR, lambda t, n, v, s: got.append(n))
+    sig = np.concatenate([rest(0.2), tone(60, 0.1, attack_ms=5), tone(48, 0.5, attack_ms=1), rest(0.3)])
+    for i in range(0, len(sig), 512):
+        feed.process(sig[i:i + 512], i / SR)
+    assert got == [60]            # the slip's note (same name as the corrected C3) only once
