@@ -130,3 +130,59 @@ def test_transpose_is_live():
     assert ctl.engine.harmony.propose(0.0).label() == "Cmaj7"
     ctl.set_param("harmony.transpose", 2)
     assert ctl.engine.harmony.propose(0.0).label() == "Dmaj7"
+
+
+# ---- colour from your melody ------------------------------------------------------------
+from accompanist.harmony import Onset
+
+
+def model(**h):
+    cfg = c.from_dict({"harmony": {"model": "chart", "chart": CHART, **h}})
+    m = charts.ChartModel(cfg)
+    m.restart()
+    return m
+
+
+def play_on(m, beat, notes):
+    """Advance the chart to `beat` (from wherever it is), then play `notes` (MIDI numbers)."""
+    while m.pos is None or m.pos < beat:
+        m.on_beat(0.0)
+    for n in notes:
+        m.observe(Onset(0.0, n, 90))
+    return m.propose(0.0)
+
+
+def test_playing_a_colour_tone_twice_adds_it():
+    m = model()
+    v = play_on(m, 0, [71, 71])                       # B over Cmaj7: the maj7 is already there
+    assert v.label() == "Cmaj7"
+    v = play_on(m, 0, [62, 74])                       # D over Cmaj7: the 9
+    assert v.label() == "Cmaj7(9)" and 2 in {n % 12 for n in v.notes}
+
+
+def test_one_passing_note_or_a_clashing_note_changes_nothing():
+    m = model()
+    assert play_on(m, 0, [66]).label() == "Cmaj7"     # F# once: not yet
+    assert play_on(m, 0, [65, 65, 77]).label() == "Cmaj7"   # F (the 11) clashes with major
+
+
+def test_dominant_takes_altered_tones():
+    m = model()
+    v = play_on(m, 6, [68, 68])                       # Ab over G7(b9): already has b9
+    assert v.label() == "G7(b9)"
+    v = play_on(m, 6, [64, 76])                       # E over G7: the 13
+    assert v.label() == "G7(b9,13)"
+
+
+def test_colours_stay_until_the_chord_changes_and_are_capped():
+    m = model(melody_max_tensions=1)
+    v = play_on(m, 0, [62, 62, 69, 69])               # 9 and 13 over Cmaj7, cap 1
+    assert v.label() == "Cmaj7(9)"
+    assert play_on(m, 3, []).label() == "Cmaj7(9)"    # still bar 1: kept
+    assert play_on(m, 4, []).label() == "Dm7(b5)"     # next chord starts clean
+
+
+def test_colours_can_be_turned_off_and_work_transposed():
+    assert play_on(model(melody_colors=False), 0, [62, 62]).label() == "Cmaj7"
+    v = play_on(model(transpose=2), 0, [64, 64])      # E over Dmaj7 (transposed): the 9
+    assert v.label() == "Dmaj7(9)"

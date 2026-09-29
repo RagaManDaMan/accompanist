@@ -10,6 +10,7 @@ Pure: no clock, no MIDI. Errors are ConfigError with a readable message.
 from __future__ import annotations
 
 import zipfile
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -281,6 +282,46 @@ def _unroll(raw) -> list[Bar]:
     return out
 
 
+# Colour tones you may add to a chart chord by playing them, by chord family: semitones
+# above the root -> label. Notes that clash with the family (e.g. the 11 over a major
+# chord) are left out, so playing them never changes the pad.
+TENSIONS = {
+    "major": {2: "9", 6: "#11", 9: "13"},
+    "dominant": {1: "b9", 2: "9", 3: "#9", 6: "#11", 8: "b13", 9: "13"},
+    "minor": {2: "9", 5: "11", 9: "13"},
+    "half-diminished": {2: "9", 5: "11", 8: "b13"},
+    "diminished": {2: "9", 5: "11", 8: "b13", 11: "maj7"},
+    "other": {2: "9", 9: "13"},
+}
+
+
+def family(intervals) -> str:
+    ivs = {i % 12 for i in intervals}
+    if {3, 6, 9} <= ivs and 10 not in ivs:
+        return "diminished"
+    if {3, 6, 10} <= ivs:
+        return "half-diminished"
+    if {4, 10} <= ivs:
+        return "dominant"
+    if 3 in ivs and 7 in ivs:
+        return "minor"
+    if 4 in ivs:
+        return "major"
+    return "other"
+
+
+def with_tensions(chord: Chord, added: list[int]) -> Chord:
+    """The chord with extra colour tones (semitones above the root, 1-11) and its label."""
+    if not added:
+        return chord
+    labels = [TENSIONS[family(chord.intervals)][i] for i in added]
+    text = chord.text
+    base, bass = (text.rsplit("/", 1) + [""])[:2] if chord.bass is not None else (text, "")
+    base = base[:-1] + "," + ",".join(labels) + ")" if base.endswith(")") else base + f"({','.join(labels)})"
+    return Chord(chord.root, tuple(sorted(set(chord.intervals) | {i + 12 for i in added})),
+                 chord.bass, base + (f"/{bass}" if bass else ""))
+
+
 class ChartModel:
     """Harmony model that plays a chart: the chord for each beat comes from the chart,
     in time with the beat clock, looping the form. Your playing sets the tempo; the pad
@@ -300,6 +341,9 @@ class ChartModel:
         self.beats_per_bar = self.chart.beats_per_bar
         self._next = 0
         self.pos: Optional[int] = None          # the current beat of the form (None: not started)
+        self._chord: Optional[Chord] = None    # the chart chord sounding now
+        self._heard: Counter = Counter()        # pitch classes you played during it
+        self._added: list[int] = []             # colour tones added to it (semitones)
 
     @property
     def default_bpm(self) -> Optional[float]:
@@ -308,13 +352,30 @@ class ChartModel:
 
     # ---- HarmonyModel ---------------------------------------------------------------
     def observe(self, onset) -> None:
-        pass                                    # the chart decides the chords
+        """The chart decides the chords; what you play only colours them (harmony.melody_colors)."""
+        if self.pos is not None:
+            self._heard[onset.note % 12] += 1
+
+    def _colour(self, chord: Chord) -> Chord:
+        """Add the chord's colour tones you have played (melody_min_notes times) while it lasts,
+        up to melody_max_tensions; once added they stay until the chord changes."""
+        h = self.cfg.harmony
+        if not h.melody_colors:
+            return chord
+        allowed = TENSIONS[family(chord.intervals)]
+        present = {i % 12 for i in chord.intervals}
+        for pc, n in self._heard.most_common():
+            iv = (pc - chord.root) % 12
+            if (n >= h.melody_min_notes and iv in allowed and iv not in present
+                    and iv not in self._added and len(self._added) < h.melody_max_tensions):
+                self._added.append(iv)
+        return with_tensions(chord, [i for i in self._added if i not in present])
 
     def propose(self, now: float):
         from .harmony import Voicing
 
         chord, _, _ = self.chart.chord_at(self.pos or 0)
-        chord = chord.transposed(self.cfg.harmony.transpose)
+        chord = self._colour(chord.transposed(self.cfg.harmony.transpose))
         bass = chord.bass if chord.bass is not None else chord.root
         base = 12 * (self.cfg.pad.octave + 1) + bass
         notes = tuple(sorted({base} | {base + 12 + (pc - bass) % 12 for pc in chord.pitch_classes}))
@@ -326,10 +387,14 @@ class ChartModel:
     def restart(self) -> None:
         """The next beat is bar 1, beat 1."""
         self._next, self.pos = 0, None
+        self._chord, self._heard, self._added = None, Counter(), []
 
     def on_beat(self, beat_t: float) -> None:
         self.pos = self._next
         self._next += 1
+        chord = self.chart.chord_at(self.pos)[0]
+        if chord is not self._chord:           # a new chord: its colour starts from scratch
+            self._chord, self._heard, self._added = chord, Counter(), []
 
     @property
     def position(self) -> Optional[dict]:

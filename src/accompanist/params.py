@@ -144,6 +144,15 @@ PARAMS: list[Param] = [
       "chart model: the count-in tempo (or `--tempo N`). Unset: a typical tempo for the "
       "chart's style (Ballad 60, Medium Swing 120, ...), else the tempo you last played.",
       "Harmony", 20, 300, 1, nullable=True),
+    P("harmony.melody_colors", bool, True, "Colour from your melody",
+      "chart model: add the colour tones you play (9, #11, 13, b9 ...) to the chart's chord, "
+      "from the next beat until the chord changes.", "Harmony"),
+    P("harmony.melody_min_notes", int, 2, "Colour after",
+      "chart model: a colour tone is added once you have played it this many times on the chord.",
+      "Harmony", 1, 8, 1),
+    P("harmony.melody_max_tensions", int, 2, "Most colour tones",
+      "chart model: at most this many colour tones added to one chord (0 = none).",
+      "Harmony", 0, 4, 1),
     P("harmony.transpose", int, 0, "Transpose",
       "chart model: play the chart this many semitones up (+) or down (-).", "Harmony", -11, 11, 1),
     P("harmony.mode", str, "auto", "Mode",
