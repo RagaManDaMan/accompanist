@@ -97,14 +97,22 @@ markings are reported and ignored for now).
 
 ## Call and response
 
-`[response] enabled = true` adds a voice (channel 4, e.g. a guitar track) that answers you:
-when you pause briefly after a phrase, it plays a short line made from what you just
-played: your motif moved a scale step or two (now and then, `response.variety`, upside down
-or backwards), in the key, ending on a chord tone, one note at a time. When the beat is
-running it comes in on the next beat with its rhythm rounded to eighth notes. It answers most pauses (`response.chance`) and gives way
-the moment you play again; `response.yield_to_you = false` lets it finish its line over you.
-Shy-to-bold dials: `chance`, `gap_beats` (how long a pause it waits for), `yield_to_you`,
-`velocity`, `octave`; put any of them on a knob with `[controls]`, e.g. `21 = "response.chance"`.
+`[response] enabled = true` adds a voice (channel 4, e.g. a guitar track) that answers you
+with **your own phrases**. Every phrase you play is remembered (the last `response.memory`);
+when you pause briefly after a phrase, it plays back an earlier one whose notes fit the chord
+and key of the moment (`response.fit`), as you played it: your notes, your register, one note
+at a time. When the beat is running it comes in on the next beat with the rhythm rounded to
+eighth notes. If nothing fits yet, it echoes the phrase you just played.
+
+Dials, shy to bold:
+- `response.chance`: share of your pauses that get an answer.
+- `response.gap_beats`: how long a pause it waits for.
+- `response.yield_to_you` (0-1): when you play during an answer, 1 = it stops at once, 0 =
+  it finishes over you, 0.5 = it keeps half of what is left, softer.
+- `response.octave`: unset = your register; a number = a fixed register.
+- `response.variety` (0-1): now and then play a variation of your last phrase instead.
+
+Any of them can go on a knob with `[controls]`, e.g. `21 = "response.yield_to_you"`.
 
 ## Dynamics
 

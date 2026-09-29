@@ -75,7 +75,8 @@ velocity = 70
 [response]              # call and response: answers your phrases (see README)
 enabled = false
 channel = 4             # e.g. an electric guitar track
-# chance = 0.7          # share of your pauses that get an answer
+# chance = 0.9          # share of your pauses that get an answer
+# yield_to_you = 1.0    # 1 = stop when you play, 0 = finish over you, 0.5 = in between
 
 [dynamics]              # the accompaniment breathes with you: see README
 follow = 0.5            # 0 = fixed levels; 1 = pad and bass follow your loudness fully

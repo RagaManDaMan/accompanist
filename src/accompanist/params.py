@@ -28,6 +28,7 @@ class Param:
     live: bool = True                # may change while running (applies at the next tick)
     nullable: bool = False           # None ("not set") is allowed
     deprecated: bool = False         # accepted in old config files, ignored
+    bool_as_number: bool = False     # true/false accepted for a 0-1 number (was a switch)
     check: Optional[Callable[[Any], None]] = None  # extra validation; raises ValueError
 
     @property
@@ -265,13 +266,16 @@ PARAMS: list[Param] = [
       "Response"),
     P("response.channel", int, 4, "Response channel", "MIDI channel (1-16), e.g. a guitar track.",
       "Response", 1, 16, 1, live=False),
-    P("response.octave", int, 5, "Response octave", "The answer is centred around this octave.",
-      "Response", 1, 7, 1),
+    P("response.octave", int, None, "Response octave",
+      "Unset: the answer is in your register. A number (1-7): centred around that octave.",
+      "Response", 1, 7, 1, nullable=True),
     P("response.velocity", int, 90, "Response loudness",
       "The answer's normal velocity; your phrase's accents and the dynamics shape it.",
       "Response", 1, 127, 1),
-    P("response.yield_to_you", bool, True, "Give way to you",
-      "Stop the answer the moment you play again (off = let it finish, over you).", "Response"),
+    P("response.yield_to_you", float, 1.0, "Give way to you",
+      "When you play during an answer: 1 = it stops at once, 0 = it finishes over you; in "
+      "between it keeps that share of its remaining notes, softer.", "Response", 0, 1, 0.05,
+      bool_as_number=True),
     P("response.gap_beats", float, 0.75, "Answer after",
       "Answer once you have paused this many beats...", "Response", 0.25, 8, 0.25),
     P("response.min_gap_s", float, 0.4, "...but at least",
@@ -280,9 +284,14 @@ PARAMS: list[Param] = [
       "Only answer phrases of at least this many notes.", "Response", 1, 16, 1),
     P("response.max_notes", int, 6, "Answer at most",
       "The answer uses at most this many notes (the end of your phrase).", "Response", 1, 16, 1),
-    P("response.variety", float, 0.2, "Variety",
-      "How often the answer turns your motif upside down or backwards instead of moving it "
-      "a step (0 = always recognisably your motif).", "Response", 0, 1, 0.05),
+    P("response.memory", int, 16, "Phrases remembered",
+      "The answer is one of your last this-many phrases.", "Response", 1, 128, 1),
+    P("response.fit", float, 0.75, "Fit to the harmony",
+      "A remembered phrase is played only if at least this share of its notes belong to the "
+      "chord and key of the moment; else your last phrase is echoed.", "Response", 0, 1, 0.05),
+    P("response.variety", float, 0.0, "Variety",
+      "How often to play a variation of your last phrase (moved a scale step, inverted or "
+      "reversed) instead of one of your own phrases (0 = never).", "Response", 0, 1, 0.05),
     P("response.chance", float, 0.9, "How often",
       "Share of your pauses that get an answer (0-1).", "Response", 0, 1, 0.05),
 
@@ -397,6 +406,8 @@ def coerce(p: Param, value: Any) -> Any:
             else:
                 raise ValueError(f"must be a whole number, got {value!r}")
     elif p.type is float:
+        if isinstance(value, bool) and p.bool_as_number:
+            value = 1.0 if value else 0.0
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"must be a number, got {value!r}")
         value = float(value)
