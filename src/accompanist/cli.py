@@ -80,8 +80,16 @@ def cmd_monitor(args) -> int:
     from .audio_notes import NoteTracker, db_of
 
     cfg = cfgmod.load(args.config)
+    if args.record_audio and not any(i.is_audio for i in cfg.inputs):
+        raise cfgmod.ConfigError("--record-audio needs an audio input in the config, e.g.\n"
+                                 "  [[inputs]]\n  name = \"sax\"\n  audio = \"Scarlett Solo\"\n"
+                                 "  audio_channel = 1")
     q: queue.Queue = queue.Queue()
     ports = open_inputs(cfg, q)
+    for icfg in cfg.inputs:
+        if not icfg.is_audio:
+            ch = "all channels" if icfg.channel is None else f"channel {icfg.channel}"
+            print(f"Listening to MIDI '{icfg.port}' ({ch}) as '{icfg.name or icfg.port}'")
     audio_q: queue.Queue = queue.Queue()
     audios, trackers, writer = [], {}, None
     for icfg in cfg.inputs:
@@ -89,7 +97,8 @@ def cmd_monitor(args) -> int:
             a = AudioInput(icfg, audio_q)
             audios.append(a)
             trackers[id(icfg)] = NoteTracker(cfg.audio, a.sample_rate)
-            print(f"Listening to '{a.name}' input {icfg.audio_channel} at {a.sample_rate:g} Hz")
+            print(f"Listening to audio '{a.name}' input {icfg.audio_channel} at {a.sample_rate:g} Hz "
+                  f"as '{icfg.name or icfg.audio}' (gate {cfg.audio.gate_db:g} dB)")
             if args.record_audio and writer is None:
                 writer = WavWriter(args.record_audio, a.sample_rate)
                 print(f"Recording that input to {writer.path}")

@@ -111,3 +111,10 @@ def test_audio_inputs_in_config():
 def test_missing_wav_is_readable(tmp_path, capsys):
     assert main(["listen", str(tmp_path / "nope.wav")]) == 2
     assert "not found" in capsys.readouterr().err
+
+
+def test_record_audio_without_an_audio_input_is_a_readable_error(tmp_path, capsys):
+    f = tmp_path / "c.toml"
+    f.write_text('[[inputs]]\nport = "LPK25"\n')
+    assert main(["monitor", "-c", str(f), "--record-audio", str(tmp_path / "x.wav")]) == 2
+    assert "needs an audio input" in capsys.readouterr().err
