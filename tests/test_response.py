@@ -211,7 +211,7 @@ def test_detector_slips_are_cleaned_out_of_remembered_phrases():
 
     slip = [(0.0, 64, 90), (0.3, 52, 90), (0.6, 67, 90)]           # E4 E3(!) G4
     assert [n for _, n, _ in clean_phrase(slip)] == [64, 64, 67]
-    blip = [(0.0, 60, 90), (0.03, 73, 90), (0.4, 62, 90)]          # a 30 ms stray
+    blip = [(0.0, 60, 90), (0.3, 73, 90), (0.33, 62, 90)]          # C#5 lasts 30 ms: a stray
     assert [n for _, n, _ in clean_phrase(blip)] == [60, 62]
     leap = [(0.0, 60, 90), (0.3, 72, 90), (0.6, 74, 90)]           # a real octave leap
     assert [n for _, n, _ in clean_phrase(leap)] == [60, 72, 74]
