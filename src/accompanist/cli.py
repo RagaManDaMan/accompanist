@@ -14,6 +14,7 @@ from pathlib import Path
 from . import config as cfgmod
 from . import params as registry
 from .controller import Controller, clock, format_status
+from .audio_io import AudioError
 from .midi_io import PortError, list_ports, open_inputs, open_output
 from .output import SafeOutput
 from .recording import Recorder, TakeError, auto_path, load_actions, load_take
@@ -54,29 +55,126 @@ def cmd_devices(_args) -> int:
     print("MIDI outputs:")
     for n in outs or ["(none)"]:
         print(f"  {n}")
-    print("\nPut a distinctive part of a name in `port = \"...\"` in your config.")
+    print("Audio inputs:")
+    try:
+        from .audio_io import list_inputs
+
+        for name, channels, rate in list_inputs() or [("(none)", 0, 0)]:
+            print(f"  {name}" + (f"  ({channels} in, {rate:g} Hz)" if channels else ""))
+    except Exception as e:                       # audio is optional: MIDI still works
+        print(f"  (unavailable: {e})")
+    print("\nPut a distinctive part of a name in `port = \"...\"` (MIDI) or `audio = \"...\"` "
+          "(audio) in your config.")
     return 0
 
 
+def note_label(note: int) -> str:
+    return cfgmod.note_name(note)
+
+
 def cmd_monitor(args) -> int:
+    """Show what the configured inputs hear: MIDI messages, and notes heard in audio."""
+    import numpy as np
+
+    from .audio_io import AudioInput, WavWriter
+    from .audio_notes import NoteTracker, db_of
+
     cfg = cfgmod.load(args.config)
     q: queue.Queue = queue.Queue()
     ports = open_inputs(cfg, q)
-    print("Monitoring configured inputs. Play something; Ctrl-C to stop.")
+    audio_q: queue.Queue = queue.Queue()
+    audios, trackers, writer = [], {}, None
+    for icfg in cfg.inputs:
+        if icfg.is_audio:
+            a = AudioInput(icfg, audio_q)
+            audios.append(a)
+            trackers[id(icfg)] = NoteTracker(cfg.audio, a.sample_rate)
+            print(f"Listening to '{a.name}' input {icfg.audio_channel} at {a.sample_rate:g} Hz")
+            if args.record_audio and writer is None:
+                writer = WavWriter(args.record_audio, a.sample_rate)
+                print(f"Recording that input to {writer.path}")
+    print("Monitoring configured inputs. Play something; Ctrl-C to stop.\n")
+    t0 = time.monotonic()
+    level, last_level_print, sounding = -120.0, 0.0, {}
     try:
         while True:
             try:
-                t, icfg, msg = q.get(timeout=0.2)
+                t, icfg, msg = q.get(timeout=0.02)
+                if msg.type not in ("clock", "active_sensing"):
+                    print(f"\r\x1b[K{t - t0:8.3f}  {icfg.name or icfg.port:<10} {msg}")
             except queue.Empty:
-                continue
-            if msg.type in ("clock", "active_sensing"):
-                continue
-            print(f"{t:10.3f}  {icfg.name or icfg.port:<12} {msg}")
+                pass
+            while True:
+                try:
+                    t, icfg, block = audio_q.get_nowait()
+                except queue.Empty:
+                    break
+                if writer is not None and icfg is audios[0].icfg:
+                    writer.write(block)
+                level = max(level - 1.0, db_of(block))           # a meter that falls slowly
+                for ev in trackers[id(icfg)].process(block, t):
+                    label = icfg.name or icfg.audio
+                    if ev.kind == "on":
+                        sounding[label] = ev
+                        print(f"\r\x1b[K{ev.t - t0:8.3f}  {label:<10} {note_label(ev.note):<4} "
+                              f"{ev.cents:+4.0f} cents  vel {ev.velocity:3d}  ({ev.db:5.1f} dB)")
+                    else:
+                        start = sounding.pop(label, None)
+                        if start is not None:
+                            print(f"\r\x1b[K{'':8}  {label:<10} {'':4} ...held {ev.t - start.t:4.2f} s")
+            now = time.monotonic()
+            if audios and now - last_level_print > 0.2:
+                bar = "#" * max(0, int((level + 60) / 2))
+                gate = "  (below gate: silence)" if level < cfg.audio.gate_db else ""
+                sys.stdout.write(f"\r\x1b[Klevel {level:6.1f} dB |{bar:<30}|{gate}")
+                sys.stdout.flush()
+                last_level_print = now
     except KeyboardInterrupt:
         pass
     finally:
         for p in ports:
             p.close()
+        for a in audios:
+            a.close()
+        if writer is not None:
+            writer.close()
+            print(f"\nSaved {writer.path}: try `accompanist listen {writer.path}`")
+    return 0
+
+
+def cmd_listen(args) -> int:
+    """Run a recording through the note detector, offline: the audio version of replay."""
+    from .audio_io import read_wav
+    from .audio_notes import NoteTracker
+    from .recording import Recorder
+
+    cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
+    cfg = cfgmod.load(cfg_path) if cfg_path else cfgmod.from_dict({})
+    samples, rate = read_wav(args.audio, args.channel)
+    tracker = NoteTracker(cfg.audio, rate)
+    events = []
+    block = 512
+    for i in range(0, len(samples), block):
+        events += tracker.process(samples[i:i + block], i / rate)
+    events += tracker.flush(len(samples) / rate)
+    ons = [e for e in events if e.kind == "on"]
+    print(f"{args.audio}: {len(samples) / rate:.1f} s at {rate:g} Hz, channel {args.channel} "
+          f"(config: {cfg_path or 'defaults'})\n")
+    held = {}
+    for e in events:
+        if e.kind == "on":
+            held[e.note] = e
+        elif e.note in held:
+            on = held.pop(e.note)
+            print(f"  {on.t:7.3f}s  {note_label(on.note):<4} {on.cents:+4.0f} cents  vel {on.velocity:3d}"
+                  f"  held {e.t - on.t:5.2f}s")
+    print(f"\n{len(ons)} notes heard.")
+    if args.save_take:
+        rec = Recorder(args.save_take)
+        for e in ons:
+            rec.note_on(e.t, e.note, e.velocity, "audio")
+        rec.close()
+        print(f"Saved as a take: {args.save_take} (accompanist replay {args.save_take})")
     return 0
 
 
@@ -134,6 +232,9 @@ def say(message) -> None:
 
 def cmd_run(args) -> int:
     cfg = cfgmod.load(args.config, args.preset, chart_overrides(args))
+    if cfg.inputs and all(i.is_audio for i in cfg.inputs):
+        raise cfgmod.ConfigError("audio inputs can only be monitored for now (`accompanist monitor`, "
+                                 "`accompanist listen FILE.wav`); accompanying audio is the next step")
     q: queue.Queue = queue.Queue()
     in_ports = open_inputs(cfg, q)
     port = open_output(cfg.output)
@@ -288,11 +389,14 @@ def cmd_params(args) -> int:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="accompanist", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("devices", help="list MIDI ports")
-    for name, helptext in (("monitor", "print incoming MIDI from configured inputs"),
+    sub.add_parser("devices", help="list MIDI ports and audio inputs")
+    for name, helptext in (("monitor", "show what the configured inputs hear (MIDI, and notes in audio)"),
                            ("run", "listen and accompany, live")):
         sp = sub.add_parser(name, help=helptext)
         sp.add_argument("-c", "--config", default="config.toml")
+        if name == "monitor":
+            sp.add_argument("--record-audio", default=None, metavar="FILE.wav",
+                            help="save the (first) audio input to a WAV file")
         if name == "run":
             sp.add_argument("--preset", default=None, help=PRESET_HELP)
             add_chart_args(sp)
@@ -307,13 +411,20 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("listen", help="run an audio recording (WAV) through the note detector, offline")
+    sp.add_argument("audio", help="a WAV file, e.g. saved by `monitor --record-audio`")
+    sp.add_argument("--channel", type=int, default=1, help="which channel of the file (default 1)")
+    sp.add_argument("-c", "--config", default=None, help="default: ./config.toml if present, else defaults")
+    sp.add_argument("--save-take", default=None, metavar="FILE.jsonl",
+                    help="also save the notes heard as a take, for `replay`")
     sp = sub.add_parser("params", help="list every setting (with --json: the schema a UI is built from)")
     sp.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
     try:
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
-                "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params}[args.cmd](args)
-    except (cfgmod.ConfigError, PortError, TakeError) as e:
+                "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
+                "listen": cmd_listen}[args.cmd](args)
+    except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 

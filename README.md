@@ -125,6 +125,29 @@ shaker = "xg xg xg | xg xg | xg xg"
 
 The cycle restarts when the beat starts (there is no downbeat detection yet).
 
+## Audio input (sax first): listening only, for now
+
+The accompanist can hear notes in audio from an interface (voice and sax are how most gigs
+happen). In this version it **only listens**: check that it hears you before it accompanies.
+
+```toml
+[[inputs]]
+name = "sax"
+audio = "Scarlett Solo"   # part of the audio interface's name (`accompanist devices`)
+audio_channel = 1         # which input of the interface
+```
+
+```bash
+accompanist monitor --record-audio takes/sax-1.wav   # live: notes as heard, a level meter
+accompanist listen takes/sax-1.wav                   # offline: the same, from a recording
+accompanist listen takes/sax-1.wav --save-take takes/sax-1.jsonl   # ...then `replay` it
+```
+
+It hears pitch with YIN, and a new note on a change of pitch (legato) or a fresh attack
+on the same pitch (tonguing). Notes are reported at their real start. The `[audio]` settings
+(`accompanist params`) tune it: `gate_db` (what counts as silence; watch the meter),
+`min_note_ms`, `attack_db`, `cents_tolerance`.
+
 ## Tuning against your own playing
 
 `accompanist run --record` saves every note you play to `takes/take-<time>.jsonl`.

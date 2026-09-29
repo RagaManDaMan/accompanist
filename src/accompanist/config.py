@@ -73,19 +73,26 @@ PulseCfg = _section_class("pulse")
 LockCfg = _section_class("lock")
 DynamicsCfg = _section_class("dynamics")
 DrumsCfg = _section_class("drums")
+AudioCfg = _section_class("audio")
 PanicCfg = _section_class("panic")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
-                   "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg, "drums": DrumsCfg,
+                   "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg, "drums": DrumsCfg, "audio": AudioCfg,
                    "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
 @dataclass
 class InputCfg:
-    port: str                       # substring of the MIDI input port name
+    port: Optional[str] = None      # substring of the MIDI input port name, or...
     role: str = "note_source"
     name: str = ""                  # label for the status line
-    channel: Optional[int] = None   # 1-16, or omit for all channels
+    channel: Optional[int] = None   # MIDI: 1-16, or omit for all channels
+    audio: Optional[str] = None     # ...substring of an audio input device's name
+    audio_channel: int = 1          # audio: which input of the interface (1-based)
+
+    @property
+    def is_audio(self) -> bool:
+        return self.audio is not None
 
 
 @dataclass
@@ -99,6 +106,7 @@ class Config:
     lock: Any = field(default_factory=LockCfg)
     dynamics: Any = field(default_factory=DynamicsCfg)
     drums: Any = field(default_factory=DrumsCfg)
+    audio: Any = field(default_factory=AudioCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict[int, str] = field(default_factory=dict)   # CC number -> action or param key
     preset: Optional[str] = None
@@ -220,13 +228,16 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
     for i, item in enumerate(d.get("inputs") or []):
         if not isinstance(item, dict):
             raise ConfigError(f"inputs[{i}] must be a table ([[inputs]])")
-        allowed_in = {"port", "role", "name", "channel"}
+        allowed_in = {"port", "role", "name", "channel", "audio", "audio_channel"}
         if set(item) - allowed_in:
             raise ConfigError(f"inputs[{i}] unknown key(s) {sorted(set(item) - allowed_in)}; "
                               f"allowed: {sorted(allowed_in)}")
-        if "port" not in item:
-            raise ConfigError(f"inputs[{i}] needs a port (part of the MIDI input's name)")
+        if ("port" in item) == ("audio" in item):
+            raise ConfigError(f"inputs[{i}] needs either port = \"...\" (a MIDI input) or "
+                              f"audio = \"...\" (an audio interface), by part of its name")
         inp = InputCfg(**item)
+        if not isinstance(inp.audio_channel, int) or isinstance(inp.audio_channel, bool) or inp.audio_channel < 1:
+            raise ConfigError(f"inputs[{i}]: audio_channel must be 1 or more (the input number)")
         if inp.role in PLANNED_ROLES:
             raise ConfigError(
                 f"inputs[{i}]: role '{inp.role}' is planned but not implemented yet "
@@ -247,6 +258,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         lock=_section("lock", d.get("lock")),
         dynamics=_section("dynamics", d.get("dynamics")),
         drums=_section("drums", d.get("drums")),
+        audio=_section("audio", d.get("audio")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls")),
         preset=name,
