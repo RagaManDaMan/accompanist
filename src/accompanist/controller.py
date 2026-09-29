@@ -28,9 +28,15 @@ class Controller:
         self.engine = Engine(cfg, out)
         self.overrides: dict[str, Any] = {}     # live changes on top of the config file
         self._taps: list[float] = []
+        self.t0: Optional[float] = None         # first note or action: the take's clock starts here
 
     # ---- input --------------------------------------------------------------
+    def _started(self, t: float) -> None:
+        if self.t0 is None:
+            self.t0 = t
+
     def on_note(self, t: float, note: int, velocity: int) -> None:
+        self._started(t)
         self.engine.on_note(t, note, velocity)
 
     def on_cc(self, t: float, control: int, value: int) -> Optional[str]:
@@ -88,6 +94,7 @@ class Controller:
         for the status display: a key press should never be silently ignored."""
         if action not in ACTIONS:
             raise ConfigError(f"unknown action '{action}'; use one of {list(ACTIONS)}")
+        self._started(now)
         eng = self.engine
         if action == "panic":
             self.panic()
@@ -147,6 +154,7 @@ class Controller:
         s["preset"] = self.cfg.preset
         s["overrides"] = dict(self.overrides)
         s["taps"] = len(self._taps)
+        s["elapsed_s"] = None if self.t0 is None else now - self.t0   # same clock as a recorded take
         return s
 
 
@@ -163,12 +171,20 @@ def cc_to_value(p: registry.Param, value: int) -> Any:
     return int(round(v)) if p.type is int else round(v, 6)
 
 
+def clock(seconds: Optional[float]) -> str:
+    """Playing time as m:ss.s (the clock recorded takes and `replay` use)."""
+    if seconds is None:
+        return "-:--.-"
+    m, sec = divmod(max(seconds, 0.0), 60)
+    return f"{int(m)}:{sec:04.1f}"
+
+
 def format_status(s: dict) -> str:
     """The one-line status display. Only a formatter of get_state().
 
     State flags come first, so they stay visible when a narrow window cuts the line."""
     heard = "--" if s["heard"] is None else f"{s['heard']} ({s['heard_ago_s']:0.1f}s ago)"
     flags = ("MUTED " if s["muted"] else "") + ("LOCKED " if s.get("locked") else "")
-    return (f"{flags}{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  "
+    return (f"{clock(s.get('elapsed_s'))}  {flags}{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  "
             f"pad {s['pad'] or '--':<4} pulse {'on ' if s['pulse'] else 'off'}  "
             f"root {s['root'] or '--':<2}  heard {heard}")

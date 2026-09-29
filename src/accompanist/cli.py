@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import config as cfgmod
 from . import params as registry
-from .controller import Controller, format_status
+from .controller import Controller, clock, format_status
 from .midi_io import PortError, list_ports, open_inputs, open_output
 from .output import SafeOutput
 from .recording import Recorder, TakeError, auto_path, load_actions, load_take
@@ -171,7 +171,7 @@ def cmd_simulate(args) -> int:
     res = simulate.run(cfg, verbose=True)
     print("\nPad changes:")
     for t, what in res.log:
-        print(f"  t={t:6.1f}s  {what}")
+        print(f"  {clock(t)}  {what}")
     print(f"\nMIDI messages emitted: {len(res.port.sent)}; notes still sounding at end: {len(res.engine.out.sounding)}")
     return 0
 
@@ -181,18 +181,19 @@ def cmd_replay(args) -> int:
 
     cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
     cfg = cfgmod.load(cfg_path, args.preset) if cfg_path else cfgmod.from_dict({}, args.preset)
-    onsets = [(t + 1.0, n, v) for t, n, v in load_take(args.take)]
-    actions = [(t + 1.0, a) for t, a in load_actions(args.take)]
-    print(f"Replaying {args.take}: {len(onsets)} notes over {onsets[-1][0] - 1.0:.1f}s "
+    # Times are the take's own clock (0 = first note or key press), as shown live in the status line.
+    onsets = load_take(args.take)
+    actions = load_actions(args.take)
+    print(f"Replaying {args.take}: {len(onsets)} notes over {onsets[-1][0]:.1f}s "
           f"(config: {cfg_path or 'defaults'}{', preset: ' + cfg.preset if cfg.preset else ''})\n")
     res = simulate.run(cfg, verbose=True, onsets=onsets, actions=actions)
     active = [b for (t, b, c) in res.tempo_trace if onsets[0][0] <= t <= onsets[-1][0]]
     print("\nPad changes and groove lock:")
     for t, what in res.log:
-        print(f"  t={t:6.1f}s  {what}")
+        print(f"  {clock(t)}  {what}")
     if actions:
         print("Your key presses / controller actions (replayed): "
-              + ", ".join(f"{a} at {t:.1f}s" for t, a in actions))
+              + ", ".join(f"{a} at {clock(t)}" for t, a in actions))
     if active:
         print(f"\nTempo while you played: min {min(active):.1f}, max {max(active):.1f}, "
               f"final {active[-1]:.1f} bpm")

@@ -241,6 +241,6 @@ def test_status_flags_come_first_so_a_narrow_window_still_shows_them():
     ctl.on_note(0.0, 62, 90)
     ctl.tick(0.1)
     ctl.lock(0.1)
-    assert format_status(ctl.get_state(0.1)).startswith("LOCKED ")
+    assert format_status(ctl.get_state(0.1)).startswith("0:00.1  LOCKED ")
     ctl.panic()
-    assert format_status(ctl.get_state(0.2)).startswith("MUTED ")
+    assert format_status(ctl.get_state(0.2)).startswith("0:00.2  MUTED ")

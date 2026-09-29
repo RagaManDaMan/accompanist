@@ -95,4 +95,4 @@ def test_actions_are_recorded_and_replayed(tmp_path, capsys, monkeypatch):
     (tmp_path / "config.toml").write_text('[lock]\nauto = false\n')
     assert main(["replay", str(f)]) == 0
     out = capsys.readouterr().out
-    assert "LOCKED" in out and "unlocked" in out and "lock at 11.1s" in out
+    assert "LOCKED" in out and "unlocked" in out and "lock at 0:10.1" in out

@@ -139,7 +139,7 @@ def run(
         if verbose and now - last_print >= 2.0:
             true = next((b for (tt, b) in reversed(truth) if tt <= now), None)
             true_s = f"(you: {true:5.1f})" if truth and true and now < truth[-1][0] + 1 else ""
-            print(f"t={now:6.1f}s  {format_status(ctl.get_state(now))}  {true_s}")
+            print(f"{format_status(ctl.get_state(now))}  {true_s}")
             last_print = now
         now += dt
     return SimResult(eng, port, log, now, trace, ctl, timeline)
