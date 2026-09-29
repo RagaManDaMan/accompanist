@@ -203,6 +203,7 @@ def test_tap_tempo_sets_tempo_and_octave():
     assert ctl.engine.tempo.bpm == pytest.approx(120)
     assert ctl.cfg.tempo.prior_bpm == 120                         # octave follows the tap
     assert ctl.overrides["tempo.prior_bpm"] == 120
+    assert ctl.cfg.tempo.prior_sigma_oct == ctl.cfg.tempo.tap_sigma_oct == 0.3
 
 
 def test_slow_taps_start_over():

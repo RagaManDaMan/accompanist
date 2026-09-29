@@ -84,6 +84,9 @@ PARAMS: list[Param] = [
       "Older notes count less: their weight halves every this many seconds.", "Tempo", 1, 120, 1),
     P("tempo.alpha", float, 0.25, "Follow speed",
       "How fast the estimate follows you (0-1). Higher = quicker but jumpier.", "Tempo", 0.01, 1, 0.01),
+    P("tempo.tap_sigma_oct", float, 0.3, "Prior width after tapping",
+      "Tapping the tempo also narrows the prior to this (octaves), so the tempo you tapped "
+      "wins over look-alike tempi (3:2, 4:3) in busy playing.", "Tempo", 0.1, 2, 0.05),
     P("tempo.prior_sigma_oct", float, 0.5, "Prior width",
       "How strongly prior_bpm pulls, as a width in octaves (smaller = stronger).",
       "Tempo (advanced)", 0.1, 2, 0.05),

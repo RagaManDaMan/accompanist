@@ -133,7 +133,8 @@ class Controller:
 
     def tap_tempo(self, now: float) -> Optional[float]:
         """Tap the beat. After TAP_COUNT taps, sets the tempo, and its octave (prior_bpm), to
-        what you tapped, and lines the pulse up with your last tap. Returns the bpm once set."""
+        what you tapped, narrows the prior (tap_sigma_oct) so look-alike tempi don't take over,
+        and lines the pulse up with your last tap. Returns the bpm once set."""
         if self._taps and now - self._taps[-1] > TAP_RESET_S:
             self._taps = []
         self._taps.append(now)
@@ -144,6 +145,8 @@ class Controller:
         t = self.cfg.tempo
         bpm = min(max(60.0 / period, t.min_bpm), t.max_bpm)
         self.set_param("tempo.prior_bpm", round(bpm, 1))
+        if t.prior_sigma_oct > t.tap_sigma_oct:
+            self.set_param("tempo.prior_sigma_oct", t.tap_sigma_oct)
         self.engine.set_tempo(bpm, beat_t=now)
         self._taps = []
         return bpm
