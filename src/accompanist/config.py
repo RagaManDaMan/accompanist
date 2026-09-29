@@ -72,9 +72,10 @@ PadCfg = _section_class("pad")
 PulseCfg = _section_class("pulse")
 LockCfg = _section_class("lock")
 DynamicsCfg = _section_class("dynamics")
+DrumsCfg = _section_class("drums")
 PanicCfg = _section_class("panic")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
-                   "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
+                   "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg, "drums": DrumsCfg,
                    "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
@@ -97,6 +98,7 @@ class Config:
     pulse: Any = field(default_factory=PulseCfg)
     lock: Any = field(default_factory=LockCfg)
     dynamics: Any = field(default_factory=DynamicsCfg)
+    drums: Any = field(default_factory=DrumsCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict[int, str] = field(default_factory=dict)   # CC number -> action or param key
     preset: Optional[str] = None
@@ -244,6 +246,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         pulse=_section("pulse", d.get("pulse")),
         lock=_section("lock", d.get("lock")),
         dynamics=_section("dynamics", d.get("dynamics")),
+        drums=_section("drums", d.get("drums")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls")),
         preset=name,

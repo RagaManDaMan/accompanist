@@ -71,6 +71,29 @@ play busily (`dynamics.duck`, never below `dynamics.pad_floor`), coming forward 
 you pause. The bass (pulse) velocity follows your loudness too, but never ducks. Most Logic
 instruments respond to CC11; if yours doesn't, set `expression_cc = 7` (volume).
 
+## Drums
+
+`[drums] enabled = true` plays a General MIDI drum pattern on channel 10 (put a Logic
+drum kit on a track that listens to channel 10). `drums.pattern` picks one of the
+patterns (`accompanist params` lists them): `basic`, `halftime`, `soft`, `sparse`,
+`waltz`, and `seven-322` (7 beats grouped 3+2+2). Drums follow the same beat as the bass,
+start when it starts, follow your loudness, and stop on panic. `drums.swing` swings the
+off-steps.
+
+A pattern is a small text file, so new grooves need no code. Put your own in
+`./patterns/NAME.toml`:
+
+```toml
+description = "7 beats grouped 3+2+2"
+beats = 7                 # the cycle: any length
+steps_per_beat = 2        # subdivisions of each beat
+[hits]                    # one step per character: X accent, x hit, g ghost, . rest
+kick   = "X. .. .. | x. .. | x. .."
+shaker = "xg xg xg | xg xg | xg xg"
+```
+
+The cycle restarts when the beat starts (there is no downbeat detection yet).
+
 ## Tuning against your own playing
 
 `accompanist run --record` saves every note you play to `takes/take-<time>.jsonl`.

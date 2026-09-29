@@ -1,0 +1,7 @@
+description = "3/4: kick on 1, hats on 2 and 3"
+beats = 3
+steps_per_beat = 2
+[hits]
+kick  = "X. .. .."
+hat   = ".. x. x."
+ride  = "x. .. .."

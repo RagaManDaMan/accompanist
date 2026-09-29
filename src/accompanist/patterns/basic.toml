@@ -1,0 +1,7 @@
+description = "4/4: kick on 1 and 3, snare on 2 and 4, eighth-note hats"
+beats = 4
+steps_per_beat = 2
+[hits]
+kick  = "X. .. x. .."
+snare = ".. x. .. x."
+hat   = "xg xg xg xg"

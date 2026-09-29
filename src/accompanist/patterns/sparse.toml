@@ -1,0 +1,6 @@
+description = "4/4, ambient: kick on 1, shaker on the beat"
+beats = 4
+steps_per_beat = 1
+[hits]
+kick   = "X..."
+shaker = "gxgx"

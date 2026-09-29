@@ -48,6 +48,16 @@ class Param:
         }
 
 
+def _check_pattern(v: Any) -> None:
+    from .config import ConfigError
+    from .patterns import load
+
+    try:
+        load(v)
+    except ConfigError as e:
+        raise ValueError(str(e)) from e
+
+
 def _check_root(v: Any) -> None:
     from .config import parse_root, ConfigError
 
@@ -206,6 +216,24 @@ PARAMS: list[Param] = [
     P("pulse.hint_window", float, 0.15, "On-beat window",
       "Only notes within this fraction of a beat from the pulse nudge it.", "Pulse", 0, 0.5, 0.01),
     P("pulse.note_length_s", float, 0.2, "Pulse note length", "Seconds.", "Pulse", 0.01, 2, 0.01),
+
+    # ---- drums -----------------------------------------------------------------
+    P("drums.enabled", bool, False, "Drums on", "Play a drum pattern on the beat (General MIDI).",
+      "Drums"),
+    P("drums.channel", int, 10, "Drums channel", "MIDI channel (1-16); GM drums are on 10.",
+      "Drums", 1, 16, 1, live=False),
+    P("drums.pattern", str, "basic", "Pattern",
+      "Which pattern (see `accompanist params`: patterns/NAME.toml; add your own in ./patterns).",
+      "Drums", choices=("basic", "halftime", "soft", "sparse", "waltz", "seven-322"),
+      check=_check_pattern),
+    P("drums.velocity", int, 70, "Drums velocity", "Velocity of a normal hit (x).", "Drums", 1, 127, 1),
+    P("drums.accent", int, 25, "Drums accent", "Extra velocity for an accent (X).", "Drums", 0, 127, 1),
+    P("drums.ghost", float, 0.45, "Ghost level", "A ghost note (g) at this share of a hit.",
+      "Drums", 0.05, 1, 0.05),
+    P("drums.swing", float, 0.0, "Swing",
+      "Delay every second step by this share of a step (0 = straight, 0.33 = triplet swing).",
+      "Drums", 0, 0.5, 0.01),
+    P("drums.note_length_s", float, 0.1, "Drum note length", "Seconds.", "Drums", 0.01, 1, 0.01),
 
     # ---- dynamics --------------------------------------------------------------
     P("dynamics.follow", float, 0.5, "Follow your loudness",

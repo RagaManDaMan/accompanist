@@ -1,6 +1,8 @@
-"""The voices: a slow-moving pad and a tempo-locked pulse."""
+"""The voices: a slow-moving pad, a tempo-locked pulse (bass) and drums."""
 from __future__ import annotations
 
+import heapq
+import itertools
 import random
 from typing import Optional
 
@@ -137,3 +139,54 @@ class PulseResponder:
 
     def reset(self) -> None:
         self.beat_count = 0
+
+
+class DrumResponder:
+    """Plays a drum pattern (patterns.py) on the beat clock.
+
+    Each beat, the steps of that beat are scheduled at their times within it (with swing
+    on every second step), then played by tick(). The cycle restarts when the beat clock
+    starts. Changing drums.pattern live takes effect at the next beat.
+    """
+
+    def __init__(self, cfg, out: SafeOutput) -> None:
+        self.cfg, self.out = cfg, out
+        self.beat_count = 0
+        self._queue: list[tuple[float, int, int, int]] = []   # (time, seq, note, velocity)
+        self._seq = itertools.count()
+        self._pattern = None
+
+    def pattern(self):
+        from .patterns import load
+
+        if self._pattern is None or self._pattern.name != self.cfg.pattern:
+            self._pattern = load(self.cfg.pattern)
+        return self._pattern
+
+    def on_beat(self, beat_t: float, period: float, gain: float = 1.0) -> None:
+        pat = self.pattern()
+        spb = pat.steps_per_beat
+        first = (self.beat_count % pat.beats) * spb
+        for step, note, level in pat.hits:
+            k = step - first
+            if 0 <= k < spb:
+                offset = (k + (self.cfg.swing if k % 2 == 1 else 0.0)) * period / spb
+                vel = self.cfg.velocity * gain
+                if level == "accent":
+                    vel += self.cfg.accent
+                elif level == "ghost":
+                    vel *= self.cfg.ghost
+                heapq.heappush(self._queue, (beat_t + offset, next(self._seq), note,
+                                             min(max(round(vel), 1), 127)))
+        self.beat_count += 1
+
+    def tick(self, now: float) -> None:
+        ch = self.cfg.channel - 1
+        while self._queue and self._queue[0][0] <= now:
+            t, _, note, vel = heapq.heappop(self._queue)
+            self.out.note_on(ch, note, vel)
+            self.out.note_off_at(t + self.cfg.note_length_s, ch, note)
+
+    def reset(self) -> None:
+        self.beat_count = 0
+        self._queue.clear()

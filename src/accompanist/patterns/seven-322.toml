@@ -1,0 +1,7 @@
+description = "7 beats grouped 3+2+2 (an example of a non-4/4 cycle): kick at each group"
+beats = 7
+steps_per_beat = 2
+[hits]
+kick   = "X. .. .. | x. .. | x. .."
+shaker = "xg xg xg | xg xg | xg xg"
+rim    = ".. .. .. | .. .. | .. g."

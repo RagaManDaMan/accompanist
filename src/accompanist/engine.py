@@ -16,7 +16,7 @@ from .dynamics import Dynamics
 from .config import Config, note_name, NOTE_NAMES
 from .harmony import Onset, Voicing, make_model
 from .output import SafeOutput
-from .responders import PadResponder, PulseResponder
+from .responders import DrumResponder, PadResponder, PulseResponder
 from .tempo import REALIGN_ADVANTAGE, TempoEstimator
 
 # Pad expression: resend when it moves this many steps (of 127), at most this often.
@@ -32,6 +32,8 @@ class Engine:
         self.clock = BeatClock(cfg.pulse.phase_gain)
         self.pad = PadResponder(cfg.pad, out, cfg.harmony.seed)
         self.pulse = PulseResponder(cfg.pulse, out)
+        self.drums = DrumResponder(cfg.drums, out)
+        self.beat_count = 0                       # beats since the clock started (bar position)
         self.dynamics = Dynamics(cfg.dynamics)
         self._expression_sent: Optional[tuple[int, int]] = None   # (cc, value) last sent to the pad
         self._expression_t = float("-inf")
@@ -83,8 +85,10 @@ class Engine:
         elif voicing is not None:
             self.pad.update(now, voicing, period, beat_known=self.clock.running)
 
-        if not self.cfg.pulse.enabled:
+        # The beat clock runs while bass (pulse) or drums need it.
+        if not (self.cfg.pulse.enabled or self.cfg.drums.enabled):
             self.clock.stop()
+            self.drums.reset()
             return
         p = self.cfg.pulse
         if self.locked:
@@ -96,20 +100,29 @@ class Engine:
         active = active and voicing is not None
         if active and not self.clock.running and self.last_onset_t is not None:
             self.pulse.reset()
+            self.drums.reset()
+            self.beat_count = 0
             fit = self.tempo.beat_reference(now)
             self.clock.start(fit[0] if fit else self.last_onset_t, period, now)
         elif not active and self.clock.running:
             self.clock.stop()
+            self.drums.reset()
         if self.clock.running:
             # The pulse follows the harmony that is actually sounding, so pad and
             # pulse never disagree while the pad is still catching up.
             pulse_root = self.pad.current.root_pc if self.pad.current else voicing.root_pc
-            for _ in self.clock.due(now):
+            gain = self.dynamics.follow_gain()
+            for beat_t in self.clock.due(now):
                 if self.cfg.pad.enabled:
-                    self.pad.on_beat(now, self.pulse.beat_count % max(1, p.beats_per_bar))
+                    self.pad.on_beat(now, self.beat_count % max(1, p.beats_per_bar))
                     if self.pad.current and not self.chord_held:
                         pulse_root = self.pad.current.root_pc
-                self.pulse.on_beat(now, pulse_root, self.dynamics.follow_gain())
+                if p.enabled:
+                    self.pulse.on_beat(now, pulse_root, gain)
+                if self.cfg.drums.enabled:
+                    self.drums.on_beat(beat_t, self.clock.period, gain)
+                self.beat_count += 1
+            self.drums.tick(now)
 
     def _shape_pad(self, now: float) -> None:
         """Ride the pad's level on its expression controller: follow your loudness, step back
@@ -162,6 +175,7 @@ class Engine:
         self._expression_sent = None           # re-send the pad level after resume
         self.pad.reset()
         self.pulse.reset()
+        self.drums.reset()
         self.clock.stop()
 
     def resume(self) -> None:

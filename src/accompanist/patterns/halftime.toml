@@ -1,0 +1,7 @@
+description = "4/4 half-time: kick on 1, snare on 3, eighth-note hats"
+beats = 4
+steps_per_beat = 2
+[hits]
+kick  = "X. .. .. .x"
+snare = ".. .. x. .."
+hat   = "xg xg xg xg"

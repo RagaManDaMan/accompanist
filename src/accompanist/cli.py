@@ -218,8 +218,10 @@ def cmd_replay(args) -> int:
 
 def cmd_params(args) -> int:
     if args.json:
+        from . import patterns
         print(json.dumps({"params": registry.schema(), "actions": list(cfgmod.ACTIONS),
-                          "presets": cfgmod.available_presets()}, indent=2))
+                          "presets": cfgmod.available_presets(),
+                          "drum_patterns": patterns.available()}, indent=2))
         return 0
     group = None
     for p in registry.PARAMS:
@@ -234,6 +236,8 @@ def cmd_params(args) -> int:
         print(f"  {p.key:<26} {str(p.default):<12} {rng:<14} {p.help}{flag}")
     print(f"\nActions (keys, [controls] CCs): {', '.join(cfgmod.ACTIONS)}")
     print(f"Presets (--preset NAME): {', '.join(cfgmod.available_presets()) or '(none)'}")
+    from . import patterns
+    print(f"Drum patterns (drums.pattern): {', '.join(patterns.available())}")
     return 0
 
 

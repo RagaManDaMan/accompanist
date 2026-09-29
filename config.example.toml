@@ -56,6 +56,12 @@ beats_per_bar = 4
 min_confidence = 0.5    # start pulsing once the tempo is this clear...
 stop_confidence = 0.15  # ...and only stop again if it falls below this
 
+[drums]                 # General MIDI drums on channel 10: see README
+enabled = false
+pattern = "basic"       # basic, halftime, soft, sparse, waltz, seven-322, or your own
+velocity = 70
+# swing = 0.0           # 0.33 = triplet swing
+
 [dynamics]              # the accompaniment breathes with you: see README
 follow = 0.5            # 0 = fixed levels; 1 = pad and bass follow your loudness fully
 duck = 0.5              # how far the pad steps back while you play busily

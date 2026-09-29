@@ -1,0 +1,7 @@
+description = "4/4, quiet: ride on the beat, rim on 4, a soft kick on 1"
+beats = 4
+steps_per_beat = 2
+[hits]
+kick = "x. .. .. .."
+ride = "x. xg x. xg"
+rim  = ".. .. .. g."
