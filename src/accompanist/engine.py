@@ -90,6 +90,8 @@ class Engine:
             if self.clock.running:
                 self._realign(now)
         self.clock.phase_gain = self.cfg.pulse.phase_gain * (self.cfg.lock.phase_rate if self.locked else 1.0)
+        self.clock.max_nudge = self.cfg.pulse.max_nudge
+        self.clock.max_tempo_step = self.cfg.pulse.max_tempo_step
         self.proposal = self.harmony.propose(now)
         self._auto_lock(now)
         if self.muted:

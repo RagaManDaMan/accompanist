@@ -59,6 +59,11 @@ def _check_pattern(v: Any) -> None:
         raise ValueError(str(e)) from e
 
 
+def _multiple_of(v: Any, n: int) -> None:
+    if v % n:
+        raise ValueError(f"must be a multiple of {n}, got {v}")
+
+
 def _check_root(v: Any) -> None:
     from .config import parse_root, ConfigError
 
@@ -235,6 +240,11 @@ PARAMS: list[Param] = [
       "Stop pulsing after this much silence (seconds).", "Pulse", 0.5, 36000, 0.5),
     P("pulse.phase_gain", float, 0.3, "Phase pull",
       "How hard the pulse leans toward your on-beat notes (0-1).", "Pulse", 0, 1, 0.05),
+    P("pulse.max_nudge", float, 0.04, "Steadiness",
+      "The pulse moves toward your beat by at most this share of a beat per beat, so it "
+      "follows without lurching (0 = at once).", "Pulse", 0, 0.5, 0.01),
+    P("pulse.max_tempo_step", float, 0.02, "Tempo easing",
+      "Its beat spacing changes by at most this share per beat (0 = at once).", "Pulse", 0, 0.5, 0.01),
     P("pulse.hint_window", float, 0.15, "On-beat window",
       "Only notes within this fraction of a beat from the pulse nudge it.", "Pulse", 0, 0.5, 0.01),
     P("pulse.note_length_s", float, 0.2, "Pulse note length", "Seconds.", "Pulse", 0.01, 2, 0.01),
@@ -272,13 +282,15 @@ PARAMS: list[Param] = [
       "Extra velocity on 1 (bass and drums) once the groove is heard clearly.", "Groove", 0, 60, 1),
     P("groove.confident_at", float, 0.5, "Sure at",
       "The groove counts as heard clearly from this confidence (0-1).", "Groove", 0, 1, 0.05),
-    P("groove.window_s", float, 20.0, "Groove memory",
-      "Seconds of your playing the groove is judged on.", "Groove", 5, 120, 1),
+    P("groove.window_beats", int, 24, "Groove memory",
+      "Beats of your playing the groove is judged on: a multiple of 12, so it holds whole bars "
+      "of both 3 and 4 (24 = 6 bars of 4 or 8 of 3).", "Groove", 12, 96, 12,
+      check=lambda v: _multiple_of(v, 12)),
     P("groove.min_notes", int, 12, "Groove needs",
       "Notes needed before a groove is named.", "Groove", 4, 100, 1),
     P("groove.switch_margin", float, 0.15, "Groove stickiness",
       "A different meter or downbeat must fit this much better...", "Groove", 0, 1, 0.01),
-    P("groove.hold_s", float, 4.0, "Groove switch after",
+    P("groove.hold_s", float, 3.0, "Groove switch after",
       "...for this long before the band changes to it.", "Groove", 0, 30, 0.5),
     P("groove.swing_threshold", float, 0.12, "Swing from",
       "Swing amount (0 = straight, 0.33 = triplet) from which the feel counts as swing.",

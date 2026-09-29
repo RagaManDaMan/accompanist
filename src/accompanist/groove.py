@@ -59,7 +59,7 @@ class Groove:
     # ---- estimation ---------------------------------------------------------------------
     def update(self, now: float, period: float) -> None:
         c = self.cfg
-        while self._notes and self._notes[0][0] < now - c.window_s:
+        while self._notes and self._notes[0][0] < now - c.window_beats * period:
             self._notes.popleft()
         notes = list(self._notes)
         if len(notes) < c.min_notes:
@@ -93,7 +93,12 @@ class Groove:
         offs = sorted(p for _, _, p, _ in notes if OFF_BEAT[0] <= p <= OFF_BEAT[1])
         if len(offs) >= MIN_OFFBEATS:
             pos = offs[len(offs) // 2]                       # median: robust to stray notes
-            self.swing = max(0.0, min(0.5, 2 * pos - 1))
+            # Measured against where *your* on-beat notes fall, not the pulse: if the pulse
+            # sits a little ahead of you, straight eighths would otherwise look swung.
+            ons = sorted(p if p < 0.5 else p - 1 for _, _, p, _ in notes
+                         if p <= ON_BEAT or p >= 1 - ON_BEAT)
+            lean = ons[len(ons) // 2] if len(ons) >= MIN_OFFBEATS else 0.0
+            self.swing = max(0.0, min(0.5, 2 * (pos - lean) - 1))
         # Hysteresis: swing from swing_threshold, back to straight only well below it.
         if self.swing >= self.cfg.swing_threshold:
             self._swinging = True

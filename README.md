@@ -99,8 +99,11 @@ markings are reported and ignored for now).
 
 Once the beat is running, the accompanist listens for the **meter** (in 3 or in 4; a 2/4
 march counts as "in 4"), **where 1 is**, and **straight vs swing** (and how much swing).
-It commits to what it hears and only changes when a different groove keeps fitting clearly
-better (`groove.switch_margin` for `groove.hold_s`). Then:
+It judges the last `groove.window_beats` beats (24: six bars of 4 or eight of 3), commits to
+what it hears, and only changes when a different groove keeps fitting clearly better
+(`groove.switch_margin` for `groove.hold_s`). Swing is measured against where your own
+on-beat notes fall, so a pulse sitting slightly ahead of you does not make straight eighths
+look swung. Then:
 
 - bass accents, the pad's bar changes and the drum cycle follow the bar it heard, with a
   firm accent on 1 (`groove.downbeat_accent`) once it is sure;
@@ -225,7 +228,8 @@ one into `tests/fixtures/` to keep it as a regression test.
   times a gentle prior toward `prior_bpm`. The result is smoothed, and a different
   tempo peak must clearly win for a few seconds before the estimate jumps to it.
   Silence holds the tempo. No fixed grid, and no need to start near the right tempo.
-- **Pulse** (`beatclock.py`): free-runs at the estimated beat. It starts on the phase your
+- **Pulse** (`beatclock.py`): free-runs at the estimated beat, easing into every tempo or
+  phase correction (`pulse.max_tempo_step`, `pulse.max_nudge` per beat) so it never lurches. It starts on the phase your
   recent notes fit best (most notes fall on beats), and is realigned if it is clearly off;
   onsets within `hint_window` (15%) of a predicted beat pull its phase toward you (a small
   phase-locked loop). While locked, the tempo is refined by fitting a beat grid to your notes.
