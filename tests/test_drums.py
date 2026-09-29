@@ -42,7 +42,9 @@ def drum_hits(res, cfg):
 
 
 def replay_steady(extra):
-    cfg = c.from_dict({"drums": {"enabled": True, **extra}, "lock": {"auto": False}})
+    # These tests are about pattern playback: the bar is the pulse's, not the groove heard.
+    cfg = c.from_dict({"drums": {"enabled": True, **extra}, "lock": {"auto": False},
+                       "groove": {"auto": False}})
     onsets = load_take(FIXTURES / "melody-90bpm.jsonl")
     return cfg, simulate.run(cfg, onsets=onsets, total=40.0)
 

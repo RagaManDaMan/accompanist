@@ -95,6 +95,23 @@ markings are reported and ignored for now).
   `harmony.melody_min_notes`, `melody_max_tensions`, or `melody_colors = false` to turn it off.
 - `charts/` is ignored by git, like `takes/`: your charts stay on your machine.
 
+## Groove: meter, downbeat, feel
+
+Once the beat is running, the accompanist listens for the **meter** (in 3 or in 4; a 2/4
+march counts as "in 4"), **where 1 is**, and **straight vs swing** (and how much swing).
+It commits to what it hears and only changes when a different groove keeps fitting clearly
+better (`groove.switch_margin` for `groove.hold_s`). Then:
+
+- bass accents, the pad's bar changes and the drum cycle follow the bar it heard, with a
+  firm accent on 1 (`groove.downbeat_accent`) once it is sure;
+- the drums keep your pattern if it fits the meter, else switch (e.g. `waltz` in 3, `swing`
+  when you swing in 4), and swing as much as you do (`groove.auto_drums`);
+- the status line shows it, e.g. `3/4 swing` (a `?` while it is still unsure).
+
+New patterns: `swing` (ride "spang-a-lang", hi-hat on 2 and 4) and `march` (2/4). Turn it
+off with `[groove] auto = false` (then `pulse.beats_per_bar` and `drums.pattern` rule). With
+a chart, the chart's meter rules.
+
 ## Call and response
 
 `[response] enabled = true` adds a voice (channel 4, e.g. a guitar track) that answers you

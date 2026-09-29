@@ -116,7 +116,9 @@ class PadResponder:
             self.out.note_on(ch, n, self.cfg.velocity)
         for n in sorted(old_notes - new_notes):
             self.out.note_off_at(now + self.cfg.overlap_s, ch, n)
-        self.current, self._pending, self._ready, self._last_change = new, None, None, now
+        if not force_new:                  # a re-voicing is not a change of harmony: it must
+            self._last_change = now        # not hold back the next real change (min_change_beats)
+        self.current, self._pending, self._ready = new, None, None
         self._bars_since_change = 0
 
     def release_all(self) -> None:
@@ -138,9 +140,9 @@ class PulseResponder:
         self.beat_count = 0
 
     def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
-                bar_position: Optional[int] = None) -> None:
+                bar_position: Optional[int] = None, boost: int = 0) -> None:
         pos = self.beat_count % max(1, self.cfg.beats_per_bar) if bar_position is None else bar_position
-        vel = round(self.cfg.velocity * gain) + (self.cfg.accent if pos == 0 else 0)
+        vel = round(self.cfg.velocity * gain) + (self.cfg.accent if pos == 0 else 0) + boost
         vel = min(max(vel, 1), 127)
         note = 12 * (self.cfg.octave + 1) + root_pc
         ch = self.cfg.channel - 1
@@ -166,23 +168,31 @@ class DrumResponder:
         self._queue: list[tuple[float, int, int, int]] = []   # (time, seq, note, velocity)
         self._seq = itertools.count()
         self._pattern = None
+        self.pattern_name: Optional[str] = None     # chosen by the groove, over drums.pattern
 
     def pattern(self):
         from .patterns import load
 
-        if self._pattern is None or self._pattern.name != self.cfg.pattern:
-            self._pattern = load(self.cfg.pattern)
+        name = self.pattern_name or self.cfg.pattern
+        if self._pattern is None or self._pattern.name != name:
+            self._pattern = load(name)
         return self._pattern
 
-    def on_beat(self, beat_t: float, period: float, gain: float = 1.0) -> None:
+    def on_beat(self, beat_t: float, period: float, gain: float = 1.0,
+                form_beat: Optional[int] = None, swing: Optional[float] = None,
+                boost: int = 0) -> None:
+        """Schedule this beat's steps. form_beat: beats since a downbeat (so the cycle lines
+        up with the bar); swing: overrides drums.swing; boost: extra velocity on this beat."""
         pat = self.pattern()
         spb = pat.steps_per_beat
-        first = (self.beat_count % pat.beats) * spb
+        where = self.beat_count if form_beat is None else form_beat
+        first = (where % pat.beats) * spb
+        swing = self.cfg.swing if swing is None else swing
         for step, note, level in pat.hits:
             k = step - first
             if 0 <= k < spb:
-                offset = (k + (self.cfg.swing if k % 2 == 1 else 0.0)) * period / spb
-                vel = self.cfg.velocity * gain
+                offset = (k + (swing if k % 2 == 1 else 0.0)) * period / spb
+                vel = self.cfg.velocity * gain + (boost if k == 0 else 0)
                 if level == "accent":
                     vel += self.cfg.accent
                 elif level == "ghost":

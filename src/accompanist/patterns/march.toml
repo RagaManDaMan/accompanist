@@ -1,0 +1,7 @@
+description = "2/4 march: kick on 1, snare on 2 with a pickup"
+beats = 2
+steps_per_beat = 4
+[hits]
+kick  = "X... ...."
+snare = "..g. x.gx"
+hat   = "x.x. x.x."

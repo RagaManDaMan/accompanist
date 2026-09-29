@@ -246,7 +246,8 @@ PARAMS: list[Param] = [
       "Drums", 1, 16, 1, live=False),
     P("drums.pattern", str, "basic", "Pattern",
       "Which pattern (see `accompanist params`: patterns/NAME.toml; add your own in ./patterns).",
-      "Drums", choices=("basic", "halftime", "soft", "sparse", "waltz", "seven-322"),
+      "Drums", choices=("basic", "halftime", "soft", "sparse", "swing", "march", "waltz",
+                        "seven-322"),
       check=_check_pattern),
     P("drums.velocity", int, 70, "Drums velocity", "Velocity of a normal hit (x).", "Drums", 1, 127, 1),
     P("drums.accent", int, 25, "Drums accent", "Extra velocity for an accent (X).", "Drums", 0, 127, 1),
@@ -259,6 +260,29 @@ PARAMS: list[Param] = [
     P("drums.count_in_note", int, 37, "Count-in click",
       "Drum note for the chart count-in clicks (37 = side stick, 75 = claves), on the drums "
       "channel.", "Drums", 0, 127, 1),
+
+    # ---- groove (meter, downbeat, feel) ----------------------------------------
+    P("groove.auto", bool, True, "Hear the groove",
+      "Hear the meter (in 3 or in 4), where 1 is, and straight vs swing from your playing; "
+      "bass, drums and pad follow it (not with a chart).", "Groove"),
+    P("groove.auto_drums", bool, True, "Drums follow the groove",
+      "Switch the drum pattern if yours does not fit the meter heard (e.g. waltz in 3), and "
+      "swing the drums as you swing.", "Groove"),
+    P("groove.downbeat_accent", int, 15, "Downbeat accent",
+      "Extra velocity on 1 (bass and drums) once the groove is heard clearly.", "Groove", 0, 60, 1),
+    P("groove.confident_at", float, 0.5, "Sure at",
+      "The groove counts as heard clearly from this confidence (0-1).", "Groove", 0, 1, 0.05),
+    P("groove.window_s", float, 20.0, "Groove memory",
+      "Seconds of your playing the groove is judged on.", "Groove", 5, 120, 1),
+    P("groove.min_notes", int, 12, "Groove needs",
+      "Notes needed before a groove is named.", "Groove", 4, 100, 1),
+    P("groove.switch_margin", float, 0.15, "Groove stickiness",
+      "A different meter or downbeat must fit this much better...", "Groove", 0, 1, 0.01),
+    P("groove.hold_s", float, 4.0, "Groove switch after",
+      "...for this long before the band changes to it.", "Groove", 0, 30, 0.5),
+    P("groove.swing_threshold", float, 0.12, "Swing from",
+      "Swing amount (0 = straight, 0.33 = triplet) from which the feel counts as swing.",
+      "Groove", 0, 0.5, 0.01),
 
     # ---- response (call and response) -----------------------------------------
     P("response.enabled", bool, False, "Answer your phrases",

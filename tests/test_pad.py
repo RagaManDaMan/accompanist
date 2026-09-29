@@ -74,3 +74,16 @@ def test_variation_is_repeatable_with_the_same_seed():
 
 def test_clock_rounds_cleanly():
     assert clock(59.96) == "1:00.0" and clock(125.44) == "2:05.4" and clock(None) == "-:--.-"
+
+
+def test_a_revoicing_does_not_hold_back_the_next_chord_change():
+    _, p = pad(revoice_bars=1, min_change_beats=8)
+    for t in (0.0, 0.1):
+        p.update(t, D, 0.5)
+    p.on_beat(2.0, 0)                              # a re-voice of D, 2 s in
+    for t in (2.1, 2.2):
+        p.update(t, G, 0.5)                        # 8 beats = 4 s after the D, not the re-voice
+    assert p.current.root_pc == 2
+    for t in (4.1, 4.2):
+        p.update(t, G, 0.5)
+    assert p.current.root_pc == 7

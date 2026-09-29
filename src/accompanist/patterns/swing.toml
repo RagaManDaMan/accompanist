@@ -1,0 +1,7 @@
+description = "4/4 jazz swing: ride 'spang-a-lang', hi-hat on 2 and 4, feathered kick"
+beats = 4
+steps_per_beat = 2
+[hits]
+ride      = "X. xx x. xx"
+pedal_hat = ".. x. .. x."
+kick      = "g. g. g. g."

@@ -9,16 +9,21 @@ comes in through controller.Controller, never directly from the CLI.
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from .beatclock import BeatClock
 from .dynamics import Dynamics
+from .groove import Groove
 from .config import Config, note_name, NOTE_NAMES
 from .harmony import Onset, Voicing, make_model
 from .output import SafeOutput
 from .responders import DrumResponder, PadResponder, PulseResponder
 from .response import ResponseResponder
 from .tempo import REALIGN_ADVANTAGE, TempoEstimator
+
+# Drum patterns for a meter heard, when yours does not fit it: (meter, feel) or meter.
+GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing"}
 
 # Pad expression: resend when it moves this many steps (of 127), at most this often.
 EXPRESSION_STEP = 2
@@ -44,6 +49,8 @@ class Engine:
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
         self.dynamics = Dynamics(cfg.dynamics)
+        self.groove = Groove(cfg.groove)
+        self._groove_t = float("-inf")
         self._expression_sent: Optional[tuple[int, int]] = None   # (cc, value) last sent to the pad
         self._expression_t = float("-inf")
         self.muted = False
@@ -65,6 +72,10 @@ class Engine:
         self.last_onset_t, self.last_note = t, note
         self.clock.hint(t, self.cfg.pulse.hint_window)
         self.response.hear(t, note, velocity, self.tempo.period)   # stops any answer at once
+        if self.clock.running and not self.is_chart:           # where it fell against the beat
+            x = (t - self.clock.next_beat) / self.clock.period
+            k = math.floor(x)
+            self.groove.observe(t, self.beat_count + k, x - k, velocity)
 
     # ---- responding ------------------------------------------------------
     def tick(self, now: float) -> None:
@@ -137,8 +148,13 @@ class Engine:
             pulse_root = (self.pad.current.root_pc if self.pad.current
                           else voicing.root_pc if voicing is not None else 0)
             gain = self.dynamics.follow_gain()
-            bpb = max(1, getattr(self.harmony, "beats_per_bar", None) or p.beats_per_bar)
+            if (self.cfg.groove.auto and not self.is_chart
+                    and now - self._groove_t >= self.cfg.tempo.update_s):
+                self._groove_t = now
+                self.groove.update(now, self.clock.period)
+                self._choose_drums()
             for beat_t in self.clock.due(now):
+                bpb, bar_pos, form_beat, sure = self._bar(self.beat_count)
                 if self._count_in_left > 0:                   # count-in click: 1, 2, 3, 4
                     self._click(beat_t, first=self._count_in_left == bpb)
                     self._count_in_left -= 1
@@ -155,16 +171,43 @@ class Engine:
                         self.pad.update(now, chord, period, beat_known=True)
                     if chord is not None:
                         pulse_root = chord.root_pc
+                boost = self.cfg.groove.downbeat_accent if (sure and bar_pos == 0) else 0
                 if self.cfg.pad.enabled:
-                    self.pad.on_beat(now, self.beat_count % bpb)
+                    self.pad.on_beat(now, bar_pos)
                     if self.pad.current and not self.chord_held:
                         pulse_root = self.pad.current.root_pc
                 if p.enabled:
-                    self.pulse.on_beat(now, pulse_root, gain, self.beat_count % bpb)
+                    self.pulse.on_beat(now, pulse_root, gain, bar_pos, boost)
                 if self.cfg.drums.enabled:
-                    self.drums.on_beat(beat_t, self.clock.period, gain)
+                    swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
+                             and self.groove.meter and not self.is_chart else None)
+                    self.drums.on_beat(beat_t, self.clock.period, gain, form_beat, swing, boost)
                 self.beat_count += 1
             self.drums.tick(now)
+
+    def _bar(self, beat: int) -> tuple[int, int, int, bool]:
+        """(beats per bar, position in the bar, beats since a downbeat, groove heard clearly)
+        for beat number `beat`: from the chart, else the groove heard, else pulse.beats_per_bar."""
+        g = self.groove
+        if self.is_chart:
+            bpb = max(1, self.harmony.beats_per_bar)
+            return bpb, beat % bpb, beat, True
+        if self.cfg.groove.auto and g.meter:
+            form = beat - g.downbeat
+            return g.meter, form % g.meter, form, g.confidence >= self.cfg.groove.confident_at
+        bpb = max(1, self.cfg.pulse.beats_per_bar)
+        return bpb, beat % bpb, beat, False
+
+    def _choose_drums(self) -> None:
+        """Keep your drum pattern if its cycle fits the meter heard; else one that does."""
+        g = self.groove
+        self.drums.pattern_name = None
+        if not (self.cfg.groove.auto_drums and g.meter):
+            return
+        from .patterns import load
+
+        if load(self.cfg.drums.pattern).beats % g.meter != 0:
+            self.drums.pattern_name = GROOVE_PATTERNS.get((g.meter, g.feel), GROOVE_PATTERNS[g.meter])
 
     def _scale_pcs(self) -> Optional[set[int]]:
         """The key's scale, when the harmony model knows one (modal); else None."""
@@ -277,6 +320,7 @@ class Engine:
         """The next beat is beat 1 of bar 1: for the bar count, the drums and a chart."""
         self.pulse.reset()
         self.drums.reset()
+        self.groove.reset()                    # beat numbers start again
         self.beat_count = 0
         if hasattr(self.harmony, "restart"):
             self.harmony.restart()
@@ -354,6 +398,8 @@ class Engine:
                          max(0.0, self.cfg.lock.after_s - (now - self._confident_since)),
             "harmony_model": self.cfg.harmony.model,
             "key": getattr(self.harmony, "key_label", None),
+            "groove": None if self.is_chart else self.groove.label(),
+            "groove_confidence": self.groove.confidence,
             "chart": getattr(self.harmony, "position", None),
             "song": None if not self.is_chart else
                     "playing" if self.song_playing else
