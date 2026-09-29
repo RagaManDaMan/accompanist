@@ -114,3 +114,38 @@ def test_not_yielding_lets_the_answer_finish_over_you():
     back_in = first[0][0] + 0.05
     sent = run(ctl, PHRASE + [(back_in, 62, 90)], first[-1][0] + 0.1)
     assert answer_notes(sent) == first                  # the whole answer, unchanged
+
+
+def test_with_the_beat_running_answers_land_on_the_eighth_note_grid():
+    """Loose (audio-like) timing in; the answer comes in on a beat, every note on an 8th."""
+    from accompanist import simulate
+
+    period = 60 / 100
+    loose = []
+    t = 1.0
+    for bar in range(8):                                   # 3-note phrases, then a pause
+        for k, n in enumerate((60, 64, 67)):
+            loose.append((t + k * period / 2 + (0.03 if k == 1 else -0.02), n, 90))
+        t += 4 * period
+    config = c.from_dict({"response": {"enabled": True, "chance": 1.0},
+                          "harmony": {"root": "C"}, "lock": {"auto": False},
+                          "tempo": {"prior_bpm": 100}})
+    res = simulate.run(config, onsets=loose, total=t)
+    beats = [t for t, m in res.timeline if m.type == "note_on" and m.channel == 1]
+    settled = beats[0] + 4 * period                        # answers made once the beat was known
+    answers = [t for t, m in res.timeline if m.type == "note_on" and m.channel == CH and t > settled]
+    assert answers
+    for a in answers:
+        prev = max(b for b in beats if b <= a + 0.01)
+        nxt = min(b for b in beats if b > prev)
+        x = (a - prev) / ((nxt - prev) / 2)
+        assert abs(x - round(x)) * (nxt - prev) / 2 < 0.02            # on an 8th (5 ms ticks)
+
+
+def test_variety_zero_keeps_the_motif_shape():
+    r = c.from_dict({"response": {"variety": 0.0}}).response
+    phrase = [(0.0, 60, 90), (0.3, 62, 90), (0.6, 64, 90), (0.9, 67, 90)]
+    for seed in range(20):
+        ans = make_answer(phrase, {0, 4, 7}, {0, 2, 4, 5, 7, 9, 11}, random.Random(seed), r, 0.6)
+        steps = [b[1] - a[1] for a, b in zip(ans, ans[1:])]
+        assert all(s >= 0 for s in steps[:-1])                      # still rising, like yours

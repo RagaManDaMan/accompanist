@@ -1,8 +1,9 @@
 """Call and response: when you pause after a phrase, answer it on its own channel.
 
-The answer is made from what you just played: its rhythm and contour, varied (moved a
-scale step or two, turned upside down, or played backwards), kept in the key, ending on a
-chord tone, in the response voice's register. It never plays over you: the moment you
+The answer is made from what you just played: its rhythm (rounded to eighth notes when the
+beat is known, starting on the next beat) and contour, moved a scale step or two, and now
+and then (response.variety) turned upside down or played backwards; kept in the key,
+ending on a chord tone, in the response voice's register. It never plays over you: the moment you
 play again it stops. Seeded, so a replay answers exactly as the live run did.
 
 `make_answer` is pure (phrase, chord, scale, random source -> notes); ResponseResponder
@@ -17,8 +18,6 @@ from typing import Any, Optional
 
 from .output import SafeOutput
 
-# How often each variation is chosen: (name, weight).
-VARIATIONS = (("sequence", 0.5), ("inversion", 0.25), ("retrograde", 0.25))
 MIN_IOI_S = 0.08          # answer notes are at least this far apart
 MAX_IOI_BEATS = 1.5       # ...and at most this many beats
 LAST_NOTE_BEATS = 1.5     # the answer's last note rings this long
@@ -58,8 +57,10 @@ def _step(pitch: int, steps: int, scale) -> int:
 
 
 def make_answer(phrase: list[tuple[float, int, int]], chord_pcs, scale_pcs, rng: random.Random,
-                cfg: Any, period: float, gain: float = 1.0) -> list[tuple[float, int, int, float]]:
-    """[(offset s, note, velocity, duration s)] answering `phrase` [(t, note, velocity)]."""
+                cfg: Any, period: float, gain: float = 1.0,
+                grid: bool = False) -> list[tuple[float, int, int, float]]:
+    """[(offset s, note, velocity, duration s)] answering `phrase` [(t, note, velocity)].
+    grid=True: the rhythm is rounded to eighth notes of `period` (the beat is known)."""
     src = phrase[-cfg.max_notes:]
     if not src:
         return []
@@ -70,8 +71,11 @@ def make_answer(phrase: list[tuple[float, int, int]], chord_pcs, scale_pcs, rng:
     vels = [v for _, _, v in src]
     mean_vel = sum(vels) / len(vels)
 
-    names, weights = zip(*VARIATIONS)
-    kind = rng.choices(names, weights)[0]
+    # Mostly the motif itself, moved a step or two (recognisably yours); now and then, with
+    # probability `variety`, turned upside down or played backwards.
+    kind = "sequence"
+    if rng.random() < cfg.variety:
+        kind = rng.choice(("inversion", "retrograde"))
     if kind == "sequence":
         k = rng.choice((-2, -1, 1, 2))
         pitches = [_step(p, k, scale) for p in pitches]
@@ -87,6 +91,12 @@ def make_answer(phrase: list[tuple[float, int, int]], chord_pcs, scale_pcs, rng:
     pitches = [_fold(p + shift, centre) for p in pitches]
     pitches[-1] = _fold(_nearest_in(pitches[-1], chord), centre)   # land on a chord tone
 
+    if grid:
+        # On the beat: each interval rounded to whole eighth notes (at least one, at most
+        # MAX_IOI_BEATS), so the answer lands exactly on the grid whatever the timing heard.
+        step = period / 2
+        max_steps = int(MAX_IOI_BEATS * 2)
+        iois = [min(max(round(x / step), 1), max_steps) * step for x in iois]
     out, t = [], 0.0
     for i, p in enumerate(pitches):
         if i < len(iois):
@@ -143,11 +153,10 @@ class ResponseResponder:
             return                                          # let this pause breathe
         self.cancel()                                       # a new answer replaces an old one
         start = now
-        if next_beat is not None:                           # come in on the next half beat
-            half = period / 2
-            start = next_beat - half * int((next_beat - now) / half)
+        if next_beat is not None:                           # come in on the next beat
+            start = next_beat - period * int((next_beat - now) / period)
         for off, note, vel, dur in make_answer(self.phrase, chord_pcs, scale_pcs, self.rng,
-                                               self.cfg, period, gain):
+                                               self.cfg, period, gain, grid=next_beat is not None):
             heapq.heappush(self._queue, (start + off, next(self._seq), note, vel, dur))
 
     def cancel(self) -> None:

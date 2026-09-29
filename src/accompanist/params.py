@@ -280,6 +280,9 @@ PARAMS: list[Param] = [
       "Only answer phrases of at least this many notes.", "Response", 1, 16, 1),
     P("response.max_notes", int, 6, "Answer at most",
       "The answer uses at most this many notes (the end of your phrase).", "Response", 1, 16, 1),
+    P("response.variety", float, 0.2, "Variety",
+      "How often the answer turns your motif upside down or backwards instead of moving it "
+      "a step (0 = always recognisably your motif).", "Response", 0, 1, 0.05),
     P("response.chance", float, 0.9, "How often",
       "Share of your pauses that get an answer (0-1).", "Response", 0, 1, 0.05),
 
