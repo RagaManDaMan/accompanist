@@ -88,8 +88,8 @@ markings are reported and ignored for now).
   panic stops the song. **c** holds a chord, as usual. The status line shows
   `bar 5/32 [A] beat 1`.
 - **Your melody colours the chords:** play one of a chord's colour tones (9, #11, 13 on
-  major chords; b9, 9, #9, #11, b13, 13 on dominants; 9, 11, 13 on minor chords) twice while
-  it lasts and the pad adds it from the next beat until the chord changes (`Fmaj7` becomes
+  major chords; b9, 9, #9, #11, b13, 13 on dominants; 9, 11, 13 on minor chords) while it
+  lasts and the pad adds it from the next beat until the chord changes (`Fmaj7` becomes
   `Fmaj7(#11)`). Notes that clash are ignored; the chart's root and quality never change.
   `harmony.melody_min_notes`, `melody_max_tensions`, or `melody_colors = false` to turn it off.
 - `charts/` is ignored by git, like `takes/`: your charts stay on your machine.

@@ -153,7 +153,7 @@ def play_on(m, beat, notes):
 
 
 def test_playing_a_colour_tone_twice_adds_it():
-    m = model()
+    m = model(melody_min_notes=2)
     v = play_on(m, 0, [71, 71])                       # B over Cmaj7: the maj7 is already there
     assert v.label() == "Cmaj7"
     v = play_on(m, 0, [62, 74])                       # D over Cmaj7: the 9
@@ -161,7 +161,7 @@ def test_playing_a_colour_tone_twice_adds_it():
 
 
 def test_one_passing_note_or_a_clashing_note_changes_nothing():
-    m = model()
+    m = model(melody_min_notes=2)
     assert play_on(m, 0, [66]).label() == "Cmaj7"     # F# once: not yet
     assert play_on(m, 0, [65, 65, 77]).label() == "Cmaj7"   # F (the 11) clashes with major
 

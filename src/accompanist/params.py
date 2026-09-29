@@ -147,7 +147,7 @@ PARAMS: list[Param] = [
     P("harmony.melody_colors", bool, True, "Colour from your melody",
       "chart model: add the colour tones you play (9, #11, 13, b9 ...) to the chart's chord, "
       "from the next beat until the chord changes.", "Harmony"),
-    P("harmony.melody_min_notes", int, 2, "Colour after",
+    P("harmony.melody_min_notes", int, 1, "Colour after",
       "chart model: a colour tone is added once you have played it this many times on the chord.",
       "Harmony", 1, 8, 1),
     P("harmony.melody_max_tensions", int, 2, "Most colour tones",
