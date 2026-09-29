@@ -191,17 +191,19 @@ class Engine:
     def lock(self, now: float) -> bool:
         """Lock the tempo: pad and pulse keep going through silence, the tempo follows only
         slowly and never jumps. Chords still follow you (see hold_chord). Needs something
-        heard first. Returns True if locked."""
+        heard first. Returns True if locked.
+
+        The beat is never moved: the lock is usually pressed on a computer key, whose timing
+        has nothing to do with the music. Only the beat spacing settles on your notes."""
         if self.muted or (self.last_onset_t is None and not self.clock.running):
             return False
         self.locked, self._confident_since = True, None
-        # Lock onto the best beat we can hear (tempo, then phase), then hold it.
+        # Settle the tempo on the beat grid your recent notes fit best (a small, inaudible
+        # change in beat spacing), but never move where the next beat falls.
         if len(self.tempo.onsets) >= self.cfg.tempo.min_onsets:
-            period, beat = self.tempo.refine(now)
+            period, _ = self.tempo.refine(now)
             self.tempo.set_bpm(60.0 / period)
             self.clock.set_period(self.tempo.period)
-            if self.clock.running:
-                self.clock.align(beat)
         return True
 
     def unlock(self) -> None:
@@ -243,7 +245,8 @@ class Engine:
         self.lock(last_tap)
 
     def set_tempo(self, bpm: float, beat_t: Optional[float] = None) -> None:
-        """Force the tempo (tap tempo). If beat_t is given, it was a beat: align the pulse to it."""
+        """Force the tempo (tap tempo). If beat_t is given, it was a beat: align the pulse to it
+        (only for a count-in; otherwise key presses must not move the beat)."""
         self.tempo.set_bpm(bpm)
         self.clock.set_period(self.tempo.period)
         if beat_t is not None and self.clock.running:

@@ -29,14 +29,15 @@ def grid_error(t, bpm):
     return abs(x - round(x)) * p
 
 
-def assert_locked_groove(res, bpm, start):
-    """From `start` on: the pulse never stops, and every beat is within 60 ms of the grid."""
+def assert_locked_groove(res, bpm, start, settle=0.0):
+    """From `start` on: the pulse never stops; from `start + settle` on, every beat is within
+    60 ms of the grid."""
     period = 60.0 / bpm
     beats = [t for t in res.notes_on(PULSE_CH) if t >= start]
     assert beats[-1] >= res.end_time - 1.5 * period                 # still going at the very end
     gaps = [b - a for a, b in zip(beats, beats[1:])]
     assert max(gaps) <= 1.1 * period                                # never stopped, never skipped
-    assert max(grid_error(b, bpm) for b in beats) <= 0.060
+    assert max(grid_error(b, bpm) for b in beats if b >= start + settle) <= 0.060
 
 
 def test_steady_take_with_a_pause_locks_and_keeps_the_groove():
@@ -53,9 +54,16 @@ def test_steady_take_with_a_pause_locks_and_keeps_the_groove():
 
 def test_rubato_take_locked_by_key_stays_on_the_grid():
     # 80 bpm melody, each note up to 15% of its interval off the beat. Lock pressed at 30 s.
-    res = replay("rubato-80bpm.jsonl", actions=[(30.0 + OFFSET, "lock")])
-    assert lock_time(res) == pytest.approx(30.0 + OFFSET, abs=0.01)
-    assert_locked_groove(res, 80, 30.0 + OFFSET)
+    press = 30.0 + OFFSET
+    res = replay("rubato-80bpm.jsonl", actions=[(press, "lock")])
+    assert lock_time(res) == pytest.approx(press, abs=0.01)
+    # A key press is not music: the beat does not jump when you press lock...
+    beats = res.notes_on(PULSE_CH)
+    before = [b for b in beats if b <= press][-2:]
+    after = next(b for b in beats if b > press)
+    assert after - before[1] == pytest.approx(before[1] - before[0], rel=0.05)
+    # ...and once it has settled on your notes, it stays on the grid.
+    assert_locked_groove(res, 80, press, settle=10.0)
 
 
 def test_without_a_lock_the_pulse_stops_in_silence():
@@ -221,3 +229,17 @@ def test_pulse_starts_on_the_beat_not_on_an_off_beat_note():
         now = round(now + 0.005, 6)
     assert times and max(grid_error(t + OFFSET, 90) for t in times) <= 0.060
     assert max(b - a for a, b in zip(times, times[1:])) <= 1.1 * 60 / 90   # steady, no flipping
+
+
+def test_tapping_without_a_chart_sets_tempo_but_does_not_move_the_beat():
+    ctl = controller({"lock": {"auto": False}})
+    play(ctl, phrase(D_PHRASE, 90, 0.0, 30), 15.0)
+    eng = ctl.engine
+    assert eng.clock.running
+    beat_before = eng.clock.next_beat
+    taps = [15.0 + 0.23 + i * 60 / 90 for i in range(4)]   # taps well off the beat
+    for t in taps:
+        ctl.tap_tempo(t)
+    assert eng.tempo.bpm == pytest.approx(90, rel=0.01)
+    k = round((eng.clock.next_beat - beat_before) / eng.clock.period)
+    assert eng.clock.next_beat == pytest.approx(beat_before + k * eng.clock.period, abs=0.005)

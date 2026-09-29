@@ -159,8 +159,9 @@ class Controller:
 
     def tap_tempo(self, now: float) -> Optional[float]:
         """Tap the beat. After TAP_COUNT taps, sets the tempo, and its octave (prior_bpm), to
-        what you tapped, narrows the prior (tap_sigma_oct) so look-alike tempi don't take over,
-        and lines the pulse up with your last tap. Returns the bpm once set."""
+        what you tapped, and narrows the prior (tap_sigma_oct) so look-alike tempi don't take
+        over. The beat's position stays with your playing; only with a chart are the taps a
+        count-in (bar 1 on the next beat). Returns the bpm once set."""
         if self._taps and now - self._taps[-1] > TAP_RESET_S:
             self._taps = []
         self._taps.append(now)
@@ -178,9 +179,11 @@ class Controller:
         self.set_param("tempo.prior_bpm", round(bpm, 1))
         if t.prior_sigma_oct > t.tap_sigma_oct:
             self.set_param("tempo.prior_sigma_oct", t.tap_sigma_oct)
-        self.engine.set_tempo(bpm, beat_t=now)
         if hasattr(self.engine.harmony, "restart"):   # a chart: the taps were the count-in
+            self.engine.set_tempo(bpm)
             self.engine.count_in(now)
+        else:                                         # tempo only: the beat stays with your playing
+            self.engine.set_tempo(bpm)
         self._taps = []
         return bpm
 

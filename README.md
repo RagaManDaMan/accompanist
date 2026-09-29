@@ -29,7 +29,8 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
 **l** = lock / unlock the tempo, **c** = hold / release the chord, **t** = tap tempo
 (4 taps set the tempo and its octave; with a chart they are the count-in), **s** = chart
-from the top, **q** = quit. Every key press prints what it did.
+from the top, **q** = quit. Every key press prints what it did. Keys are commands, not music: apart from
+panic and a chart count-in, a key press never moves the beat.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
 ## Settings, presets, controllers
