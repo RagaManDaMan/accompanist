@@ -118,3 +118,20 @@ def test_record_audio_without_an_audio_input_is_a_readable_error(tmp_path, capsy
     f.write_text('[[inputs]]\nport = "LPK25"\n')
     assert main(["monitor", "-c", str(f), "--record-audio", str(tmp_path / "x.wav")]) == 2
     assert "needs an audio input" in capsys.readouterr().err
+
+
+def test_an_attack_that_reads_an_octave_high_is_corrected_not_a_new_note():
+    # A sax attack whose second harmonic leads for ~100 ms: C4 briefly, then the real C3.
+    attack = tone(60, 0.1, attack_ms=5)
+    body = tone(48, 0.5, attack_ms=1)
+    ev = hear(rest(0.2), attack, body, rest(0.3))
+    fixed = [e for e in ev if e.corrected]
+    assert len(fixed) == 1 and fixed[0].note == 48 and fixed[0].t == pytest.approx(0.2, abs=0.02)
+    # With the fix off, the slip shows as two notes.
+    assert len([e for e in hear(rest(0.2), attack, body, rest(0.3), octave_fix_ms=0)
+                if e.kind == "on"]) == 2
+
+
+def test_a_real_octave_leap_after_the_settle_time_is_a_new_note():
+    ev = hear(rest(0.2), tone(60, 0.3), tone(72, 0.3), rest(0.3))
+    assert ons(ev) == [(60, 0.2), (72, 0.5)] and not any(e.corrected for e in ev)

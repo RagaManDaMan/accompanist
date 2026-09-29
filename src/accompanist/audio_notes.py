@@ -9,7 +9,9 @@ aperiodicity below audio.yin_threshold) and holds one semitone (within
 audio.cents_tolerance) for audio.min_note_ms. It is reported at the moment it began, not
 when it was confirmed, so tempo following sees the real attack. A new note starts on a
 change of pitch (legato) or a fresh attack at the same pitch (tonguing: the level jumps by
-audio.attack_db). A note ends after audio.release_ms of silence or unclear pitch.
+audio.attack_db). A note ends after audio.release_ms of silence or unclear pitch. An
+octave jump within audio.octave_fix_ms of a note's start is that note's attack settling
+(reported as a correction with the same onset), not a new note.
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ class AudioEvent:
     velocity: int = 0   # 1-127 for "on", from the level
     cents: float = 0.0  # how far from the tempered note it was sung/played
     db: float = 0.0     # level, dBFS
+    corrected: bool = False   # an octave fix of the note that just began (same onset)
 
 
 def yin(frame: np.ndarray, sr: float, min_hz: float, max_hz: float,
@@ -180,6 +183,15 @@ class NoteTracker:
         self._cand_n += 1
         self._cand_ok += in_tune
         if t - self._cand_t >= c.min_note_ms / 1000 and self._cand_ok >= self._cand_n / 2:
+            if (self.note is not None and (semitone - self.note) % 12 == 0
+                    and self._cand_t - self._note_t <= c.octave_fix_ms / 1000):
+                # The attack of a note often reads an octave off (a sax's second harmonic
+                # leads for ~100 ms): the same note, corrected, keeping its onset.
+                events.append(AudioEvent(self._note_t, "off", self.note))
+                events.append(AudioEvent(self._note_t, "on", semitone, self._velocity(level), cents,
+                                         level, corrected=True))
+                self.note, self._cand = semitone, None
+                return events
             start = self._cand_t - (c.window / 2) / self.sr * ONSET_BACKDATE
             start = max(start, self._note_t)              # never before the previous note began
             if self.note is not None:

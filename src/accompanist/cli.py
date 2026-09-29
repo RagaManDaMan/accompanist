@@ -167,9 +167,14 @@ def cmd_listen(args) -> int:
         events += tracker.process(samples[i:i + block], i / rate)
     events += tracker.flush(len(samples) / rate)
     ons = [e for e in events if e.kind == "on"]
+    ons = [e for i, e in enumerate(ons) if not (i + 1 < len(ons) and ons[i + 1].corrected
+                                                and ons[i + 1].t == e.t)]   # keep the fixed note
     print(f"{args.audio}: {len(samples) / rate:.1f} s at {rate:g} Hz, channel {args.channel} "
           f"(config: {cfg_path or 'defaults'})\n")
     held = {}
+    events = [e for e in events if not (e.kind == "off" and any(
+        o.corrected and o.t == e.t and o.kind == "on" for o in events))]   # hide octave fixes
+    fixes = sum(1 for e in events if e.corrected)
     for e in events:
         if e.kind == "on":
             held[e.note] = e
@@ -177,7 +182,7 @@ def cmd_listen(args) -> int:
             on = held.pop(e.note)
             print(f"  {on.t:7.3f}s  {note_label(on.note):<4} {on.cents:+4.0f} cents  vel {on.velocity:3d}"
                   f"  held {e.t - on.t:5.2f}s")
-    print(f"\n{len(ons)} notes heard.")
+    print(f"\n{len(ons)} notes heard" + (f" ({fixes} octave slips at attacks corrected)." if fixes else "."))
     if args.save_take:
         rec = Recorder(args.save_take)
         for e in ons:

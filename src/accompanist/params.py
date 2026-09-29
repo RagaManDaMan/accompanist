@@ -291,6 +291,9 @@ PARAMS: list[Param] = [
       "Audio input", 10, 300, 5),
     P("audio.release_ms", float, 70.0, "Note end after",
       "This much silence (or unclear pitch) ends a note.", "Audio input", 10, 1000, 5),
+    P("audio.octave_fix_ms", float, 150.0, "Octave settle",
+      "An octave jump this soon after a note starts is the attack settling, not a new note "
+      "(0 = off).", "Audio input", 0, 400, 10),
     P("audio.attack_db", float, 8.0, "Re-attack jump",
       "A jump in level this big on the same pitch is a new note (tonguing).",
       "Audio input", 2, 30, 0.5),
