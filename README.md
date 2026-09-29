@@ -27,8 +27,8 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 (`xcode-select --install`) and retry.
 
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
-**l / u** = lock / unlock the groove, **t** = tap tempo (4 taps set the tempo and its
-octave), **q** = quit.
+**l / u** = lock / unlock the tempo, **c** = hold / release the chord, **t** = tap tempo
+(4 taps set the tempo and its octave), **q** = quit. Every key press prints what it did.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
 ## Settings, presets, controllers
@@ -41,17 +41,24 @@ On exit, and on Ctrl-C, it always sends All Notes Off.
   `preset = "ambient"` at the top of `config.toml`. Built in: `ambient` (slow wide pad,
   no pulse) and `modal-drone` (a steady drone that barely moves, quiet pulse). Put your
   own in `./presets/NAME.toml`; they may set anything except ports and inputs.
-- **[controls]** maps MIDI controllers to actions (`panic`, `resume`, `tap_tempo`) or to
+- **[controls]** maps MIDI controllers to actions (`panic`, `resume`, `lock`, `unlock`,
+  `chord_hold`, `chord_release`, `chord_toggle`, `tap_tempo`) or to
   any live setting (`7 = "pad.velocity"`). See `config.example.toml`.
 
-## Groove lock
+## Tempo lock and chord hold
 
-Once the tempo has been clear (confidence >= `lock.confidence`, 0.8) for `lock.after_s`
-(25 s), or when you press **l** (or a `lock` controller), the groove **locks**:
-the pad's harmony is frozen as it was, pad and pulse keep going through silence, and the
-tempo follows you only slowly (`lock.tempo_rate`) and never jumps to another tempo or
-octave. Only **u**, an `unlock` controller or panic ends a lock; stopping playing never
-does. `LOCKED` shows in the status line. Set `[lock] auto = false` to lock only by hand.
+Two separate locks, so the beat can stay put while the harmony keeps moving:
+
+- **Tempo lock** (**l**, or a `lock` controller; automatic once the tempo has been clear,
+  confidence >= `lock.confidence`, for `lock.after_s`, unless `[lock] auto = false`): pad and
+  pulse keep going through silence, and the tempo follows you only slowly
+  (`lock.tempo_rate`), never jumping to another tempo or octave. Chords still follow you.
+  Only **u**, an `unlock` controller or panic ends it; stopping playing never does.
+- **Chord hold** (**c** toggles; `chord_hold` / `chord_release` / `chord_toggle` controllers):
+  the pad (and the pulse's note) stay on the current chord, whatever you play, until you
+  release it or panic.
+
+The status line shows `LOCKED` and `CHORD HELD`.
 
 Unlocked, the pulse starts once confidence reaches `pulse.min_confidence` and stops only
 if it falls below `pulse.stop_confidence` (or after `pulse.idle_stop_s` of silence).

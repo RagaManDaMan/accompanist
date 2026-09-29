@@ -32,7 +32,7 @@ VALID_ROLES = ("note_source",)
 PLANNED_ROLES = ("pitch_contour", "voice")
 
 # Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
-ACTIONS = ("panic", "resume", "lock", "unlock", "tap_tempo")
+ACTIONS = ("panic", "resume", "lock", "unlock", "chord_hold", "chord_release", "chord_toggle", "tap_tempo")
 
 BUILTIN_PRESETS = Path(__file__).parent / "presets"
 USER_PRESETS = Path("presets")

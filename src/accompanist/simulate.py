@@ -116,7 +116,7 @@ def run(
     trace: list[tuple[float, float, float]] = []
     pending = sorted(actions or [])
     timeline: list[tuple[float, object]] = []
-    i, now, last_print, last_trace, last_chord, last_locked = 0, 0.0, -1.0, -1.0, None, False
+    i, now, last_print, last_trace, last_chord, last_locked, last_held = 0, 0.0, -1.0, -1.0, None, False, False
     while now <= total:
         while i < len(onsets) and onsets[i][0] <= now:
             ctl.on_note(onsets[i][0], onsets[i][1], onsets[i][2])
@@ -133,6 +133,9 @@ def run(
         if eng.locked != last_locked:
             log.append((now, "LOCKED" if eng.locked else "unlocked"))
             last_locked = eng.locked
+        if eng.chord_held != last_held:
+            log.append((now, f"chord HELD ({eng.frozen.label()})" if eng.chord_held else "chord released"))
+            last_held = eng.chord_held
         if now - last_trace >= 1.0:
             trace.append((now, eng.tempo.bpm, eng.tempo.confidence))
             last_trace = now

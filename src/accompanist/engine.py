@@ -31,8 +31,9 @@ class Engine:
         self.last_onset_t: Optional[float] = None
         self.last_note: Optional[int] = None
         self.proposal: Optional[Voicing] = None   # what the harmony model last suggested
-        self.locked = False
-        self.frozen: Optional[Voicing] = None     # the harmony held while locked
+        self.locked = False                       # tempo lock (the groove)
+        self.chord_held = False                   # chord lock, separate from the tempo lock
+        self.frozen: Optional[Voicing] = None     # the chord held while chord_held
         self._confident_since: Optional[float] = None
         self._auto_armed = True
 
@@ -63,11 +64,11 @@ class Engine:
             return
         idle = float("inf") if self.last_onset_t is None else now - self.last_onset_t
         period = self.tempo.period
-        voicing = self.frozen if self.locked else self.proposal
+        voicing = self.frozen if self.chord_held else self.proposal
 
         if not self.cfg.pad.enabled:
             self.pad.release_all()
-        elif idle > self.cfg.pad.idle_release_s and not self.locked:
+        elif idle > self.cfg.pad.idle_release_s and not (self.locked or self.chord_held):
             self.pad.release_all()
         elif voicing is not None:
             self.pad.update(now, voicing, period)
@@ -126,8 +127,9 @@ class Engine:
 
     # ---- control (called by the Controller) --------------------------------
     def panic(self) -> None:
-        """Kill switch: silence now and stay silent until resume(). Also ends a lock."""
+        """Kill switch: silence now and stay silent until resume(). Also ends both locks."""
         self.unlock()
+        self.release_chord()
         self.muted = True
         self.out.panic()
         self.pad.reset()
@@ -138,14 +140,12 @@ class Engine:
         self.muted = False
 
     def lock(self, now: float) -> bool:
-        """Hold the groove: freeze the harmony, keep pad and pulse going through silence,
-        follow tempo only slowly. Needs something heard first. Returns True if locked."""
+        """Lock the tempo: pad and pulse keep going through silence, the tempo follows only
+        slowly and never jumps. Chords still follow you (see hold_chord). Needs something
+        heard first. Returns True if locked."""
         if self.muted or self.last_onset_t is None:
             return False
-        voicing = self.pad.current or self.proposal
-        if voicing is None:
-            return False
-        self.locked, self.frozen, self._confident_since = True, voicing, None
+        self.locked, self._confident_since = True, None
         # Lock onto the best beat we can hear (tempo, then phase), then hold it.
         if len(self.tempo.onsets) >= self.cfg.tempo.min_onsets:
             period, beat = self.tempo.refine(now)
@@ -159,7 +159,19 @@ class Engine:
         """Only a key, a controller or panic ends a lock; silence never does."""
         if self.locked:
             self._auto_armed = False
-        self.locked, self.frozen = False, None
+        self.locked = False
+
+    def hold_chord(self) -> bool:
+        """Hold the chord that is sounding (or about to): the pad and pulse stay on it,
+        whatever you play, until release_chord() or panic. Returns True if held."""
+        voicing = self.pad.current or self.proposal
+        if self.muted or voicing is None:
+            return False
+        self.chord_held, self.frozen = True, voicing
+        return True
+
+    def release_chord(self) -> None:
+        self.chord_held, self.frozen = False, None
 
     def set_tempo(self, bpm: float, beat_t: Optional[float] = None) -> None:
         """Force the tempo (tap tempo). If beat_t is given, it was a beat: align the pulse to it."""
@@ -185,6 +197,7 @@ class Engine:
             "pulse": self.clock.running,
             "muted": self.muted,
             "locked": self.locked,
+            "chord_held": self.chord_held,
             "lock_in_s": None if self.locked or self._confident_since is None else
                          max(0.0, self.cfg.lock.after_s - (now - self._confident_since)),
             "harmony_model": self.cfg.harmony.model,

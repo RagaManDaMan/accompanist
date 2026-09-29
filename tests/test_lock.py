@@ -94,18 +94,38 @@ def test_lock_needs_something_heard():
     assert ctl.lock(0.0) is False and not ctl.get_state(0.0)["locked"]
 
 
-def test_lock_freezes_the_harmony_and_unlock_releases_it():
+def test_tempo_lock_does_not_freeze_the_chords():
     cfg = {"pad": {"lag_beats": 1, "min_change_beats": 1}, "lock": {"auto": False}}
     ctl = controller(cfg)
     play(ctl, phrase(D_PHRASE, 90, 0.0, 30), 20.0)
-    assert ctl.get_state(20.0)["pad"] in ("D", "D5")
     assert ctl.lock(20.0)
     play(ctl, phrase(G_MINOR, 90, 20.0, 60), 60.0, start=20.01)
     s = ctl.get_state(60.0)
-    assert s["locked"] and s["pad"] in ("D", "D5")                  # G minor played; D held
-    ctl.unlock()
-    play(ctl, phrase(G_MINOR, 90, 60.0, 30), 80.0, start=60.01)
-    assert ctl.get_state(80.0)["pad"] in ("Gm", "G5")               # follows again
+    assert s["locked"] and s["pad"] in ("Gm", "G5")                 # chords followed you
+
+
+def test_chord_hold_freezes_the_chord_until_released():
+    cfg = {"pad": {"lag_beats": 1, "min_change_beats": 1}, "lock": {"auto": False}}
+    ctl = controller(cfg)
+    play(ctl, phrase(D_PHRASE, 90, 0.0, 30), 20.0)
+    assert ctl.do("chord_toggle", 20.0).startswith("chord HELD")
+    play(ctl, phrase(G_MINOR, 90, 20.0, 60), 60.0, start=20.01)
+    s = ctl.get_state(60.0)
+    assert s["chord_held"] and not s["locked"] and s["pad"] in ("D", "D5")
+    assert "CHORD HELD" in format_status(s) and "LOCKED" not in format_status(s)
+    play(ctl, [], 90.0, start=60.01)                                # silence: still held
+    assert ctl.get_state(90.0)["pad"] in ("D", "D5")
+    ctl.do("chord_toggle", 90.0)
+    play(ctl, phrase(G_MINOR, 90, 90.0, 30), 110.0, start=90.01)
+    assert ctl.get_state(110.0)["pad"] in ("Gm", "G5")              # follows again
+
+
+def test_panic_releases_a_held_chord():
+    ctl = controller({"lock": {"auto": False}})
+    play(ctl, phrase(D_PHRASE, 90, 0.0, 20), 10.0)
+    assert ctl.hold_chord()
+    ctl.panic()
+    assert not ctl.get_state(10.0)["chord_held"]
 
 
 def test_silence_never_ends_a_lock_only_unlock_or_panic_do():

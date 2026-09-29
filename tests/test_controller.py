@@ -227,10 +227,14 @@ def test_every_action_reports_what_happened():
     assert ctl.do("lock", 0.0) == "can't lock yet: nothing heard"
     ctl.on_note(0.0, 62, 90)
     ctl.tick(0.1)
-    assert ctl.do("unlock", 0.1) == "not locked"
-    assert ctl.do("lock", 0.1).startswith("LOCKED at")
+    assert ctl.do("unlock", 0.1) == "tempo not locked"
+    assert ctl.do("lock", 0.1).startswith("tempo LOCKED at")
     assert ctl.do("lock", 0.2).startswith("already LOCKED")
-    assert ctl.do("unlock", 0.3) == "unlocked"
+    assert ctl.do("unlock", 0.3) == "tempo unlocked"
+    assert ctl.do("chord_toggle", 0.3).startswith("chord HELD: D")
+    assert ctl.do("chord_hold", 0.3).startswith("already holding")
+    assert ctl.do("chord_toggle", 0.3) == "chords follow you again"
+    assert ctl.do("chord_release", 0.3) == "no chord held"
     assert ctl.do("panic", 0.4).startswith("PANIC")
     assert ctl.do("lock", 0.5).startswith("can't lock while muted")
     assert ctl.do("resume", 0.6) == "resumed"

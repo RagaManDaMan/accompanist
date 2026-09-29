@@ -5,6 +5,7 @@
     ctl.set_param("pad.velocity", 70)      # validated; applies at the next tick
     ctl.get_state(now)                     # a plain dict; the status line formats it
     ctl.panic(); ctl.resume(); ctl.lock(now); ctl.unlock(); ctl.tap_tempo(now)
+    ctl.hold_chord(); ctl.release_chord()      # or ctl.do("chord_toggle", now)
 
 Like the engine, it is clock-agnostic: callers pass the time.
 """
@@ -110,12 +111,25 @@ class Controller:
                 return "can't lock while muted (r = resume first)"
             if not self.lock(now):
                 return "can't lock yet: nothing heard"
-            pad = eng.frozen.label() if eng.frozen else "--"
-            return f"LOCKED at {eng.tempo.bpm:.1f} bpm, pad {pad}"
+            return f"tempo LOCKED at {eng.tempo.bpm:.1f} bpm (u = unlock)"
         if action == "unlock":
             was = eng.locked
             self.unlock()
-            return "unlocked" if was else "not locked"
+            return "tempo unlocked" if was else "tempo not locked"
+        if action == "chord_toggle":
+            action = "chord_release" if eng.chord_held else "chord_hold"
+        if action == "chord_hold":
+            if eng.chord_held:
+                return f"already holding {eng.frozen.label()} (c = release)"
+            if eng.muted:
+                return "can't hold a chord while muted (r = resume first)"
+            if not self.hold_chord():
+                return "can't hold a chord yet: nothing heard"
+            return f"chord HELD: {eng.frozen.label()} (c = release)"
+        if action == "chord_release":
+            was = eng.chord_held
+            self.release_chord()
+            return "chords follow you again" if was else "no chord held"
         bpm = self.tap_tempo(now)
         return f"tap {len(self._taps)}/{TAP_COUNT}" if bpm is None else f"tempo set to {bpm:.1f} bpm by tapping"
 
@@ -130,6 +144,12 @@ class Controller:
 
     def unlock(self) -> None:
         self.engine.unlock()
+
+    def hold_chord(self) -> bool:
+        return self.engine.hold_chord()
+
+    def release_chord(self) -> None:
+        self.engine.release_chord()
 
     def tap_tempo(self, now: float) -> Optional[float]:
         """Tap the beat. After TAP_COUNT taps, sets the tempo, and its octave (prior_bpm), to
@@ -187,7 +207,8 @@ def format_status(s: dict) -> str:
 
     State flags come first, so they stay visible when a narrow window cuts the line."""
     heard = "--" if s["heard"] is None else f"{s['heard']} ({s['heard_ago_s']:0.1f}s ago)"
-    flags = ("MUTED " if s["muted"] else "") + ("LOCKED " if s.get("locked") else "")
+    flags = (("MUTED " if s["muted"] else "") + ("LOCKED " if s.get("locked") else "")
+             + ("CHORD HELD " if s.get("chord_held") else ""))
     return (f"{clock(s.get('elapsed_s'))}  {flags}{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  "
             f"pad {s['pad'] or '--':<7} pulse {'on ' if s['pulse'] else 'off'}  "
             f"{'key ' + s['key'] + '  ' if s.get('key') else ''}"
