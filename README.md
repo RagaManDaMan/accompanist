@@ -28,7 +28,8 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
 **l** = lock / unlock the tempo, **c** = hold / release the chord, **t** = tap tempo
-(4 taps set the tempo and its octave), **q** = quit. Every key press prints what it did.
+(4 taps set the tempo and its octave; with a chart they are the count-in), **s** = chart
+from the top, **q** = quit. Every key press prints what it did.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
 ## Settings, presets, controllers
@@ -62,6 +63,25 @@ The status line shows `LOCKED` and `CHORD HELD`.
 
 Unlocked, the pulse starts once confidence reaches `pulse.min_confidence` and stops only
 if it falls below `pulse.stop_confidence` (or after `pulse.idle_stop_s` of silence).
+
+## Playing with a chord chart
+
+```bash
+accompanist run --chart charts/Misty.musicxml          # add --transpose -2 etc. to change key
+```
+
+Export a tune from iReal Pro as **MusicXML** (other MusicXML lead sheets work too; `.mxl`
+as well) and pass it with `--chart`, or set `[harmony] model = "chart"` and
+`chart = "charts/NAME.musicxml"`. The pad and bass then play the chart's chords, exactly on
+the beat, following repeats and 1st/2nd endings and looping the form (segno/coda/D.C.
+markings are reported and ignored for now).
+
+- **Count in:** tap **t** four times ("1 2 3 4"): the chart starts at bar 1 on the next beat,
+  and the tempo locks so the band keeps going before you play. Or just start playing: the
+  chart starts when the beat is found. **s** restarts from the top on the next beat.
+- Your playing sets and steers the tempo (unless locked); the pad still varies its voicings;
+  **c** holds a chord, as usual. The status line shows `bar 5/32 [A] beat 1`.
+- `charts/` is ignored by git, like `takes/`: your charts stay on your machine.
 
 ## Dynamics
 

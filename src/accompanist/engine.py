@@ -99,9 +99,7 @@ class Engine:
             active = self.tempo.confidence >= p.min_confidence and idle <= p.idle_stop_s
         active = active and voicing is not None
         if active and not self.clock.running and self.last_onset_t is not None:
-            self.pulse.reset()
-            self.drums.reset()
-            self.beat_count = 0
+            self.restart_form()
             fit = self.tempo.beat_reference(now)
             self.clock.start(fit[0] if fit else self.last_onset_t, period, now)
         elif not active and self.clock.running:
@@ -112,13 +110,22 @@ class Engine:
             # pulse never disagree while the pad is still catching up.
             pulse_root = self.pad.current.root_pc if self.pad.current else voicing.root_pc
             gain = self.dynamics.follow_gain()
+            bpb = max(1, getattr(self.harmony, "beats_per_bar", None) or p.beats_per_bar)
             for beat_t in self.clock.due(now):
+                if hasattr(self.harmony, "on_beat"):          # a chart: its chord for this beat
+                    self.harmony.on_beat(beat_t)
+                    self.proposal = self.harmony.propose(now)
+                    chord = self.frozen if self.chord_held else self.proposal
+                    if self.cfg.pad.enabled and chord is not None:
+                        self.pad.update(now, chord, period, beat_known=True)
+                    if chord is not None:
+                        pulse_root = chord.root_pc
                 if self.cfg.pad.enabled:
-                    self.pad.on_beat(now, self.beat_count % max(1, p.beats_per_bar))
+                    self.pad.on_beat(now, self.beat_count % bpb)
                     if self.pad.current and not self.chord_held:
                         pulse_root = self.pad.current.root_pc
                 if p.enabled:
-                    self.pulse.on_beat(now, pulse_root, gain)
+                    self.pulse.on_beat(now, pulse_root, gain, self.beat_count % bpb)
                 if self.cfg.drums.enabled:
                     self.drums.on_beat(beat_t, self.clock.period, gain)
                 self.beat_count += 1
@@ -185,7 +192,7 @@ class Engine:
         """Lock the tempo: pad and pulse keep going through silence, the tempo follows only
         slowly and never jumps. Chords still follow you (see hold_chord). Needs something
         heard first. Returns True if locked."""
-        if self.muted or self.last_onset_t is None:
+        if self.muted or (self.last_onset_t is None and not self.clock.running):
             return False
         self.locked, self._confident_since = True, None
         # Lock onto the best beat we can hear (tempo, then phase), then hold it.
@@ -214,6 +221,26 @@ class Engine:
 
     def release_chord(self) -> None:
         self.chord_held, self.frozen = False, None
+
+    def restart_form(self) -> None:
+        """The next beat is beat 1 of bar 1: for the bar count, the drums and a chart."""
+        self.pulse.reset()
+        self.drums.reset()
+        self.beat_count = 0
+        if hasattr(self.harmony, "restart"):
+            self.harmony.restart()
+
+    def count_in(self, last_tap: float) -> None:
+        """After tapping the tempo: the next beat after the last tap is bar 1, and the tempo
+        locks so the band keeps playing before you do."""
+        if self.muted:
+            return
+        if self.clock.running:
+            self.clock.next_beat = last_tap + self.tempo.period
+        else:
+            self.clock.start(last_tap, self.tempo.period)
+        self.restart_form()
+        self.lock(last_tap)
 
     def set_tempo(self, bpm: float, beat_t: Optional[float] = None) -> None:
         """Force the tempo (tap tempo). If beat_t is given, it was a beat: align the pulse to it."""
@@ -247,4 +274,5 @@ class Engine:
                          max(0.0, self.cfg.lock.after_s - (now - self._confident_since)),
             "harmony_model": self.cfg.harmony.model,
             "key": getattr(self.harmony, "key_label", None),
+            "chart": getattr(self.harmony, "position", None),
         }

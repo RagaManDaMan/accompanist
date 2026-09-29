@@ -43,6 +43,13 @@ class PadResponder:
         if self.current is not None and self._same_chord(candidate, self.current):
             self._pending = self._ready = None
             return
+        if candidate.scheduled:                 # a chart change: it is due now, on this beat
+            self._pending = None
+            if beat_known and self.cfg.change_on != "now":
+                self._ready = candidate
+            else:
+                self._apply(now, candidate)
+            return
         # The lag clock is keyed on the ROOT: a wobbling third (major/minor/open) must not
         # restart it. The latest voicing wins when the lag expires.
         if self._pending is None or self._pending[0].root_pc != candidate.root_pc:
@@ -60,7 +67,9 @@ class PadResponder:
         """The beat clock ticked: apply a waiting change, or re-voice a static chord."""
         if bar_position == 0:
             self._bars_since_change += 1
-        if self._ready is not None and (self.cfg.change_on == "beat" or bar_position == 0):
+        due = self.cfg.change_on == "beat" or bar_position == 0 or (
+            self._ready is not None and self._ready.scheduled)
+        if self._ready is not None and due:
             self._apply(now, self._ready)
         elif (bar_position == 0 and self.current is not None and self.cfg.revoice_bars > 0
               and self._bars_since_change >= self.cfg.revoice_bars):
@@ -98,7 +107,8 @@ class PadResponder:
         return min(options, key=cost)
 
     def _apply(self, now: float, chord: Voicing, force_new: bool = False) -> None:
-        new = Voicing(chord.root_pc, chord.third, self._choose(chord, force_new), chord.name)
+        new = Voicing(chord.root_pc, chord.third, self._choose(chord, force_new), chord.name,
+                      chord.scheduled)
         ch = self.cfg.channel - 1
         old_notes = set(self.current.notes) if self.current else set()
         new_notes = set(new.notes)
@@ -127,8 +137,9 @@ class PulseResponder:
         self.cfg, self.out = cfg, out
         self.beat_count = 0
 
-    def on_beat(self, now: float, root_pc: int, gain: float = 1.0) -> None:
-        pos = self.beat_count % max(1, self.cfg.beats_per_bar)
+    def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
+                bar_position: Optional[int] = None) -> None:
+        pos = self.beat_count % max(1, self.cfg.beats_per_bar) if bar_position is None else bar_position
         vel = round(self.cfg.velocity * gain) + (self.cfg.accent if pos == 0 else 0)
         vel = min(max(vel, 1), 127)
         note = 12 * (self.cfg.octave + 1) + root_pc

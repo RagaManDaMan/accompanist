@@ -134,9 +134,14 @@ PARAMS: list[Param] = [
 
     # ---- harmony --------------------------------------------------------------
     P("harmony.model", str, "drone", "Harmony model",
-      "Which harmony model drives the pad: 'drone' (root + fifth, third if played) or "
-      "'modal' (chords from a key and mode, following what you play).",
-      "Harmony", choices=("drone", "modal"), live=False),
+      "Which harmony model drives the pad: 'drone' (root + fifth, third if played), "
+      "'modal' (chords from a key and mode, following what you play) or 'chart' (a chord chart).",
+      "Harmony", choices=("drone", "modal", "chart"), live=False),
+    P("harmony.chart", str, None, "Chart",
+      "chart model: a MusicXML chord chart (e.g. exported from iReal Pro); or `--chart FILE`.",
+      "Harmony", nullable=True, live=False),
+    P("harmony.transpose", int, 0, "Transpose",
+      "chart model: play the chart this many semitones up (+) or down (-).", "Harmony", -11, 11, 1),
     P("harmony.mode", str, "auto", "Mode",
       "modal model: 'major', 'minor' (with raised 7th), 'chromatic' (any chord), or 'auto' "
       "(major or minor, detected from your playing).", "Harmony",

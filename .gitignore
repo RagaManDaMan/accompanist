@@ -6,3 +6,4 @@ config.toml
 takes/
 .DS_Store
 *.bak
+charts/

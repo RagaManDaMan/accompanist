@@ -32,7 +32,7 @@ VALID_ROLES = ("note_source",)
 PLANNED_ROLES = ("pitch_contour", "voice")
 
 # Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
-ACTIONS = ("panic", "resume", "lock", "unlock", "lock_toggle", "chord_hold", "chord_release", "chord_toggle", "tap_tempo")
+ACTIONS = ("panic", "resume", "lock", "unlock", "lock_toggle", "chord_hold", "chord_release", "chord_toggle", "chart_restart", "tap_tempo")
 
 BUILTIN_PRESETS = Path(__file__).parent / "presets"
 USER_PRESETS = Path("presets")
@@ -278,8 +278,9 @@ def _read_toml(p: Path) -> dict:
         raise ConfigError(f"{p}: not valid TOML ({e})") from None
 
 
-def load(path: str | Path, preset: Optional[str] = None) -> Config:
+def load(path: str | Path, preset: Optional[str] = None, overrides: Optional[dict] = None) -> Config:
+    """config.toml, layered over a preset; `overrides` (e.g. from command-line flags) win."""
     p = Path(path)
     if not p.exists():
         raise ConfigError(f"config file not found: {p} (copy config.example.toml to start)")
-    return from_dict(_read_toml(p), preset)
+    return from_dict(merge(_read_toml(p), overrides or {}), preset)

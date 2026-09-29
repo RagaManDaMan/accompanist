@@ -80,9 +80,26 @@ def cmd_monitor(args) -> int:
     return 0
 
 
+def chart_overrides(args) -> dict:
+    """--chart FILE / --transpose N: play a chord chart (a command-line layer over config.toml)."""
+    h = {}
+    if getattr(args, "chart", None):
+        h.update(model="chart", chart=args.chart)
+    if getattr(args, "transpose", None) is not None:
+        h["transpose"] = args.transpose
+    return {"harmony": h} if h else {}
+
+
+def add_chart_args(sp) -> None:
+    sp.add_argument("--chart", default=None, metavar="FILE",
+                    help="play a chord chart (MusicXML, e.g. exported from iReal Pro)")
+    sp.add_argument("--transpose", type=int, default=None, metavar="N",
+                    help="transpose the chart N semitones (-11..11)")
+
+
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
 KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_toggle",
-        "c": "chord_toggle"}
+        "c": "chord_toggle", "s": "chart_restart"}
 
 
 def say(message) -> None:
@@ -93,7 +110,7 @@ def say(message) -> None:
 
 
 def cmd_run(args) -> int:
-    cfg = cfgmod.load(args.config, args.preset)
+    cfg = cfgmod.load(args.config, args.preset, chart_overrides(args))
     q: queue.Queue = queue.Queue()
     in_ports = open_inputs(cfg, q)
     port = open_output(cfg.output)
@@ -109,7 +126,8 @@ def cmd_run(args) -> int:
     if rec:
         print(f"Recording your notes to {rec.path}")
     print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
-          "      [c] = hold / release chord   [t] = tap tempo   [q] = quit\n")
+          "      [c] = hold / release chord   [t] = tap tempo (with a chart: 4 taps = count-in)"
+          "   [s] = chart from the top   [q] = quit\n")
     last_print = 0.0
     try:
         while True:
@@ -168,7 +186,8 @@ def cmd_run(args) -> int:
 def cmd_simulate(args) -> int:
     from . import simulate
 
-    cfg = cfgmod.load(args.config, args.preset) if args.config else cfgmod.from_dict({}, args.preset)
+    cfg = (cfgmod.load(args.config, args.preset, chart_overrides(args)) if args.config
+           else cfgmod.from_dict(chart_overrides(args), args.preset))
     res = simulate.run(cfg, verbose=True)
     print("\nPad changes:")
     for t, what in res.log:
@@ -181,7 +200,8 @@ def cmd_replay(args) -> int:
     from . import simulate
 
     cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
-    cfg = cfgmod.load(cfg_path, args.preset) if cfg_path else cfgmod.from_dict({}, args.preset)
+    cfg = (cfgmod.load(cfg_path, args.preset, chart_overrides(args)) if cfg_path
+           else cfgmod.from_dict(chart_overrides(args), args.preset))
     # Times are the take's own clock (0 = first note or key press), as shown live in the status line.
     onsets = load_take(args.take)
     actions = load_actions(args.take)
@@ -251,15 +271,18 @@ def main(argv=None) -> int:
         sp.add_argument("-c", "--config", default="config.toml")
         if name == "run":
             sp.add_argument("--preset", default=None, help=PRESET_HELP)
+            add_chart_args(sp)
             sp.add_argument("--record", nargs="?", const="auto", default=None, metavar="FILE",
                             help="save your notes as a take (default: takes/take-<time>.jsonl)")
     sp = sub.add_parser("replay", help="run a recorded take through the engine offline (no hardware)")
     sp.add_argument("take", help="a take file made with `run --record`")
     sp.add_argument("-c", "--config", default=None, help="default: ./config.toml if present, else defaults")
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
+    add_chart_args(sp)
     sp = sub.add_parser("simulate", help="dry-run against a scripted performance (no hardware)")
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
+    add_chart_args(sp)
     sp = sub.add_parser("params", help="list every setting (with --json: the schema a UI is built from)")
     sp.add_argument("--json", action="store_true")
     args = p.parse_args(argv)

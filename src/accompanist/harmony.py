@@ -44,6 +44,7 @@ class Voicing:
     third: int | None          # 3 = minor, 4 = major, None = open (drone-like)
     notes: tuple[int, ...]
     name: str | None = None    # chord label, when the model knows better than root+third
+    scheduled: bool = False    # from a chart: play it on this beat, no lag or rate limit
 
     @property
     def key(self) -> tuple[int, int | None]:
@@ -125,7 +126,8 @@ class DroneModel:
 
 
 def make_model(cfg: Any) -> HarmonyModel:
+    from .charts import ChartModel
     from .modal import ModalModel
 
-    models = {"drone": DroneModel, "modal": ModalModel}
+    models = {"drone": DroneModel, "modal": ModalModel, "chart": ChartModel}
     return models[cfg.harmony.model](cfg)

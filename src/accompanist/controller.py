@@ -11,7 +11,6 @@ Like the engine, it is clock-agnostic: callers pass the time.
 """
 from __future__ import annotations
 
-from statistics import median
 from typing import Any, Optional
 
 from . import params as registry
@@ -118,6 +117,11 @@ class Controller:
             was = eng.locked
             self.unlock()
             return "tempo unlocked" if was else "tempo not locked"
+        if action == "chart_restart":
+            if not hasattr(eng.harmony, "restart"):
+                return "no chart loaded (harmony.model = \"chart\")"
+            eng.restart_form()
+            return "chart restarts at bar 1 on the next beat"
         if action == "chord_toggle":
             action = "chord_release" if eng.chord_held else "chord_hold"
         if action == "chord_hold":
@@ -163,13 +167,20 @@ class Controller:
         if len(self._taps) < TAP_COUNT:
             return None
         taps = self._taps[-TAP_COUNT:]
-        period = median(b - a for a, b in zip(taps, taps[1:]))
+        # Least-squares slope through the taps: steadier than any one interval, which
+        # matters because key presses are only read every few milliseconds.
+        n = len(taps)
+        mean_i, mean_t = (n - 1) / 2, sum(taps) / n
+        period = (sum((i - mean_i) * (t - mean_t) for i, t in enumerate(taps))
+                  / sum((i - mean_i) ** 2 for i in range(n)))
         t = self.cfg.tempo
         bpm = min(max(60.0 / period, t.min_bpm), t.max_bpm)
         self.set_param("tempo.prior_bpm", round(bpm, 1))
         if t.prior_sigma_oct > t.tap_sigma_oct:
             self.set_param("tempo.prior_sigma_oct", t.tap_sigma_oct)
         self.engine.set_tempo(bpm, beat_t=now)
+        if hasattr(self.engine.harmony, "restart"):   # a chart: the taps were the count-in
+            self.engine.count_in(now)
         self._taps = []
         return bpm
 
@@ -205,6 +216,14 @@ def clock(seconds: Optional[float]) -> str:
     return f"{m}:{t // 10:02d}.{t % 10}"
 
 
+def chart_position(s: dict) -> str:
+    c = s.get("chart")
+    if not c:
+        return ""
+    section = f" [{c['section']}]" if c["section"] else ""
+    return f"bar {c['bar']}/{c['bars']}{section} beat {c['beat']}  "
+
+
 def pad_level(s: dict) -> str:
     lvl = s.get("pad_level")
     return "" if lvl is None else f" {lvl:4.0%}"
@@ -219,5 +238,6 @@ def format_status(s: dict) -> str:
              + ("CHORD HELD " if s.get("chord_held") else ""))
     return (f"{clock(s.get('elapsed_s'))}  {flags}{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  "
             f"pad {s['pad'] or '--':<7}{pad_level(s)} pulse {'on ' if s['pulse'] else 'off'}  "
+            f"{chart_position(s)}"
             f"{'key ' + s['key'] + '  ' if s.get('key') else ''}"
             f"root {s['root'] or '--':<2}  heard {heard}")
