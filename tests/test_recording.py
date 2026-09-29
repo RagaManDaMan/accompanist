@@ -76,3 +76,23 @@ def test_replay_command_end_to_end(tmp_path, capsys, monkeypatch):
 def test_replay_command_reports_bad_take_cleanly(tmp_path, capsys):
     assert main(["replay", str(tmp_path / "missing.jsonl")]) == 2
     assert "not found" in capsys.readouterr().err
+
+
+def test_actions_are_recorded_and_replayed(tmp_path, capsys, monkeypatch):
+    from accompanist.recording import load_actions
+
+    monkeypatch.chdir(tmp_path)
+    f = tmp_path / "t.jsonl"
+    rec = Recorder(f)
+    for i in range(40):                          # 20 s of steady quarter notes at 120
+        rec.note_on(100.0 + i * 0.5, 62, 90)
+        if i == 20:
+            rec.action(100.0 + i * 0.5 + 0.1, "lock")
+    rec.action(125.0, "unlock")
+    rec.close()
+    assert load_actions(f) == [(10.1, "lock"), (25.0, "unlock")]
+    assert len(load_take(f)) == 40               # actions are not notes
+    (tmp_path / "config.toml").write_text('[lock]\nauto = false\n')
+    assert main(["replay", str(f)]) == 0
+    out = capsys.readouterr().out
+    assert "LOCKED" in out and "unlocked" in out and "lock at 11.1s" in out

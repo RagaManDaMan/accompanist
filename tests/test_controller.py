@@ -219,3 +219,28 @@ def test_state_is_a_plain_dict_and_status_formats_it():
     json.dumps(s)                                                 # plain data, UI-ready
     assert s["heard"] == "D4" and s["root"] == "D" and s["muted"] is False
     assert "bpm" in format_status(s) and "heard D4" in format_status(s)
+
+
+def test_every_action_reports_what_happened():
+    _, ctl = make()
+    assert ctl.do("lock", 0.0) == "can't lock yet: nothing heard"
+    ctl.on_note(0.0, 62, 90)
+    ctl.tick(0.1)
+    assert ctl.do("unlock", 0.1) == "not locked"
+    assert ctl.do("lock", 0.1).startswith("LOCKED at")
+    assert ctl.do("lock", 0.2).startswith("already LOCKED")
+    assert ctl.do("unlock", 0.3) == "unlocked"
+    assert ctl.do("panic", 0.4).startswith("PANIC")
+    assert ctl.do("lock", 0.5).startswith("can't lock while muted")
+    assert ctl.do("resume", 0.6) == "resumed"
+    assert ctl.do("tap_tempo", 1.0) == "tap 1/4"
+
+
+def test_status_flags_come_first_so_a_narrow_window_still_shows_them():
+    _, ctl = make()
+    ctl.on_note(0.0, 62, 90)
+    ctl.tick(0.1)
+    ctl.lock(0.1)
+    assert format_status(ctl.get_state(0.1)).startswith("LOCKED ")
+    ctl.panic()
+    assert format_status(ctl.get_state(0.2)).startswith("MUTED ")

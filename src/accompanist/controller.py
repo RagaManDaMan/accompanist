@@ -83,13 +83,34 @@ class Controller:
         return {p.key: self.get_param(p.key) for p in registry.PARAMS if not p.deprecated}
 
     # ---- actions ----------------------------------------------------------------
-    def do(self, action: str, now: float) -> None:
+    def do(self, action: str, now: float) -> str:
+        """Perform an action. Returns a short message saying what happened (or why not),
+        for the status display: a key press should never be silently ignored."""
         if action not in ACTIONS:
             raise ConfigError(f"unknown action '{action}'; use one of {list(ACTIONS)}")
-        if action in ("tap_tempo", "lock"):
-            getattr(self, action)(now)
-        else:
-            getattr(self, action)()
+        eng = self.engine
+        if action == "panic":
+            self.panic()
+            return "PANIC: silenced and muted (r = resume)"
+        if action == "resume":
+            was = eng.muted
+            self.resume()
+            return "resumed" if was else "not muted"
+        if action == "lock":
+            if eng.locked:
+                return "already LOCKED (u = unlock)"
+            if eng.muted:
+                return "can't lock while muted (r = resume first)"
+            if not self.lock(now):
+                return "can't lock yet: nothing heard"
+            pad = eng.frozen.label() if eng.frozen else "--"
+            return f"LOCKED at {eng.tempo.bpm:.1f} bpm, pad {pad}"
+        if action == "unlock":
+            was = eng.locked
+            self.unlock()
+            return "unlocked" if was else "not locked"
+        bpm = self.tap_tempo(now)
+        return f"tap {len(self._taps)}/{TAP_COUNT}" if bpm is None else f"tempo set to {bpm:.1f} bpm by tapping"
 
     def panic(self) -> None:
         self.engine.panic()
@@ -143,13 +164,11 @@ def cc_to_value(p: registry.Param, value: int) -> Any:
 
 
 def format_status(s: dict) -> str:
-    """The one-line status display. Only a formatter of get_state()."""
+    """The one-line status display. Only a formatter of get_state().
+
+    State flags come first, so they stay visible when a narrow window cuts the line."""
     heard = "--" if s["heard"] is None else f"{s['heard']} ({s['heard_ago_s']:0.1f}s ago)"
-    flags = ""
-    if s.get("locked"):
-        flags += "  LOCKED"
-    if s["muted"]:
-        flags += "  ** MUTED **"
-    return (f"{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  heard {heard:<16} "
-            f"root {s['root'] or '--':<2}  pad {s['pad'] or '--':<4} "
-            f"pulse {'on ' if s['pulse'] else 'off'}{flags}")
+    flags = ("MUTED " if s["muted"] else "") + ("LOCKED " if s.get("locked") else "")
+    return (f"{flags}{s['bpm']:5.1f} bpm  conf {s['confidence']:4.0%}  "
+            f"pad {s['pad'] or '--':<4} pulse {'on ' if s['pulse'] else 'off'}  "
+            f"root {s['root'] or '--':<2}  heard {heard}")

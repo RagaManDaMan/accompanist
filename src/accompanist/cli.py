@@ -6,6 +6,7 @@ import json
 import queue
 import re
 import select
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -15,7 +16,7 @@ from . import params as registry
 from .controller import Controller, format_status
 from .midi_io import PortError, list_ports, open_inputs, open_output
 from .output import SafeOutput
-from .recording import Recorder, TakeError, auto_path, load_take
+from .recording import Recorder, TakeError, auto_path, load_actions, load_take
 
 
 class KeyReader:
@@ -83,6 +84,13 @@ PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accomp
 KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock", "u": "unlock"}
 
 
+def say(message) -> None:
+    """Print an event line above the status line (which is redrawn after it)."""
+    if message:
+        sys.stdout.write(f"\r\x1b[K{message}\n")
+        sys.stdout.flush()
+
+
 def cmd_run(args) -> int:
     cfg = cfgmod.load(args.config, args.preset)
     q: queue.Queue = queue.Queue()
@@ -99,7 +107,8 @@ def cmd_run(args) -> int:
           + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     if rec:
         print(f"Recording your notes to {rec.path}")
-    print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l]/[u] = lock/unlock   [t] = tap   [q] = quit\n")
+    print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] (L) = lock   [u] = unlock"
+          "   [t] = tap tempo   [q] = quit\n")
     last_print = 0.0
     try:
         while True:
@@ -114,18 +123,30 @@ def cmd_run(args) -> int:
                     if rec:
                         rec.note_on(t, msg.note, msg.velocity, icfg.name or icfg.port)
                 elif msg.type == "control_change":
+                    target = cfg.controls.get(msg.control)
                     try:
-                        ctl.on_cc(t, msg.control, msg.value)
+                        if target in cfgmod.ACTIONS:
+                            if msg.value >= 64:        # a switch pressed
+                                say(ctl.do(target, t))
+                                if rec:
+                                    rec.action(t, target)
+                        elif target is not None:
+                            say(ctl.on_cc(t, msg.control, msg.value))
                     except cfgmod.ConfigError as e:
-                        sys.stdout.write(f"\r\x1b[K{e}\n")
+                        say(str(e))
+                    last_print = 0.0
             key = keys.poll()
             if key == "q":
                 break
             if key in KEYS:
-                ctl.do(KEYS[key], now)
+                say(ctl.do(KEYS[key], now))
+                if rec:
+                    rec.action(now, KEYS[key])
+                last_print = 0.0               # show the new state at once
             ctl.tick(now)
             if now - last_print >= 0.25:
-                sys.stdout.write("\r\x1b[K" + format_status(ctl.get_state(now)))
+                width = shutil.get_terminal_size((100, 20)).columns - 1
+                sys.stdout.write("\r\x1b[K" + format_status(ctl.get_state(now))[:width])
                 sys.stdout.flush()
                 last_print = now
             time.sleep(0.005)
@@ -161,13 +182,17 @@ def cmd_replay(args) -> int:
     cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
     cfg = cfgmod.load(cfg_path, args.preset) if cfg_path else cfgmod.from_dict({}, args.preset)
     onsets = [(t + 1.0, n, v) for t, n, v in load_take(args.take)]
+    actions = [(t + 1.0, a) for t, a in load_actions(args.take)]
     print(f"Replaying {args.take}: {len(onsets)} notes over {onsets[-1][0] - 1.0:.1f}s "
           f"(config: {cfg_path or 'defaults'}{', preset: ' + cfg.preset if cfg.preset else ''})\n")
-    res = simulate.run(cfg, verbose=True, onsets=onsets)
+    res = simulate.run(cfg, verbose=True, onsets=onsets, actions=actions)
     active = [b for (t, b, c) in res.tempo_trace if onsets[0][0] <= t <= onsets[-1][0]]
     print("\nPad changes and groove lock:")
     for t, what in res.log:
         print(f"  t={t:6.1f}s  {what}")
+    if actions:
+        print("Your key presses / controller actions (replayed): "
+              + ", ".join(f"{a} at {t:.1f}s" for t, a in actions))
     if active:
         print(f"\nTempo while you played: min {min(active):.1f}, max {max(active):.1f}, "
               f"final {active[-1]:.1f} bpm")

@@ -27,10 +27,16 @@ class Recorder:
         self._f.flush()
 
     def note_on(self, t: float, note: int, velocity: int, source: str = "") -> None:
+        self._write(t, {"note": note, "vel": velocity, "src": source})
+
+    def action(self, t: float, name: str) -> None:
+        """A control action (lock, unlock, panic, ...) so replay can repeat it at the same moment."""
+        self._write(t, {"action": name})
+
+    def _write(self, t: float, fields: dict) -> None:
         if self._t0 is None:
             self._t0 = t
-        row = {"t": round(t - self._t0, 4), "note": note, "vel": velocity, "src": source}
-        self._f.write(json.dumps(row) + "\n")
+        self._f.write(json.dumps({"t": round(t - self._t0, 4), **fields}) + "\n")
         self._f.flush()
 
     def close(self) -> None:
@@ -41,8 +47,7 @@ def auto_path(directory: str | Path = "takes") -> Path:
     return Path(directory) / f"take-{datetime.now():%Y%m%d-%H%M%S}.jsonl"
 
 
-def load_take(path: str | Path) -> list[tuple[float, int, int]]:
-    """Returns [(t, note, velocity)] sorted by time, starting at t = 0."""
+def _rows(path: str | Path) -> list[dict]:
     p = Path(path)
     if not p.exists():
         raise TakeError(f"take not found: {p}")
@@ -55,13 +60,33 @@ def load_take(path: str | Path) -> list[tuple[float, int, int]]:
         raise TakeError(f"{p}: first line is not valid JSON") from e
     if header.get("format") != FORMAT:
         raise TakeError(f"{p}: not an accompanist take (expected format '{FORMAT}')")
-    onsets = []
+    rows = []
     for i, ln in enumerate(lines[1:], start=2):
         try:
             r = json.loads(ln)
+            float(r["t"])
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+            raise TakeError(f"{p}: bad line {i}") from e
+        r["_line"] = i
+        rows.append(r)
+    return rows
+
+
+def load_take(path: str | Path) -> list[tuple[float, int, int]]:
+    """Returns the notes, [(t, note, velocity)] sorted by time (t = 0 is the first event)."""
+    onsets = []
+    for r in _rows(path):
+        if "action" in r:
+            continue
+        try:
             onsets.append((float(r["t"]), int(r["note"]), int(r["vel"])))
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
-            raise TakeError(f"{p}: bad note on line {i}") from e
+        except (KeyError, ValueError) as e:
+            raise TakeError(f"{path}: bad note on line {r['_line']}") from e
     if not onsets:
-        raise TakeError(f"{p} contains no notes")
+        raise TakeError(f"{path} contains no notes")
     return sorted(onsets)
+
+
+def load_actions(path: str | Path) -> list[tuple[float, str]]:
+    """The control actions recorded in a take, [(t, action)], on the same clock as load_take."""
+    return sorted((float(r["t"]), str(r["action"])) for r in _rows(path) if "action" in r)
