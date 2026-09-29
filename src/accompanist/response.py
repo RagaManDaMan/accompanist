@@ -26,6 +26,8 @@ MAX_IOI_BEATS = 1.5       # ...and at most this many beats
 LAST_NOTE_BEATS = 1.5     # the answer's last note rings this long
 GATE = 0.9                # notes sound for this share of their interval
 SPAN = 9                  # answer notes stay within this many semitones of the voice's centre
+BLIP_S = 0.09             # a remembered phrase drops notes shorter than this
+OUTLIER = 12              # ...and folds notes this far from both neighbours
 
 
 def _nearest_in(pitch: int, pcs) -> int:
@@ -117,6 +119,29 @@ def render(pitches: list[int], iois: list[float], vels: list[int], cfg: Any, per
     return out
 
 
+def clean_phrase(phrase: list[tuple[float, int, int]]) -> list[tuple[float, int, int]]:
+    """Tidy a phrase heard in audio before it is remembered: drop blips (a note lasting
+    under BLIP_S before the next), and move a note that sits an octave or more away from
+    *both* its neighbours by octaves toward them (a pitch-detection slip; a real one-sided
+    octave leap is kept)."""
+    notes = [p for i, p in enumerate(phrase)
+             if i == len(phrase) - 1 or phrase[i + 1][0] - p[0] >= BLIP_S]
+    out = list(notes)
+    for i in range(len(out)):
+        t, n, v = out[i]
+        if i == 0 or i == len(out) - 1:
+            continue                                    # one neighbour: a leap may be real
+        near = [out[i - 1][1], out[i + 1][1]]
+        if all(abs(n - m) >= OUTLIER for m in near):
+            target = sum(near) / len(near)
+            while n - target > 6:
+                n -= 12
+            while target - n > 6:
+                n += 12
+            out[i] = (t, n, v)
+    return out
+
+
 def fit(phrase: list[tuple[float, int, int]], allowed) -> float:
     """Share of the phrase's notes whose pitch class is allowed."""
     return sum(1 for _, n, _ in phrase if n % 12 in allowed) / len(phrase) if phrase else 0.0
@@ -183,7 +208,10 @@ class ResponseResponder:
         return max(self.cfg.gap_beats * period, self.cfg.min_gap_s)
 
     def _remember(self, phrase: list[tuple[float, int, int]]) -> None:
-        self.memory.append(list(phrase))
+        phrase = clean_phrase(phrase)
+        if not phrase:
+            return
+        self.memory.append(phrase)
         if len(self.memory) > self.cfg.memory:
             self.memory.pop(0)
             if self._last_used is not None:
@@ -204,7 +232,7 @@ class ResponseResponder:
                 or len(self.phrase) < self.cfg.min_notes):
             return
         self.answered = True                                # your phrase is over
-        current = list(self.phrase)
+        current = clean_phrase(self.phrase) or list(self.phrase)
         if not self.cfg.enabled or self.rng.random() >= self.cfg.chance:
             self._remember(current)
             return                                          # let this pause breathe

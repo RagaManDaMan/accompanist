@@ -204,3 +204,14 @@ def test_a_fixed_octave_moves_the_phrase_but_keeps_its_shape():
     ans = [n for _, n in answer_notes(run(ctl, PHRASE, 6.0))]
     assert ans and all(n >= 72 for n in ans)
     assert [b - a for a, b in zip(ans, ans[1:])] == [b[1] - a[1] for a, b in zip(PHRASE, PHRASE[1:])][:len(ans) - 1]
+
+
+def test_detector_slips_are_cleaned_out_of_remembered_phrases():
+    from accompanist.response import clean_phrase
+
+    slip = [(0.0, 64, 90), (0.3, 52, 90), (0.6, 67, 90)]           # E4 E3(!) G4
+    assert [n for _, n, _ in clean_phrase(slip)] == [64, 64, 67]
+    blip = [(0.0, 60, 90), (0.03, 73, 90), (0.4, 62, 90)]          # a 30 ms stray
+    assert [n for _, n, _ in clean_phrase(blip)] == [60, 62]
+    leap = [(0.0, 60, 90), (0.3, 72, 90), (0.6, 74, 90)]           # a real octave leap
+    assert [n for _, n, _ in clean_phrase(leap)] == [60, 72, 74]
