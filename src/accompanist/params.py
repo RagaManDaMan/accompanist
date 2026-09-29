@@ -227,6 +227,9 @@ PARAMS: list[Param] = [
       "Start pulsing once the tempo confidence reaches this.", "Pulse", 0, 1, 0.05),
     P("pulse.stop_confidence", float, 0.15, "Pulse stop confidence",
       "Once pulsing, stop only if the tempo confidence falls below this.", "Pulse", 0, 1, 0.05),
+    P("pulse.stop_after_s", float, 8.0, "Low-confidence patience",
+      "Unlocked, the pulse stops only if confidence stays below stop_confidence this long "
+      "(a dip, or pressing l to unlock, never stops it).", "Pulse", 0, 60, 0.5),
     P("pulse.idle_stop_s", float, 6.0, "Pulse stop after",
       "Stop pulsing after this much silence (seconds).", "Pulse", 0.5, 36000, 0.5),
     P("pulse.phase_gain", float, 0.3, "Phase pull",

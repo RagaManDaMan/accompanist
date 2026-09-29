@@ -63,7 +63,8 @@ Two separate locks, so the beat can stay put while the harmony keeps moving:
 The status line shows `LOCKED` and `CHORD HELD`.
 
 Unlocked, the pulse starts once confidence reaches `pulse.min_confidence` and stops only
-if it falls below `pulse.stop_confidence` (or after `pulse.idle_stop_s` of silence).
+if confidence stays below `pulse.stop_confidence` for `pulse.stop_after_s` (8 s), or after
+`pulse.idle_stop_s` of silence. A dip, or pressing **l** to unlock, never stops it.
 
 ## Playing with a chord chart
 

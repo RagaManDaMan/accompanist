@@ -38,6 +38,7 @@ class Engine:
         self.is_chart = hasattr(self.harmony, "restart")
         self.song_playing = False
         self._count_in_left = 0
+        self._low_conf_since: Optional[float] = None   # unlocked pulse: when confidence dropped
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
         self.dynamics = Dynamics(cfg.dynamics)
@@ -102,8 +103,14 @@ class Engine:
             active = self.song_playing or self._count_in_left > 0   # a song never stops by itself
         elif self.locked:
             active = voicing is not None                      # silence never stops a locked groove
-        elif self.clock.running:                              # hysteresis: stop only well below start
-            active = self.tempo.confidence >= p.stop_confidence and idle <= p.idle_stop_s
+        elif self.clock.running:                              # hysteresis: stop only well below start,
+            if self.tempo.confidence >= p.stop_confidence:    # and only if it stays there
+                self._low_conf_since = None
+            elif self._low_conf_since is None:
+                self._low_conf_since = now
+            unsure = (self._low_conf_since is not None
+                      and now - self._low_conf_since >= p.stop_after_s)
+            active = not unsure and idle <= p.idle_stop_s
         else:
             active = self.tempo.confidence >= p.min_confidence and idle <= p.idle_stop_s
         if not self.is_chart:
@@ -232,6 +239,7 @@ class Engine:
         if self.locked:
             self._auto_armed = False
         self.locked = False
+        self._low_conf_since = None           # unlocking never stops the band by itself
 
     def hold_chord(self) -> bool:
         """Hold the chord that is sounding (or about to): the pad and pulse stay on it,

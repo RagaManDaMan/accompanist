@@ -196,11 +196,16 @@ def test_pulse_starts_at_min_confidence_and_stops_only_below_stop_confidence():
     eng.tempo.confidence = 0.3                                      # below start, above stop
     ctl.tick(15.001)
     assert eng.clock.running
-    eng.tempo.confidence = 0.1                                      # below stop
+    eng.tempo.confidence = 0.1                                      # below stop...
     ctl.tick(15.002)
+    assert eng.clock.running                                        # ...a dip is not enough
+    ctl.tick(15.002 + ctl.cfg.pulse.stop_after_s * 0.5)
+    eng.tempo.confidence = 0.1
+    assert eng.clock.running
+    ctl.tick(15.002 + ctl.cfg.pulse.stop_after_s + 0.01)            # ...it must stay low
     assert not eng.clock.running
     eng.tempo.confidence = 0.3                                      # not enough to restart
-    ctl.tick(15.003)
+    ctl.tick(15.003 + ctl.cfg.pulse.stop_after_s + 0.02)
     assert not eng.clock.running
 
 
@@ -243,3 +248,17 @@ def test_tapping_without_a_chart_sets_tempo_but_does_not_move_the_beat():
     assert eng.tempo.bpm == pytest.approx(90, rel=0.01)
     k = round((eng.clock.next_beat - beat_before) / eng.clock.period)
     assert eng.clock.next_beat == pytest.approx(beat_before + k * eng.clock.period, abs=0.005)
+
+
+def test_unlocking_never_stops_the_pulse_even_with_low_confidence():
+    ctl = controller({"lock": {"auto": False}})
+    play(ctl, phrase(D_PHRASE, 90, 0.0, 30), 15.0)
+    assert ctl.lock(15.0)
+    play(ctl, phrase(D_PHRASE, 90, 15.0, 30), 30.0, start=15.01)
+    ctl.engine.tempo.confidence = 0.02                              # very unsure, then unlock
+    ctl.do("lock_toggle", 30.0)
+    assert not ctl.engine.locked
+    for k in range(1, 30):                                          # the next 3 s
+        ctl.engine.tempo.confidence = 0.02
+        ctl.tick(30.0 + k * 0.1)
+        assert ctl.engine.clock.running
