@@ -96,3 +96,11 @@ def test_actions_are_recorded_and_replayed(tmp_path, capsys, monkeypatch):
     assert main(["replay", str(f)]) == 0
     out = capsys.readouterr().out
     assert "LOCKED" in out and "unlocked" in out and "lock at 0:10.1" in out
+
+
+def test_startup_summary_names_every_voice_and_its_channel():
+    from accompanist.cli import voices_summary
+
+    s = voices_summary(c.from_dict({"drums": {"enabled": True, "pattern": "soft"}}))
+    assert "pad ch 1 (drone" in s and "bass ch 2" in s and "drums ch 10 (soft)" in s
+    assert "drums: off" in voices_summary(c.from_dict({}))

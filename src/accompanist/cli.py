@@ -80,6 +80,24 @@ def cmd_monitor(args) -> int:
     return 0
 
 
+def voices_summary(cfg) -> str:
+    """What will play, and on which MIDI channel: shown at startup, so a setting that did not
+    reach config.toml is visible before you play."""
+    h = cfg.harmony
+    if h.model == "chart":
+        harmony = f"chart {Path(h.chart).name}" + (f", transposed {h.transpose:+d}" if h.transpose else "")
+    elif h.model == "modal":
+        harmony = f"modal, root {h.root}, mode {h.mode}"
+    else:
+        harmony = f"drone, root {h.root}"
+    pad = f"pad ch {cfg.pad.channel} ({harmony})" if cfg.pad.enabled else "pad: off"
+    bass = f"bass ch {cfg.pulse.channel}" if cfg.pulse.enabled else "bass: off"
+    drums = (f"drums ch {cfg.drums.channel} ({cfg.drums.pattern})" if cfg.drums.enabled
+             else "drums: off ([drums] enabled = true)")
+    lock = "tempo lock: auto" if cfg.lock.auto else "tempo lock: manual (l)"
+    return f"Voices: {pad} | {bass} | {drums} | {lock}"
+
+
 def chart_overrides(args) -> dict:
     """--chart FILE / --transpose N: play a chord chart (a command-line layer over config.toml)."""
     h = {}
@@ -123,6 +141,7 @@ def cmd_run(args) -> int:
     where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
     print(f"Listening on {len(in_ports)} input(s); playing to {where}."
           + (f" Preset: {cfg.preset}." if cfg.preset else ""))
+    print(voices_summary(cfg))
     if rec:
         print(f"Recording your notes to {rec.path}")
     print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
