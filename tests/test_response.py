@@ -47,7 +47,7 @@ def test_a_pause_after_a_phrase_gets_an_answer_in_the_gap():
     ans = answer_notes(sent)
     assert 1 <= len(ans) <= 6
     assert ans[0][0] >= 1.5 + 0.4                       # only after the pause
-    assert all(abs(n - 64) <= 9 for _, n in ans)          # in the response register (octave 4)
+    assert all(abs(n - 76) <= 9 for _, n in ans)          # in the response register (octave 5)
 
 
 def test_the_answer_stops_the_moment_you_play_again():
@@ -62,7 +62,7 @@ def test_the_answer_stops_the_moment_you_play_again():
 
 
 def test_short_phrases_and_zero_chance_get_no_answer():
-    _, ctl = controller()
+    _, ctl = controller(min_notes=3)
     assert answer_notes(run(ctl, PHRASE[:2], 5.0)) == []  # 2 notes < min_notes
     _, ctl = controller(chance=0.0)
     assert answer_notes(run(ctl, PHRASE, 5.0)) == []
@@ -90,3 +90,27 @@ def test_answers_are_repeatable():
         _, ctl = controller()
         return answer_notes(run(ctl, PHRASE * 1, 6.0))
     assert once() == once()
+
+
+def test_one_note_at_a_time_and_loud_enough():
+    _, ctl = controller()
+    sent = run(ctl, PHRASE, 6.0)
+    sounding, most = set(), 0
+    for _, m in sent:
+        if m.channel == CH and m.type == "note_on":
+            sounding.add(m.note)
+            most = max(most, len(sounding))
+        elif m.channel == CH and m.type == "note_off":
+            sounding.discard(m.note)
+    assert most == 1
+    vels = [m.velocity for _, m in sent if m.channel == CH and m.type == "note_on"]
+    assert min(vels) >= 60                              # ~ response.velocity, shaped by accents
+
+
+def test_not_yielding_lets_the_answer_finish_over_you():
+    _, ctl = controller(yield_to_you=False)
+    first = answer_notes(run(ctl, PHRASE, 6.0))
+    _, ctl = controller(yield_to_you=False)
+    back_in = first[0][0] + 0.05
+    sent = run(ctl, PHRASE + [(back_in, 62, 90)], first[-1][0] + 0.1)
+    assert answer_notes(sent) == first                  # the whole answer, unchanged

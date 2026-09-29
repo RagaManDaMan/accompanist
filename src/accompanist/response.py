@@ -68,6 +68,7 @@ def make_answer(phrase: list[tuple[float, int, int]], chord_pcs, scale_pcs, rng:
     pitches = [_nearest_in(n, scale) for _, n, _ in src]
     iois = [b[0] - a[0] for a, b in zip(src, src[1:])]
     vels = [v for _, _, v in src]
+    mean_vel = sum(vels) / len(vels)
 
     names, weights = zip(*VARIATIONS)
     kind = rng.choices(names, weights)[0]
@@ -93,7 +94,7 @@ def make_answer(phrase: list[tuple[float, int, int]], chord_pcs, scale_pcs, rng:
             dur = GATE * gap
         else:
             gap, dur = 0.0, LAST_NOTE_BEATS * period
-        vel = min(max(round(vels[i] * cfg.velocity * gain), 1), 127)
+        vel = min(max(round(cfg.velocity * vels[i] / mean_vel * gain), 1), 127)   # your accents
         out.append((t, p, vel, dur))
         t += gap
     return out
@@ -111,8 +112,10 @@ class ResponseResponder:
         self._sounding: dict[int, float] = {}                       # note -> ends at
 
     def hear(self, t: float, note: int, velocity: int, period: float) -> None:
-        """You played: stop answering at once; the note joins your phrase (or starts one)."""
-        self.cancel()
+        """You played: stop answering at once (unless yield_to_you is off); the note joins your
+        phrase (or starts one)."""
+        if self.cfg.yield_to_you:
+            self.cancel()
         if self.answered or (self.last_t is not None and t - self.last_t >= self._gap(period)):
             self.phrase, self.answered = [], False
         self.phrase.append((t, note, velocity))
@@ -126,6 +129,9 @@ class ResponseResponder:
         ch = self.cfg.channel - 1
         while self._queue and self._queue[0][0] <= now:
             t, _, note, vel, dur = heapq.heappop(self._queue)
+            for other in list(self._sounding):          # one voice: one note at a time
+                self.out.note_off(ch, other)
+                del self._sounding[other]
             self.out.note_on(ch, note, vel)
             self.out.note_off_at(t + dur, ch, note)
             self._sounding[note] = t + dur
@@ -135,6 +141,7 @@ class ResponseResponder:
         self.answered = True
         if self.rng.random() >= self.cfg.chance:
             return                                          # let this pause breathe
+        self.cancel()                                       # a new answer replaces an old one
         start = now
         if next_beat is not None:                           # come in on the next half beat
             half = period / 2

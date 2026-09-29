@@ -100,8 +100,10 @@ markings are reported and ignored for now).
 `[response] enabled = true` adds a voice (channel 4, e.g. a guitar track) that answers you:
 when you pause for about a beat after a phrase of 3+ notes, it plays a short line made from
 what you just played (moved a scale step, upside down, or backwards), in the key, ending on
-a chord tone. It answers most pauses, not all (`response.chance`), and stops the moment you
-play again. `accompanist params` lists the rest (`gap_beats`, `octave`, `max_notes`, ...).
+a chord tone, one note at a time. It answers most pauses (`response.chance`) and gives way
+the moment you play again; `response.yield_to_you = false` lets it finish its line over you.
+Shy-to-bold dials: `chance`, `gap_beats` (how long a pause it waits for), `yield_to_you`,
+`velocity`, `octave`; put any of them on a knob with `[controls]`, e.g. `21 = "response.chance"`.
 
 ## Dynamics
 

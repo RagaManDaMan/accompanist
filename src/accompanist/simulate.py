@@ -118,12 +118,12 @@ def run(
     timeline: list[tuple[float, object]] = []
     i, now, last_print, last_trace, last_chord, last_locked, last_held = 0, 0.0, -1.0, -1.0, None, False, False
     while now <= total:
+        sent = len(port.sent)                    # everything sent from here is logged at `now`
         while i < len(onsets) and onsets[i][0] <= now:
             ctl.on_note(onsets[i][0], onsets[i][1], onsets[i][2])
             i += 1
         while pending and pending[0][0] <= now:
             ctl.do(pending.pop(0)[1], now)
-        sent = len(port.sent)
         ctl.tick(now)
         timeline.extend((now, m) for m in port.sent[sent:])
         chord = eng.pad.current.label() if eng.pad.current else None
