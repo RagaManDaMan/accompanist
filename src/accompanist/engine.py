@@ -14,7 +14,7 @@ from typing import Optional
 
 from .beatclock import BeatClock
 from .dynamics import Dynamics
-from .groove import Groove
+from .groove import GROUPS, Groove
 from .config import Config, note_name, NOTE_NAMES
 from .harmony import Onset, Voicing, make_model
 from .output import SafeOutput
@@ -23,7 +23,8 @@ from .response import ResponseResponder
 from .tempo import REALIGN_ADVANTAGE, TempoEstimator
 
 # Drum patterns for a meter heard, when yours does not fit it: (meter, feel) or meter.
-GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing"}
+GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing", 5: "five", 6: "six-eight",
+                   7: "seven-322"}
 
 # Pad expression: resend when it moves this many steps (of 127), at most this often.
 EXPRESSION_STEP = 2
@@ -124,7 +125,7 @@ class Engine:
         if self.is_chart:
             active = self.song_playing or self._count_in_left > 0   # a song never stops by itself
         elif self.locked:
-            active = voicing is not None                      # silence never stops a locked groove
+            active = True                                     # silence never stops a locked groove
         elif self.clock.running:                              # hysteresis: stop only well below start,
             if self.tempo.confidence >= p.stop_confidence:    # and only if it stays there
                 self._low_conf_since = None
@@ -135,7 +136,7 @@ class Engine:
             active = not unsure and idle <= p.idle_stop_s
         else:
             active = self.tempo.confidence >= p.min_confidence and idle <= p.idle_stop_s
-        if not self.is_chart:
+        if not self.is_chart and not self.locked:
             active = active and voicing is not None
         if active and not self.clock.running and self.last_onset_t is not None and not self.is_chart:
             self.restart_form()
@@ -148,9 +149,9 @@ class Engine:
             # The pulse follows the harmony that is actually sounding, so pad and
             # pulse never disagree while the pad is still catching up.
             pulse_root = (self.pad.current.root_pc if self.pad.current
-                          else voicing.root_pc if voicing is not None else 0)
+                          else voicing.root_pc if voicing is not None else None)
             gain = self.dynamics.follow_gain()
-            if (self.cfg.groove.auto and not self.is_chart
+            if ((self.cfg.groove.auto or self.groove.pinned) and not self.is_chart
                     and now - self._groove_t >= self.cfg.tempo.update_s):
                 self._groove_t = now
                 self.groove.update(now, self.clock.period)
@@ -178,11 +179,14 @@ class Engine:
                     self.pad.on_beat(now, bar_pos)
                     if self.pad.current and not self.chord_held:
                         pulse_root = self.pad.current.root_pc
-                if p.enabled:
-                    self.pulse.on_beat(now, pulse_root, gain, bar_pos, boost)
+                if p.enabled and pulse_root is not None:     # no harmony heard yet: no bass
+                    group = bar_pos in GROUPS.get(bpb, (0,))
+                    self.pulse.on_beat(now, pulse_root, gain, bar_pos, boost, group)
                 if self.cfg.drums.enabled:
                     swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
                              and self.groove.meter and not self.is_chart else None)
+                    if self.drums.pattern_name is None and self.groove.pinned:
+                        self._choose_drums()
                     self.drums.on_beat(beat_t, self.clock.period, gain, form_beat, swing, boost)
                 self.beat_count += 1
             self.drums.tick(now)
@@ -194,9 +198,10 @@ class Engine:
         if self.is_chart:
             bpb = max(1, self.harmony.beats_per_bar)
             return bpb, beat % bpb, beat, True
-        if self.cfg.groove.auto and g.meter:
+        if (self.cfg.groove.auto or g.pinned) and g.meter:
             form = beat - g.downbeat
-            return g.meter, form % g.meter, form, g.confidence >= self.cfg.groove.confident_at
+            sure = g.pinned or g.confidence >= self.cfg.groove.confident_at
+            return g.meter, form % g.meter, form, sure
         bpb = max(1, self.cfg.pulse.beats_per_bar)
         return bpb, beat % bpb, beat, False
 
@@ -204,12 +209,13 @@ class Engine:
         """Keep your drum pattern if its cycle fits the meter heard; else one that does."""
         g = self.groove
         self.drums.pattern_name = None
-        if not (self.cfg.groove.auto_drums and g.meter):
+        if not ((self.cfg.groove.auto_drums or g.pinned) and g.meter):
             return
         from .patterns import load
 
         if load(self.cfg.drums.pattern).beats % g.meter != 0:
-            self.drums.pattern_name = GROOVE_PATTERNS.get((g.meter, g.feel), GROOVE_PATTERNS[g.meter])
+            self.drums.pattern_name = GROOVE_PATTERNS.get((g.meter, g.feel),
+                                                          GROOVE_PATTERNS.get(g.meter))
 
     def _scale_pcs(self) -> Optional[set[int]]:
         """The key's scale, when the harmony model knows one (modal); else None."""
@@ -340,6 +346,18 @@ class Engine:
         self.restart_form()
         self.song_playing = True
         self.lock(last_tap)
+
+    def count_off(self, beats: int, bpm: float, downbeat_t: float, now: float) -> bool:
+        """A count-off of `beats` taps: tempo, and that meter with 1 at downbeat_t (the beat
+        after the last tap); the band comes in there, tempo locked. Returns False if muted."""
+        if self.muted:
+            return False
+        self.set_tempo(bpm)
+        self.clock.start(downbeat_t - self.tempo.period, self.tempo.period)   # next beat: 1
+        self.restart_form()
+        self.groove.pin(beats)
+        self.lock(now)
+        return True
 
     def start_song(self, now: float) -> Optional[float]:
         """Chart: count in one bar of clicks, then play from bar 1, tempo locked (like pressing

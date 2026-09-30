@@ -290,7 +290,7 @@ def cmd_run(args) -> int:
     if wav:
         print(f"Recording the audio to {wav.path}")
     print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
-          "      [c] = hold / release chord   [t] = tap tempo (with a chart: 4 taps = count-in)"
+          "      [c] = hold / release chord   [t] = count off: 3 waltz, 4 four, 5 = 5/4, 6 = 6/8, 7 = 3+2+2"
           "   [s] = chart: count in + play from the top   [q] = quit\n")
     last_print = 0.0
     try:
@@ -335,6 +335,9 @@ def cmd_run(args) -> int:
                     rec.action(now, KEYS[key])
                 last_print = 0.0               # show the new state at once
             ctl.tick(now)
+            for message in ctl.take_events():     # e.g. a count-off completing
+                say(message)
+                last_print = 0.0
             if now - last_print >= 0.25:
                 width = shutil.get_terminal_size((100, 20)).columns - 1
                 sys.stdout.write("\r\x1b[K" + format_status(ctl.get_state(now))[:width])

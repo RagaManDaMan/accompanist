@@ -18,8 +18,8 @@ from .config import ACTIONS, Config, ConfigError, check
 from .engine import Engine
 from .output import SafeOutput
 
-TAP_COUNT = 4           # taps needed to set the tempo
-TAP_RESET_S = 2.5       # a longer gap between taps starts a new count
+COUNT_METERS = (3, 4, 5, 6, 7)   # taps in a count-off: the meter
+TAP_RESET_S = 2.5                # a longer gap between taps starts a new count
 
 
 class Controller:
@@ -28,6 +28,7 @@ class Controller:
         self.engine = Engine(cfg, out)
         self.overrides: dict[str, Any] = {}     # live changes on top of the config file
         self._taps: list[float] = []
+        self.events: list[str] = []
         self.t0: Optional[float] = None         # first note or action: the take's clock starts here
 
     # ---- input --------------------------------------------------------------
@@ -54,7 +55,13 @@ class Controller:
         return f"{target} = {self.get_param(target)}"
 
     def tick(self, now: float) -> None:
+        self._check_count(now)
         self.engine.tick(now)
+
+    def take_events(self) -> list[str]:
+        """Things that happened by themselves (a count-off completing): for the display."""
+        ev, self.events = self.events, []
+        return ev
 
     # ---- parameters -----------------------------------------------------------
     def set_param(self, key: str, value: Any) -> None:
@@ -139,7 +146,9 @@ class Controller:
             self.release_chord()
             return "chords follow you again" if was else "no chord held"
         bpm = self.tap_tempo(now)
-        return f"tap {len(self._taps)}/{TAP_COUNT}" if bpm is None else f"tempo set to {bpm:.1f} bpm by tapping"
+        if not self._taps:                               # a chart count-in just completed
+            return self.take_events()[-1]
+        return f"tap {len(self._taps)}" + ("" if bpm is None else f" ({bpm:.0f} bpm)")
 
     def panic(self) -> None:
         self.engine.panic()
@@ -160,34 +169,63 @@ class Controller:
         self.engine.release_chord()
 
     def tap_tempo(self, now: float) -> Optional[float]:
-        """Tap the beat. After TAP_COUNT taps, sets the tempo, and its octave (prior_bpm), to
-        what you tapped, and narrows the prior (tap_sigma_oct) so look-alike tempi don't take
-        over. The beat's position stays with your playing; only with a chart are the taps a
-        count-in (bar 1 on the next beat). Returns the bpm once set."""
+        """Count the band in: tap the beat. The taps set the tempo (and narrow the tempo prior
+        so look-alike tempi don't take over), and how many you tap sets the meter:
+        3 = waltz, 4 = four on the floor, 5 = 5/4 (3+2), 6 = 6/8 (3+3), 7 = 3+2+2.
+        The count is over when the next tap does not come (tick() notices, groove.count_wait
+        of a beat late); the band then comes in on 1, tempo locked. With a chart, its meter
+        is known, so the band comes in on time right after the last count.
+        Returns the tempo so far (None after the first tap)."""
         if self._taps and now - self._taps[-1] > TAP_RESET_S:
             self._taps = []
         self._taps.append(now)
-        if len(self._taps) < TAP_COUNT:
+        if len(self._taps) < 2:
             return None
-        taps = self._taps[-TAP_COUNT:]
-        # Least-squares slope through the taps: steadier than any one interval, which
-        # matters because key presses are only read every few milliseconds.
+        bpm = self._tapped_bpm()
+        eng = self.engine
+        if eng.is_chart and len(self._taps) >= max(1, eng.harmony.beats_per_bar):
+            self._set_tempo_prior(bpm)
+            eng.set_tempo(bpm)
+            eng.count_in(now)                          # a chart: the count was one bar
+            self._taps = []
+            self.events.append(f"counted in at {bpm:.0f} bpm: bar 1 (tempo LOCKED)")
+        return bpm
+
+    def _tapped_bpm(self) -> float:
+        """Least-squares slope through the taps: steadier than any one interval, which
+        matters because key presses are only read every few milliseconds."""
+        taps = self._taps
         n = len(taps)
         mean_i, mean_t = (n - 1) / 2, sum(taps) / n
         period = (sum((i - mean_i) * (t - mean_t) for i, t in enumerate(taps))
                   / sum((i - mean_i) ** 2 for i in range(n)))
         t = self.cfg.tempo
-        bpm = min(max(60.0 / period, t.min_bpm), t.max_bpm)
+        return min(max(60.0 / period, t.min_bpm), t.max_bpm)
+
+    def _set_tempo_prior(self, bpm: float) -> None:
+        t = self.cfg.tempo
         self.set_param("tempo.prior_bpm", round(bpm, 1))
         if t.prior_sigma_oct > t.tap_sigma_oct:
             self.set_param("tempo.prior_sigma_oct", t.tap_sigma_oct)
-        if hasattr(self.engine.harmony, "restart"):   # a chart: the taps were the count-in
-            self.engine.set_tempo(bpm)
-            self.engine.count_in(now)
-        else:                                         # tempo only: the beat stays with your playing
-            self.engine.set_tempo(bpm)
-        self._taps = []
-        return bpm
+
+    def _check_count(self, now: float) -> None:
+        """A count-off is over once the next tap is overdue: start the band."""
+        if len(self._taps) < 2 or self.engine.is_chart:
+            return
+        bpm = self._tapped_bpm()
+        period = 60.0 / bpm
+        last = self._taps[-1]
+        if now < last + period * (1 + self.cfg.groove.count_wait):
+            return
+        n, self._taps = len(self._taps), []
+        if n not in COUNT_METERS:
+            self.events.append(f"counted {n}: count {COUNT_METERS[0]} to {COUNT_METERS[-1]} "
+                               f"beats to start the band")
+            return
+        self._set_tempo_prior(bpm)
+        if self.engine.count_off(n, bpm, last + period, now):
+            self.events.append(f"counted {n}: {self.engine.groove.label()} at {bpm:.0f} bpm "
+                               f"(tempo LOCKED)")
 
     # ---- state --------------------------------------------------------------------
     def get_state(self, now: float) -> dict:

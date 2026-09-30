@@ -236,20 +236,6 @@ def test_pulse_starts_on_the_beat_not_on_an_off_beat_note():
     assert max(b - a for a, b in zip(times, times[1:])) <= 1.1 * 60 / 90   # steady, no flipping
 
 
-def test_tapping_without_a_chart_sets_tempo_but_does_not_move_the_beat():
-    ctl = controller({"lock": {"auto": False}})
-    play(ctl, phrase(D_PHRASE, 90, 0.0, 30), 15.0)
-    eng = ctl.engine
-    assert eng.clock.running
-    beat_before = eng.clock.next_beat
-    taps = [15.0 + 0.23 + i * 60 / 90 for i in range(4)]   # taps well off the beat
-    for t in taps:
-        ctl.tap_tempo(t)
-    assert eng.tempo.bpm == pytest.approx(90, rel=0.01)
-    k = round((eng.clock.next_beat - beat_before) / eng.clock.period)
-    assert eng.clock.next_beat == pytest.approx(beat_before + k * eng.clock.period, abs=0.005)
-
-
 def test_unlocking_never_stops_the_pulse_even_with_low_confidence():
     ctl = controller({"lock": {"auto": False}})
     play(ctl, phrase(D_PHRASE, 90, 0.0, 30), 15.0)

@@ -140,9 +140,11 @@ class PulseResponder:
         self.beat_count = 0
 
     def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
-                bar_position: Optional[int] = None, boost: int = 0) -> None:
+                bar_position: Optional[int] = None, boost: int = 0, group_start: bool = False) -> None:
+        """group_start: a beat that starts a group within the bar (the 4 of 3+2): half an accent."""
         pos = self.beat_count % max(1, self.cfg.beats_per_bar) if bar_position is None else bar_position
-        vel = round(self.cfg.velocity * gain) + (self.cfg.accent if pos == 0 else 0) + boost
+        accent = self.cfg.accent if pos == 0 else self.cfg.accent // 2 if group_start else 0
+        vel = round(self.cfg.velocity * gain) + accent + boost
         vel = min(max(vel, 1), 127)
         note = 12 * (self.cfg.octave + 1) + root_pc
         ch = self.cfg.channel - 1

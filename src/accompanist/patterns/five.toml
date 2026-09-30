@@ -1,0 +1,7 @@
+description = "5/4 grouped 3+2: kick on 1 and 4, snare on 3 and 5"
+beats = 5
+steps_per_beat = 2
+[hits]
+kick  = "X. .. .. | x. .."
+snare = ".. .. x. | .. x."
+ride  = "xg xg xg | xg xg"

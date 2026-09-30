@@ -27,9 +27,8 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 (`xcode-select --install`) and retry.
 
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
-**l** = lock / unlock the tempo, **c** = hold / release the chord, **t** = tap tempo
-(4 taps set the tempo and its octave; with a chart they are the count-in), **s** = chart
-count in and play from the top, **q** = quit. Every key press prints what it did. Keys are commands, not music: apart from
+**l** = lock / unlock the tempo, **c** = hold / release the chord, **t** = count off (see
+below), **s** = chart: count in and play from the top, **q** = quit. Every key press prints what it did. Keys are commands, not music: apart from
 panic and a chart count-in, a key press never moves the beat.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
@@ -94,6 +93,25 @@ markings are reported and ignored for now).
   `Fmaj7(#11)`). Notes that clash are ignored; the chart's root and quality never change.
   `harmony.melody_min_notes`, `melody_max_tensions`, or `melody_colors = false` to turn it off.
 - `charts/` is ignored by git, like `takes/`: your charts stay on your machine.
+
+## Counting off
+
+Count the band in on **t**, like a bandleader: the taps set the tempo, and how many you tap
+sets the meter:
+
+| taps | groove | accents | drums (if yours doesn't fit) |
+|---|---|---|---|
+| 3 | waltz, 3/4 | 1 | `waltz` |
+| 4 | four on the floor | 1 | `basic` |
+| 5 | 5/4, 3+2 | 1, lighter 4 | `five` |
+| 6 | 6/8 or up-tempo, 3+3 | 1, lighter 4 | `six-eight` |
+| 7 | 3+2+2 | 1, lighter 4 and 6 | `seven-322` |
+
+The count is over when the next tap does not come; the band then comes in on 1 (about 15% of
+a beat late, `groove.count_wait`: it cannot know your count has ended any sooner) with the
+tempo locked (**l** to let it follow you). Count again, any time, to change tempo and meter.
+The counted meter stays until you count again; listening still follows your swing. With a
+chart, one bar of taps is the count-in and the band comes in exactly on 1.
 
 ## Groove: meter, downbeat, feel
 

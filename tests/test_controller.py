@@ -195,21 +195,24 @@ def test_cc_scaling():
     assert cc_to_value(registry.get("harmony.root"), 0) == "auto"
 
 
-def test_tap_tempo_sets_tempo_and_octave():
+def test_a_count_off_sets_tempo_and_octave():
     _, ctl = make()
-    for i in range(3):
-        assert ctl.tap_tempo(10 + i * 0.5) is None
-    assert ctl.tap_tempo(11.5) == pytest.approx(120)
+    for i in range(4):
+        ctl.tap_tempo(10 + i * 0.5)
+    ctl.tick(11.5 + 0.5 * 1.2)                                   # the 5th tap did not come
     assert ctl.engine.tempo.bpm == pytest.approx(120)
-    assert ctl.cfg.tempo.prior_bpm == 120                         # octave follows the tap
+    assert ctl.cfg.tempo.prior_bpm == 120                         # octave follows the count
     assert ctl.overrides["tempo.prior_bpm"] == 120
     assert ctl.cfg.tempo.prior_sigma_oct == ctl.cfg.tempo.tap_sigma_oct == 0.3
+    assert ctl.engine.locked and ctl.engine.groove.label().startswith("4/4")
 
 
 def test_slow_taps_start_over():
     _, ctl = make()
     for t in (0.0, 0.5, 1.0, 5.0):                                # a long gap before the 4th
-        assert ctl.tap_tempo(t) is None
+        ctl.tap_tempo(t)
+    ctl.tick(7.0)
+    assert not ctl.engine.locked and ctl.engine.groove.meter is None
 
 
 def test_state_is_a_plain_dict_and_status_formats_it():
@@ -240,7 +243,8 @@ def test_every_action_reports_what_happened():
     assert ctl.do("panic", 0.4).startswith("PANIC")
     assert ctl.do("lock", 0.5).startswith("can't lock while muted")
     assert ctl.do("resume", 0.6) == "resumed"
-    assert ctl.do("tap_tempo", 1.0) == "tap 1/4"
+    assert ctl.do("tap_tempo", 1.0) == "tap 1"
+    assert ctl.do("tap_tempo", 1.5) == "tap 2 (120 bpm)"
 
 
 def test_status_flags_come_first_so_a_narrow_window_still_shows_them():

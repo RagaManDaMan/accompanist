@@ -257,7 +257,7 @@ PARAMS: list[Param] = [
     P("drums.pattern", str, "basic", "Pattern",
       "Which pattern (see `accompanist params`: patterns/NAME.toml; add your own in ./patterns).",
       "Drums", choices=("basic", "halftime", "soft", "sparse", "swing", "march", "waltz",
-                        "seven-322"),
+                        "five", "six-eight", "seven-322"),
       check=_check_pattern),
     P("drums.velocity", int, 70, "Drums velocity", "Velocity of a normal hit (x).", "Drums", 1, 127, 1),
     P("drums.accent", int, 25, "Drums accent", "Extra velocity for an accent (X).", "Drums", 0, 127, 1),
@@ -282,6 +282,9 @@ PARAMS: list[Param] = [
       "Extra velocity on 1 (bass and drums) once the groove is heard clearly.", "Groove", 0, 60, 1),
     P("groove.confident_at", float, 0.5, "Sure at",
       "The groove counts as heard clearly from this confidence (0-1).", "Groove", 0, 1, 0.05),
+    P("groove.count_wait", float, 0.15, "Count-off wait",
+      "A count-off is over when the next tap is this share of a beat late; the band then comes "
+      "in on 1 (that late).", "Groove", 0.05, 1, 0.05),
     P("groove.window_beats", int, 24, "Groove memory",
       "Beats of your playing the groove is judged on: a multiple of 12, so it holds whole bars "
       "of both 3 and 4 (24 = 6 bars of 4 or 8 of 3).", "Groove", 12, 96, 12,

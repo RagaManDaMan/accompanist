@@ -1,0 +1,7 @@
+description = "6/8 (3+3): kick on 1, rim on 4, a light pulse on every beat"
+beats = 6
+steps_per_beat = 1
+[hits]
+kick   = "X.. x.."
+rim    = "... X.."
+shaker = "xgg xgg"

@@ -19,7 +19,10 @@ import math
 from collections import deque
 from typing import Any, Optional
 
-METERS = (3, 4)
+METERS = (3, 4)           # meters listening can tell apart (a count-off can set 5, 6, 7 too)
+METER_LABELS = {3: "3/4", 4: "4/4", 5: "5/4", 6: "6/8", 7: "7 (3+2+2)"}
+# Where the groups of a bar start (1 is always one): these beats get a lighter accent.
+GROUPS = {5: (0, 3), 6: (0, 3), 7: (0, 3, 5)}
 ON_BEAT = 0.15            # a note within this share of a beat of it marks that beat
 OFF_BEAT = (0.35, 0.85)   # a note this far into a beat is an in-between note (feel)
 LONG_NOTE_BEATS = 1.0     # a note this long (to the next) counts double for marking a beat
@@ -35,6 +38,7 @@ class Groove:
         self.downbeat = 0                       # beat numbers b with b % meter == downbeat are "1"
         self.swing = 0.0
         self.confidence = 0.0                   # 0-1: how clearly the meter was heard
+        self.pinned = False                     # a count-off set the meter
         self._swinging = False
         self._challenger: Optional[tuple[int, int]] = None
         self._challenger_since: Optional[float] = None
@@ -44,7 +48,13 @@ class Groove:
         return "swing" if self._swinging else "straight"
 
     def label(self) -> Optional[str]:
-        return None if self.meter is None else f"{self.meter}/4 {self.feel}"
+        return None if self.meter is None else f"{METER_LABELS.get(self.meter, self.meter)} {self.feel}"
+
+    def pin(self, meter: int) -> None:
+        """A count-off said the meter: beat number 0 is 1. Listening keeps judging the feel,
+        but the meter stays until the next count (or reset)."""
+        self.meter, self.downbeat, self.confidence, self.pinned = meter, 0, 1.0, True
+        self._challenger = self._challenger_since = None
 
     def observe(self, t: float, beat: int, pos: float, velocity: int) -> None:
         """A note at time t, `pos` (0-1) of the way from beat number `beat` to the next."""
@@ -54,6 +64,7 @@ class Groove:
         self._notes.clear()
         self.meter, self.downbeat, self.swing, self.confidence = None, 0, 0.0, 0.0
         self._swinging = False
+        self.pinned = False
         self._challenger = self._challenger_since = None
 
     # ---- estimation ---------------------------------------------------------------------
@@ -65,6 +76,8 @@ class Groove:
         if len(notes) < c.min_notes:
             return
         self._update_feel(notes)
+        if self.pinned:
+            return                                   # the count-off said the meter
         strength = self._beat_strengths(notes, period)
         if not strength:
             return
