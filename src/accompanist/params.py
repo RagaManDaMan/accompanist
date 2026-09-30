@@ -437,6 +437,16 @@ PARAMS: list[Param] = [
       "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
       "Groove lock", 0, 1, 0.05),
 
+    # ---- song (a song file's own settings; see songs/) ---------------------------
+    P("song.title", str, None, "Song", "The song's name (shown when it is loaded).", "Song",
+      nullable=True, live=False),
+    P("song.tempo", float, None, "Song tempo",
+      "Starting the song (s, or a pedal) counts the band in at this tempo.", "Song", 20, 300, 1,
+      nullable=True),
+    P("song.count", int, None, "Song meter",
+      "Beats per bar for the count-in and the band: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 = 3+2+2.",
+      "Song", 3, 7, 1, nullable=True),
+
     # ---- panic ----------------------------------------------------------------
     P("panic.cc", int, None, "Panic CC",
       "This controller (value >= 64) on any input = panic. Same as mapping it in [controls].",

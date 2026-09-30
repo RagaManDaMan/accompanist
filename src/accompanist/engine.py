@@ -46,6 +46,8 @@ class Engine:
         self.is_chart = hasattr(self.harmony, "restart")
         self.song_playing = False
         self._count_in_left = 0
+        self._count_total = 0
+        self._count_meter: Optional[int] = None
         self._low_conf_since: Optional[float] = None   # unlocked pulse: when confidence dropped
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
@@ -159,11 +161,13 @@ class Engine:
             for beat_t in self.clock.due(now):
                 bpb, bar_pos, form_beat, sure = self._bar(self.beat_count)
                 if self._count_in_left > 0:                   # count-in click: 1, 2, 3, 4
-                    self._click(beat_t, first=self._count_in_left == bpb)
+                    self._click(beat_t, first=self._count_in_left == self._count_total)
                     self._count_in_left -= 1
                     if self._count_in_left == 0:
                         self.restart_form()                   # the next beat is bar 1
                         self.song_playing = True
+                        if self._count_meter:                 # a song's meter, like a count-off
+                            self.groove.pin(self._count_meter)
                     continue
                 if hasattr(self.harmony, "on_beat"):          # a chart: its chord for this beat
 
@@ -360,22 +364,32 @@ class Engine:
         return True
 
     def start_song(self, now: float) -> Optional[float]:
-        """Chart: count in one bar of clicks, then play from bar 1, tempo locked (like pressing
-        play in iReal Pro). The tempo: harmony.chart_bpm / --tempo, else the tempo you have
-        been playing if it is clear, else a typical tempo for the chart's style.
-        Returns the count-in tempo, or None if muted."""
+        """Count in one bar of clicks, then play, tempo locked (like pressing play in iReal Pro).
+
+        With a chart: from bar 1, in the chart's meter. Without: in song.count's meter (pinned,
+        like a count-off), drums and pulse first, the pad once it has heard you.
+        The tempo: song.tempo, else harmony.chart_bpm / --tempo, else the tempo you have been
+        playing if it is clear, else (a chart) a typical tempo for its style.
+        Returns the count-in tempo, or None if muted or there is no tempo to count in at."""
         if self.muted:
             return None
-        bpm = self.cfg.harmony.chart_bpm
+        bpm = self.cfg.song.tempo or self.cfg.harmony.chart_bpm
         if bpm is None and self.tempo.confidence < self.cfg.pulse.min_confidence:
             bpm = getattr(self.harmony, "default_bpm", None)
+            if bpm is None and not self.is_chart:
+                return None                         # nothing to go on: count off with taps
         if bpm is not None:
             self.tempo.set_bpm(bpm)
         self.clock.start(now, self.tempo.period)     # first click one beat from now
         self.song_playing = False
         self.pad.release_all()
-        self._count_in_left = max(1, getattr(self.harmony, "beats_per_bar", None)
-                                  or self.cfg.pulse.beats_per_bar)
+        if self.is_chart:
+            self._count_meter = None
+            beats = self.harmony.beats_per_bar
+        else:
+            self._count_meter = self.cfg.song.count
+            beats = self.cfg.song.count or self.cfg.pulse.beats_per_bar
+        self._count_in_left = self._count_total = max(1, beats)
         self.lock(now)
         return self.tempo.bpm
 

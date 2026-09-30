@@ -141,13 +141,16 @@ class Controller:
             was = eng.locked
             self.unlock()
             return "tempo unlocked" if was else "tempo not locked"
-        if action == "chart_restart":
-            if not eng.is_chart:
-                return "no chart loaded (--chart FILE)"
+        if action in ("song_start", "chart_restart"):
+            if eng.muted:
+                return "can't start while muted (r = resume first)"
             bpm = eng.start_song(now)
             if bpm is None:
-                return "can't start while muted (r = resume first)"
-            return f"counting in at {bpm:.0f} bpm: 1 2 3 4, then bar 1 (tempo LOCKED)"
+                return "no song tempo to count in at: set [song] tempo, or count off with t"
+            title = self.cfg.song.title
+            count = eng._count_total
+            return (f"{'' if not title else title + ': '}counting in at {bpm:.0f} bpm: "
+                    f"{' '.join(str(i + 1) for i in range(count))}, then 1 (tempo LOCKED)")
         if action == "chord_toggle":
             action = "chord_release" if eng.chord_held else "chord_hold"
         if action == "chord_hold":

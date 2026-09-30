@@ -103,7 +103,7 @@ def test_style_sets_the_default_count_in_tempo():
     assert charts.style_bpm("Ballad") == 60 and charts.style_bpm("Medium Up Swing") == 160
     cfg = c.from_dict({"harmony": {"model": "chart", "chart": CHART}})
     ctl = Controller(cfg, SafeOutput(RecordingPort()))
-    assert ctl.do("chart_restart", 0.0) == "counting in at 120 bpm: 1 2 3 4, then bar 1 (tempo LOCKED)"
+    assert ctl.do("chart_restart", 0.0) == "counting in at 120 bpm: 1 2 3 4, then 1 (tempo LOCKED)"
 
 
 def test_unlocking_a_playing_chart_never_stops_the_band():

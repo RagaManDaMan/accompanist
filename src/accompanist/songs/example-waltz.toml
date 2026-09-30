@@ -1,0 +1,25 @@
+# An example song file. Copy it to ./songs/<your-song>.toml and make it yours.
+# A song file is a partial config (like a preset) plus [song]; it sits above config.toml,
+# so it only needs what makes this song different. It can't set ports, inputs or controls.
+# Use: accompanist run --song example-waltz   (then s, or your pedal, to count in)
+
+[song]
+title = "Example waltz"
+tempo = 138              # s counts the band in at this tempo...
+count = 3                # ...in this meter: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 = 3+2+2
+
+[harmony]
+model = "modal"
+root = "D"
+mode = "minor"
+
+[drums]
+enabled = true
+pattern = "waltz"
+
+[pad]
+feel = 0.6               # a little looser than the default
+
+[response]
+enabled = true
+feel = 0.5

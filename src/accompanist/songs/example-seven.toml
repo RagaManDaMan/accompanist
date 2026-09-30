@@ -1,0 +1,21 @@
+# An example in a 7-beat cycle grouped 3+2+2 (the shape of misra chapu), over a drone.
+# Use: accompanist run --song example-seven
+
+[song]
+title = "Example in seven (3+2+2)"
+tempo = 150
+count = 7
+
+[harmony]
+model = "drone"
+root = "D"               # the tonic (Sa)
+
+[drums]
+enabled = true
+pattern = "seven-322"
+
+[pulse]
+feel = 0.5
+
+[pad]
+feel = 0.3               # a steady drone: keep it plain

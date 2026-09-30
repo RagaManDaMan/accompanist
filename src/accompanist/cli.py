@@ -342,7 +342,13 @@ def voices_summary(cfg) -> str:
     response = (f"response ch {cfg.response.channel}" if cfg.response.enabled
                 else "response: off")
     lock = "tempo lock: auto" if cfg.lock.auto else "tempo lock: manual (l)"
-    return f"Voices: {pad} | {bass} | {drums} | {response} | {lock}"
+    voices = f"Voices: {pad} | {bass} | {drums} | {response} | {lock}"
+    s = cfg.song
+    if s.title:
+        meter = {3: "3/4", 4: "4/4", 5: "5/4", 6: "6/8", 7: "7 (3+2+2)"}.get(s.count, "")
+        start = f"{s.tempo:g} bpm {meter}".strip() if s.tempo else "count off with t"
+        voices = f"Song: {s.title} ({start}; s = start)\n" + voices
+    return voices
 
 
 def chart_overrides(args) -> dict:
@@ -352,12 +358,18 @@ def chart_overrides(args) -> dict:
         h.update(model="chart", chart=args.chart)
     if getattr(args, "transpose", None) is not None:
         h["transpose"] = args.transpose
+    out = {}
     if getattr(args, "tempo", None) is not None:
         h["chart_bpm"] = args.tempo
-    return {"harmony": h} if h else {}
+        out["song"] = {"tempo": args.tempo}          # --tempo also beats a song file's tempo
+    if h:
+        out["harmony"] = h
+    return out
 
 
 def add_chart_args(sp) -> None:
+    sp.add_argument("--song", default=None, metavar="NAME",
+                    help="load a song's setup (songs/NAME.toml): groove, harmony, drums, feel...")
     sp.add_argument("--chart", default=None, metavar="FILE",
                     help="play a chord chart (MusicXML, e.g. exported from iReal Pro)")
     sp.add_argument("--transpose", type=int, default=None, metavar="N",
@@ -368,7 +380,7 @@ def add_chart_args(sp) -> None:
 
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
 KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_toggle",
-        "c": "chord_toggle", "s": "chart_restart"}
+        "c": "chord_toggle", "s": "song_start"}
 
 
 def say(message) -> None:
@@ -382,7 +394,7 @@ def cmd_run(args) -> int:
     from .audio_io import AudioInput, WavWriter
     from .audio_notes import AudioFeed
 
-    cfg = cfgmod.load(args.config, args.preset, chart_overrides(args))
+    cfg = cfgmod.load(args.config, args.preset, chart_overrides(args), song=args.song)
     if args.record_audio and not any(i.is_audio for i in cfg.inputs):
         raise cfgmod.ConfigError("--record-audio needs an audio input in the config ([[inputs]] audio = ...)")
     q: queue.Queue = queue.Queue()
@@ -423,7 +435,7 @@ def cmd_run(args) -> int:
         print(f"Recording the audio to {wav.path}")
     print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
           "      [c] = hold / release chord   [t] = count off: 3 waltz, 4 four, 5 = 5/4, 6 = 6/8, 7 = 3+2+2"
-          "   [s] = chart: count in + play from the top   [q] = quit\n")
+          "\n      [s] = start the song (count in at its tempo; a chart from the top)   [q] = quit\n")
     last_print = 0.0
     try:
         while True:
@@ -501,8 +513,7 @@ def cmd_run(args) -> int:
 def cmd_simulate(args) -> int:
     from . import simulate
 
-    cfg = (cfgmod.load(args.config, args.preset, chart_overrides(args)) if args.config
-           else cfgmod.from_dict(chart_overrides(args), args.preset))
+    cfg = cfgmod.build(args.config, args.preset, chart_overrides(args), args.song)
     res = simulate.run(cfg, verbose=True)
     print("\nPad changes:")
     for t, what in res.log:
@@ -515,8 +526,7 @@ def cmd_replay(args) -> int:
     from . import simulate
 
     cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
-    cfg = (cfgmod.load(cfg_path, args.preset, chart_overrides(args)) if cfg_path
-           else cfgmod.from_dict(chart_overrides(args), args.preset))
+    cfg = cfgmod.build(cfg_path, args.preset, chart_overrides(args), args.song)
     # Times are the take's own clock (0 = first note or key press), as shown live in the status line.
     onsets = load_take(args.take)
     actions = load_actions(args.take)
@@ -555,7 +565,7 @@ def cmd_params(args) -> int:
     if args.json:
         from . import patterns
         print(json.dumps({"params": registry.schema(), "actions": list(cfgmod.ACTIONS),
-                          "presets": cfgmod.available_presets(),
+                          "presets": cfgmod.available_presets(), "songs": cfgmod.available_songs(),
                           "drum_patterns": patterns.available()}, indent=2))
         return 0
     group = None
@@ -571,6 +581,7 @@ def cmd_params(args) -> int:
         print(f"  {p.key:<26} {str(p.default):<12} {rng:<14} {p.help}{flag}")
     print(f"\nActions (keys, [controls] CCs): {', '.join(cfgmod.ACTIONS)}")
     print(f"Presets (--preset NAME): {', '.join(cfgmod.available_presets()) or '(none)'}")
+    print(f"Songs (--song NAME): {', '.join(cfgmod.available_songs()) or '(none)'}")
     from . import patterns
     print(f"Drum patterns (drums.pattern): {', '.join(patterns.available())}")
     return 0

@@ -32,10 +32,13 @@ VALID_ROLES = ("note_source", "control")    # control: a pedal/controller: comma
 PLANNED_ROLES = ("pitch_contour", "voice")
 
 # Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
-ACTIONS = ("panic", "resume", "lock", "unlock", "lock_toggle", "chord_hold", "chord_release", "chord_toggle", "chart_restart", "tap_tempo")
+ACTIONS = ("panic", "resume", "lock", "unlock", "lock_toggle", "chord_hold", "chord_release",
+           "chord_toggle", "song_start", "chart_restart", "tap_tempo")
 
 BUILTIN_PRESETS = Path(__file__).parent / "presets"
 USER_PRESETS = Path("presets")
+BUILTIN_SONGS = Path(__file__).parent / "songs"
+USER_SONGS = Path("songs")
 # Sections a preset may set. Ports and inputs are per-machine, so presets never touch them.
 PRESET_SECTIONS = tuple(s for s in registry.SECTIONS if s not in ("output", "panic"))
 
@@ -76,10 +79,12 @@ DrumsCfg = _section_class("drums")
 AudioCfg = _section_class("audio")
 ResponseCfg = _section_class("response")
 GrooveCfg = _section_class("groove")
+SongCfg = _section_class("song")
 PanicCfg = _section_class("panic")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
-                   "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg, "drums": DrumsCfg, "audio": AudioCfg, "response": ResponseCfg, "groove": GrooveCfg,
-                   "panic": PanicCfg}
+                   "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
+                   "drums": DrumsCfg, "audio": AudioCfg, "response": ResponseCfg,
+                   "groove": GrooveCfg, "song": SongCfg, "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
@@ -111,6 +116,7 @@ class Config:
     audio: Any = field(default_factory=AudioCfg)
     response: Any = field(default_factory=ResponseCfg)
     groove: Any = field(default_factory=GrooveCfg)
+    song: Any = field(default_factory=SongCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict = field(default_factory=dict)   # (kind, number) -> ControlCfg
     program_bank: int = 0           # program changes folded into banks of this size (0 = off)
@@ -240,6 +246,48 @@ def load_preset(name: str) -> dict:
     raise ConfigError(f"unknown preset '{name}'; available: {', '.join(available_presets()) or '(none)'}")
 
 
+def available_songs() -> list[str]:
+    names = {p.stem for d in (BUILTIN_SONGS, USER_SONGS) if d.is_dir() for p in d.glob("*.toml")}
+    return sorted(names)
+
+
+def load_song(name: str) -> dict:
+    """A song file (./songs/NAME.toml, else a built-in example): a partial config like a preset,
+    plus [song] title/tempo/count. A chart path in it may be relative to the song file."""
+    for d in (USER_SONGS, BUILTIN_SONGS):
+        p = d / f"{name}.toml"
+        if p.is_file():
+            data = _read_toml(p)
+            bad = set(data) - set(PRESET_SECTIONS)
+            if bad:
+                raise ConfigError(f"song '{name}' ({p}): may only set {list(PRESET_SECTIONS)}, "
+                                  f"not {sorted(bad)} (ports, inputs and controls belong in "
+                                  f"config.toml)")
+            song = data.setdefault("song", {})
+            if isinstance(song, dict):
+                song.setdefault("title", name)
+            chart = (data.get("harmony") or {}).get("chart")
+            if isinstance(chart, str) and not Path(chart).exists() and (p.parent / chart).exists():
+                data["harmony"]["chart"] = str(p.parent / chart)
+            return data
+    raise ConfigError(f"unknown song '{name}'; available: "
+                      f"{', '.join(available_songs()) or '(none)'} (song files go in ./songs/NAME.toml)")
+
+
+def build(path: Optional[str | Path] = None, preset: Optional[str] = None,
+          overrides: Optional[dict] = None, song: Optional[str] = None) -> Config:
+    """The whole layering: defaults < preset < config.toml (if a path is given) < song <
+    command-line overrides."""
+    d: dict = {}
+    if path is not None:
+        if not Path(path).exists():
+            raise ConfigError(f"config file not found: {path} (copy config.example.toml to start)")
+        d = _read_toml(Path(path))
+    if song:
+        d = merge(d, load_song(song))
+    return from_dict(merge(d, overrides or {}), preset)
+
+
 def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
     """Build a Config from a config.toml-shaped dict, layered over a preset if one is named
     (argument first, else a top-level `preset = "..."` in the dict)."""
@@ -300,6 +348,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         audio=_section("audio", d.get("audio")),
         response=_section("response", d.get("response")),
         groove=_section("groove", d.get("groove")),
+        song=_section("song", d.get("song")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls"))[0],
         program_bank=_controls(d.get("controls"))[1],
@@ -338,9 +387,8 @@ def _read_toml(p: Path) -> dict:
         raise ConfigError(f"{p}: not valid TOML ({e})") from None
 
 
-def load(path: str | Path, preset: Optional[str] = None, overrides: Optional[dict] = None) -> Config:
-    """config.toml, layered over a preset; `overrides` (e.g. from command-line flags) win."""
-    p = Path(path)
-    if not p.exists():
-        raise ConfigError(f"config file not found: {p} (copy config.example.toml to start)")
-    return from_dict(merge(_read_toml(p), overrides or {}), preset)
+def load(path: str | Path, preset: Optional[str] = None, overrides: Optional[dict] = None,
+         song: Optional[str] = None) -> Config:
+    """config.toml, layered over a preset, under a song; `overrides` (e.g. command-line flags)
+    win."""
+    return build(path, preset, overrides, song)

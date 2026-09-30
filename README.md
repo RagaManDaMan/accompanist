@@ -135,6 +135,25 @@ markings are reported and ignored for now).
   `harmony.melody_min_notes`, `melody_max_tensions`, or `melody_colors = false` to turn it off.
 - `charts/` is ignored by git, like `takes/`: your charts stay on your machine.
 
+## Songs: a setup per song
+
+A set can't have every song sounding alike. A song file, `songs/NAME.toml`, holds what makes
+one song itself: `[song]` title, `tempo` and `count` (meter: 3, 4, 5, 6, 7), plus any settings
+(harmony model and key, a chart, drum pattern, which voices play, the feel knobs...).
+
+```bash
+accompanist run --song example-waltz        # then s (or a pedal: song_start) to count in
+accompanist replay takes/misty-3.jsonl --song misty   # re-hear a take with a song's setup
+```
+
+Layering, later wins: defaults < preset < `config.toml` < song < command line. So
+`config.toml` holds your rig and general taste; the song only what differs. A song can't set
+ports, inputs or controls. A chart path in a song may be relative to the song file.
+
+**s** (or `song_start`) counts the band in: one bar of clicks at the song's tempo and meter,
+then drums and pulse come in with the tempo locked, and the pad once it has heard you. With a
+chart, it plays from bar 1. See `src/accompanist/songs/` for two examples.
+
 ## Counting off
 
 Count the band in on **t**, like a bandleader: the taps set the tempo, and how many you tap
