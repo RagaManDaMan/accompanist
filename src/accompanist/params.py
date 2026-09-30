@@ -233,7 +233,7 @@ PARAMS: list[Param] = [
     # ---- pulse ----------------------------------------------------------------
     P("pulse.enabled", bool, True, "Pulse on", "Play a soft note on every beat.", "Pulse", primary=True),
     P("pulse.feel", float, 0.3, "Bass feel",
-      "Algorithmic (0: every beat, even, on the grid) to humanize (1: leans toward your timing, follows your phrasing and dynamics, slightly varied and laid back).",
+      "Algorithmic (0: the root on every beat, even, on the grid) to humanize (1: bass shapes, leans toward your timing, follows your phrasing and dynamics, slightly varied and laid back).",
       "Pulse", 0, 1, 0.01, primary=True),
     P("pulse.channel", int, 2, "Pulse channel", "MIDI channel (1-16).", "Pulse", 1, 16, 1, live=False),
     P("pulse.octave", int, 2, "Pulse octave", "Octave of the pulse note.", "Pulse", 0, 7, 1),
@@ -261,6 +261,11 @@ PARAMS: list[Param] = [
       "Each bass note up to this many ms behind the beat (humanize).", "Pulse", 0, 60, 1),
     P("pulse.velocity_spread", int, 0, "Bass velocity spread",
       "Each bass note up to this much softer or louder.", "Pulse", 0, 40, 1),
+    P("pulse.movement", float, 0.7, "Bass movement",
+      "0 = the root on every beat; higher = bass shapes more often: fifths, thirds, octaves "
+      "and a step into the next bar.", "Pulse", 0, 1, 0.05),
+    P("pulse.shape_bars", int, 2, "Bass shape length",
+      "Repeat each bass shape for this many bars before choosing another.", "Pulse", 1, 16, 1),
     P("pulse.hint_window", float, 0.15, "On-beat window",
       "Only notes within this fraction of a beat from the pulse nudge it.", "Pulse", 0, 0.5, 0.01),
     P("pulse.note_length_s", float, 0.2, "Pulse note length", "Seconds.", "Pulse", 0.01, 2, 0.01),
@@ -290,6 +295,13 @@ PARAMS: list[Param] = [
       "Each hit up to this many ms early or late (humanize).", "Drums", 0, 40, 1),
     P("drums.velocity_spread", int, 0, "Drums velocity spread",
       "Each hit up to this much softer or louder.", "Drums", 0, 40, 1),
+    P("drums.dynamics", float, 0.5, "Drum dynamics",
+      "0 = even; higher = the drums follow your loudness more, lift when you play busily and "
+      "drop back when you rest, soften the off-beats, and mark each phrase (a crescendo, "
+      "a fill, a crash).", "Drums", 0, 1, 0.05),
+    P("drums.phrase_bars", int, 8, "Phrase length",
+      "Bars per phrase: the drums build over it, may fill at its end and crash on the next 1 "
+      "(0 = no phrases).", "Drums", 0, 32, 1),
     P("drums.count_in_note", int, 37, "Count-in click",
       "Drum note for the chart count-in clicks (37 = side stick, 75 = claves), on the drums "
       "channel.", "Drums", 0, 127, 1),

@@ -144,22 +144,48 @@ class PadResponder:
         self._bars_since_change = 0
 
 
+# Bass shapes, one character per beat: R root, 3 third, 5 fifth, 8 octave, 7 seventh (of the
+# scale), A a step into the next bar's root. A shape for a meter not listed is made from its
+# groups (see _generic_shape).
+BASS_SHAPES = {
+    2: ("R5", "R8", "RA"),
+    3: ("R55", "R58", "R35", "R5A", "R85", "R3A"),
+    4: ("R5R5", "R585", "R35A", "R5RA", "RR5A", "R853", "R358", "R587", "R3R5"),
+    6: ("R55R55", "R58R5A", "R35R3A"),
+}
+
+
 class PulseResponder:
-    """A soft note on every beat, accented once per bar."""
+    """The bass: a note on every beat, accented once per bar.
+
+    With pulse.movement above 0 it plays shapes: the root on the 1 (and whenever the chord
+    changes), then fifths, thirds, octaves and a step into the next bar, one shape repeated
+    for pulse.shape_bars bars. At 0 it plays the root on every beat.
+    """
 
     def __init__(self, cfg: PulseCfg, out: SafeOutput, seed: int = 0) -> None:
         self.cfg, self.out = cfg, out
         self.rng = random.Random(seed + 1)
+        self.shape_rng = random.Random(seed + 11)
         self.beat_count = 0
+        self._shape = ""
+        self._shape_left = 0
+        self._last_root: Optional[int] = None
+        self._last_interval = 0
 
     def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
-                bar_position: Optional[int] = None, boost: int = 0, group_start: bool = False) -> None:
-        """group_start: a beat that starts a group within the bar (the 4 of 3+2): half an accent."""
-        pos = self.beat_count % max(1, self.cfg.beats_per_bar) if bar_position is None else bar_position
+                bar_position: Optional[int] = None, boost: int = 0, group_start: bool = False,
+                chord: Optional[Voicing] = None, beats_per_bar: Optional[int] = None,
+                scale: Optional[set[int]] = None) -> None:
+        """group_start: a beat that starts a group within the bar (the 4 of 3+2): half an accent.
+        chord, beats_per_bar, scale: what the bass shapes are made of (the root alone without)."""
+        bpb = max(1, beats_per_bar or self.cfg.beats_per_bar)
+        pos = self.beat_count % bpb if bar_position is None else bar_position
         accent = self.cfg.accent if pos == 0 else self.cfg.accent // 2 if group_start else 0
         vel = round(self.cfg.velocity * gain) + accent + boost
         vel = humanize_velocity(min(max(vel, 1), 127), self.cfg.velocity_spread, self.rng)
-        note = 12 * (self.cfg.octave + 1) + root_pc
+        root = 12 * (self.cfg.octave + 1) + root_pc
+        note = self._shape_note(root, root_pc, pos, bpb, chord, scale)
         ch = self.cfg.channel - 1
         if self.cfg.timing_ms > 0:                   # humanize: laid back, a little each time
             t = now + self.rng.uniform(0, self.cfg.timing_ms) / 1000
@@ -169,8 +195,82 @@ class PulseResponder:
             self.out.note_off_at(now + self.cfg.note_length_s, ch, note)
         self.beat_count += 1
 
+    def _shape_note(self, root: int, root_pc: int, pos: int, bpb: int,
+                    chord: Optional[Voicing], scale: Optional[set[int]]) -> int:
+        changed = root_pc != self._last_root
+        self._last_root = root_pc
+        if self.cfg.movement <= 0:
+            self._last_interval = 0
+            return root
+        if len(self._shape) != bpb or (pos == 0 and self._shape_left <= 0):
+            self._shape = self._pick_shape(bpb)
+            self._shape_left = self.cfg.shape_bars
+        if pos == 0:
+            self._shape_left -= 1
+        if changed or pos >= len(self._shape):
+            self._last_interval = 0
+            return root                              # a new chord: land on its root
+        self._last_interval = self._interval(self._shape[pos], root_pc, chord, scale)
+        return root + self._last_interval
+
+    def _pick_shape(self, bpb: int) -> str:
+        if self.shape_rng.random() >= self.cfg.movement:
+            return "R" * bpb
+        return self.shape_rng.choice(BASS_SHAPES.get(bpb) or (_generic_shape(bpb, self.shape_rng),))
+
+    def _interval(self, degree: str, root_pc: int, chord: Optional[Voicing],
+                  scale: Optional[set[int]]) -> int:
+        pcs = {n % 12 for n in chord.notes} if chord else set()
+        fifth = 7 if not pcs or (root_pc + 7) % 12 in pcs else 6 if (root_pc + 6) % 12 in pcs else 7
+        if degree == "5":
+            return fifth
+        if degree == "8":
+            return 12
+        if degree == "3":
+            third = chord.third if chord and chord.third else None
+            return third if third else fifth         # an open chord: no third to play
+        if degree == "7":
+            for i in (10, 11):
+                if (root_pc + i) % 12 in (pcs | (scale or set())):
+                    return i                         # just under the octave: a walk down
+            return fifth
+        if degree == "A":                            # a step into the next bar's root
+            below = [i for i in (-2, -1) if scale is None or (root_pc + i) % 12 in scale]
+            above = [i for i in (2, 1) if scale is None or (root_pc + i) % 12 in scale]
+            if self._last_interval >= 5 and above:   # coming down from up high: from above
+                return above[0]
+            steps = above[:1] + below[:1]
+            return self.shape_rng.choice(steps) if steps else fifth
+        return 0
+
     def reset(self) -> None:
         self.beat_count = 0
+        self._shape, self._shape_left, self._last_root = "", 0, None
+
+
+def _generic_shape(bpb: int, rng: random.Random) -> str:
+    """A shape for any meter: the root at the start of each group, fifths and octaves between,
+    and a step into the next bar on the last beat."""
+    from .groove import GROUPS
+
+    starts = GROUPS.get(bpb, (0,))
+    cells = ["R" if i in starts else rng.choice("58") for i in range(bpb)]
+    if bpb > 1:
+        cells[-1] = "A"
+    return "".join(cells)
+
+
+# Drum dynamics (drums.dynamics = d, 0-1): how much harder the drums follow your loudness
+# (gain ** (1 + FOLLOW_BOOST*d)); how far they lift when you play busily and drop back when
+# you rest; how much softer the off-beat steps are; the crescendo over a phrase; where a fill
+# starts (share of the hit); and the chance of a fill at a phrase end (times d).
+FOLLOW_BOOST = 1.5
+BUSY_LIFT = 0.4
+OFFBEAT_SOFT = 0.3
+PHRASE_CRESCENDO = 0.2
+FILL_FROM = 0.55
+FILL_CHANCE = 1.2
+FILL_NOTES = {"low": "tom_low", "mid": "tom_mid", "snare": "snare"}
 
 
 class DrumResponder:
@@ -179,15 +279,21 @@ class DrumResponder:
     Each beat, the steps of that beat are scheduled at their times within it (with swing
     on every second step), then played by tick(). The cycle restarts when the beat clock
     starts. Changing drums.pattern live takes effect at the next beat.
+
+    drums.dynamics shapes the loudness: following you, lifting when you're busy, softer
+    off-beats, and phrases of drums.phrase_bars bars that build, may end in a fill, and
+    start with a crash.
     """
 
     def __init__(self, cfg, out: SafeOutput, seed: int = 0) -> None:
         self.cfg, self.out = cfg, out
         self.rng = random.Random(seed + 2)
+        self.fill_rng = random.Random(seed + 12)
         self.beat_count = 0
         self._queue: list[tuple[float, int, int, int]] = []   # (time, seq, note, velocity)
         self._seq = itertools.count()
         self._pattern = None
+        self._crash_next = False
         self.pattern_name: Optional[str] = None     # chosen by the groove, over drums.pattern
 
     def pattern(self):
@@ -200,29 +306,67 @@ class DrumResponder:
 
     def on_beat(self, beat_t: float, period: float, gain: float = 1.0,
                 form_beat: Optional[int] = None, swing: Optional[float] = None,
-                boost: int = 0) -> None:
+                boost: int = 0, beats_per_bar: Optional[int] = None, busy: float = 0.5) -> None:
         """Schedule this beat's steps. form_beat: beats since a downbeat (so the cycle lines
-        up with the bar); swing: overrides drums.swing; boost: extra velocity on this beat."""
+        up with the bar); swing: overrides drums.swing; boost: extra velocity on this beat;
+        beats_per_bar, busy (0-1, how busily you play): for the dynamics."""
+        from .patterns import GM_DRUMS
+
         pat = self.pattern()
         spb = pat.steps_per_beat
         where = self.beat_count if form_beat is None else form_beat
         first = (where % pat.beats) * spb
         swing = self.cfg.swing if swing is None else swing
+        d = self.cfg.dynamics
+        energy, fill = gain, False
+        if d > 0:
+            energy = gain ** (1 + FOLLOW_BOOST * d) * (1 + BUSY_LIFT * d * (busy - 0.5))
+            bpb = max(1, beats_per_bar or pat.beats)
+            phrase, bar_pos = self.cfg.phrase_bars, where % bpb
+            bar_in_phrase = (where // bpb) % phrase if phrase > 0 else 0
+            if phrase > 1:
+                energy *= 1 + PHRASE_CRESCENDO * d * bar_in_phrase / (phrase - 1)
+                if bar_in_phrase == phrase - 1 and bar_pos == bpb - 1:
+                    fill = self.fill_rng.random() < FILL_CHANCE * d
+                    self._crash_next = self._crash_next or fill
+            if bar_pos == 0 and self._crash_next:
+                self._crash_next = False
+                self._push(beat_t, GM_DRUMS["crash"], self.cfg.velocity * energy + self.cfg.accent + boost)
         for step, note, level in pat.hits:
             k = step - first
             if 0 <= k < spb:
+                if fill and note != GM_DRUMS["kick"]:
+                    continue                         # the fill replaces all but the kick
                 offset = (k + (swing if k % 2 == 1 else 0.0)) * period / spb
                 if self.cfg.timing_ms > 0:           # humanize: a little early or late
                     offset += self.rng.uniform(-self.cfg.timing_ms, self.cfg.timing_ms) / 1000
                     offset = max(offset, 0.0) if k == 0 else offset
-                vel = self.cfg.velocity * gain + (boost if k == 0 else 0)
+                vel = self.cfg.velocity * energy + (boost if k == 0 else 0)
                 if level == "accent":
                     vel += self.cfg.accent
                 elif level == "ghost":
                     vel *= self.cfg.ghost
-                vel = humanize_velocity(min(max(round(vel), 1), 127), self.cfg.velocity_spread, self.rng)
-                heapq.heappush(self._queue, (beat_t + offset, next(self._seq), note, vel))
+                if k > 0:
+                    vel *= 1 - OFFBEAT_SOFT * d
+                self._push(beat_t + offset, note, vel)
+        if fill:
+            self._fill(beat_t, period, spb, self.cfg.velocity * energy + self.cfg.accent)
         self.beat_count += 1
+
+    def _fill(self, beat_t: float, period: float, spb: int, top: float) -> None:
+        """A short fill across the beat, rising to `top`: snare, or down the toms."""
+        from .patterns import GM_DRUMS
+
+        n = spb if spb >= 3 else 4                   # triplets in a triplet feel, else 16ths
+        voices = self.fill_rng.choice((("snare",) * n,
+                                       tuple(("snare", "mid", "low")[min(i * 3 // n, 2)] for i in range(n))))
+        for i, v in enumerate(voices):
+            vel = top * (FILL_FROM + (1 - FILL_FROM) * i / max(1, n - 1))
+            self._push(beat_t + i * period / n, GM_DRUMS[FILL_NOTES[v]], vel)
+
+    def _push(self, t: float, note: int, vel: float) -> None:
+        vel = humanize_velocity(min(max(round(vel), 1), 127), self.cfg.velocity_spread, self.rng)
+        heapq.heappush(self._queue, (t, next(self._seq), note, vel))
 
     def tick(self, now: float) -> None:
         ch = self.cfg.channel - 1
@@ -233,4 +377,5 @@ class DrumResponder:
 
     def reset(self) -> None:
         self.beat_count = 0
+        self._crash_next = False
         self._queue.clear()

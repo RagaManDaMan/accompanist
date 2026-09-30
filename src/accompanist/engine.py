@@ -185,13 +185,17 @@ class Engine:
                         pulse_root = self.pad.current.root_pc
                 if p.enabled and pulse_root is not None:     # no harmony heard yet: no bass
                     group = bar_pos in GROUPS.get(bpb, (0,))
-                    self.pulse.on_beat(now, pulse_root, gain, bar_pos, boost, group)
+                    bass_chord = next((v for v in (self.pad.current, self.proposal, voicing)
+                                       if v is not None and v.root_pc == pulse_root), None)
+                    self.pulse.on_beat(now, pulse_root, gain, bar_pos, boost, group,
+                                       bass_chord, bpb, self._scale_pcs())
                 if self.cfg.drums.enabled:
                     swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
                              and self.groove.meter and not self.is_chart else None)
                     if self.drums.pattern_name is None and self.groove.pinned:
                         self._choose_drums()
-                    self.drums.on_beat(beat_t, self.clock.period, gain, form_beat, swing, boost)
+                    self.drums.on_beat(beat_t, self.clock.period, gain, form_beat, swing, boost,
+                                       bpb, self.dynamics.busyness(now))
                 self.beat_count += 1
             self.drums.tick(now)
 

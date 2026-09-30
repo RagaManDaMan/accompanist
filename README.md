@@ -240,6 +240,19 @@ play busily (`dynamics.duck`, never below `dynamics.pad_floor`), coming forward 
 you pause. The bass (pulse) velocity follows your loudness too, but never ducks. Most Logic
 instruments respond to CC11; if yours doesn't, set `expression_cc = 7` (volume).
 
+The drums follow you harder (`drums.dynamics`, 0 = even): louder when you play louder, a
+lift when you play busily and a drop back when you rest, softer off-beats, and phrases of
+`drums.phrase_bars` bars (8) that build a little, may end in a short fill, and start the next
+with a crash.
+
+## Bass shapes
+
+The bass plays the root on the 1 of each bar and whenever the chord changes. Between, with
+`pulse.movement` above 0 (0.7), it plays shapes: fifths, thirds, octaves, a seventh walking
+down, and a step into the next bar, in the key; each shape repeats for `pulse.shape_bars`
+bars (2) so it sounds like a line, not a dice roll. `pulse.movement = 0` is the old root on
+every beat. Both follow the bass and drums feel knobs.
+
 ## Drums
 
 `[drums] enabled = true` plays a General MIDI drum pattern on channel 10 (put a Logic
