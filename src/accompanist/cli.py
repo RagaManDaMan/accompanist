@@ -240,28 +240,33 @@ def cmd_learn(args) -> int:
             switches[action] = (kind, number, latching)
             pedal_ports.add(port)
             print(f"  {kind} {number} on '{port}'" + (" (toggles on each press)" if latching else ""))
-        expression = None
-        sweep = wait_press("\nMove an EXPRESSION PEDAL from one end to the other (or Enter to skip):")
-        if sweep:
+        expressions = []                           # (cc, knob): e.g. the FCB1010 has two
+        while len(expressions) < len(EXPRESSION_TARGETS):
+            which = "an" if not expressions else "another"
+            sweep = wait_press(f"\nMove {which} EXPRESSION PEDAL from one end to the other "
+                               f"(or Enter to skip):")
+            if not sweep:
+                break
             found = pick_expression(sweep + collect(2.0))
-            if found:
-                port, cc = found
-                menu = "  ".join(f"[{i + 1}] {t}" for i, t in enumerate(EXPRESSION_TARGETS))
-                k = ask(f"\n  cc {cc} on '{port}'. Which knob should it turn? {menu}",
-                        {str(i + 1) for i in range(len(EXPRESSION_TARGETS))})
-                expression = (cc, EXPRESSION_TARGETS[int(k) - 1])
-                pedal_ports.add(port)
-            else:
+            if not found:
                 print("  (that did not look like a pedal sweep)")
+                continue
+            port, cc = found
+            menu = "  ".join(f"[{i + 1}] {t}" for i, t in enumerate(EXPRESSION_TARGETS))
+            k = ask(f"\n  cc {cc} on '{port}'. Which knob should it turn? {menu}",
+                    {str(i + 1) for i in range(len(EXPRESSION_TARGETS))})
+            expressions.append((cc, EXPRESSION_TARGETS[int(k) - 1]))
+            pedal_ports.add(port)
         bank = 0
         if any(kind == "pc" for kind, _, _ in switches.values()):
-            if ask("\nDo your pedal's bank up/down switches change these numbers (e.g. Blackstar "
-                   "Live Logic)? [y/n]", {"y", "n"}) == "y":
-                bank = 4
-        if not switches and not expression:
+            k = ask("\nDo your pedal's bank up/down switches change these numbers? "
+                    "[4] banks of 4 (Blackstar Live Logic)  [0] banks of 10 (Behringer FCB1010)  "
+                    "[n] no", {"4", "0", "n"})
+            bank = {"4": 4, "0": 10, "n": 0}[k]
+        if not switches and not expressions:
             print("\nNothing learnt; config.toml unchanged.")
             return 0
-        block = controls_toml(switches, expression, bank)
+        block = controls_toml(switches, expressions, bank)
         print("\n" + block)
         port = next(iter(pedal_ports)) if len(pedal_ports) == 1 else None
         if ask(f"Write this into {cfg_path} (a backup is kept as {cfg_path}.bak)? [y/n]",

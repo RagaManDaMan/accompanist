@@ -56,9 +56,9 @@ def pick_expression(messages: list[Msg]) -> Optional[tuple[str, int]]:
 
 
 def controls_toml(switches: dict[str, tuple[str, int, bool]],
-                  expression: Optional[tuple[int, str]], program_bank: int = 0) -> str:
-    """The [controls] table: switches {action: (kind, number, latching)}, expression
-    (cc, parameter)."""
+                  expressions, program_bank: int = 0) -> str:
+    """The [controls] table: switches {action: (kind, number, latching)}; expressions: one
+    (cc, parameter) or a list of them (expression pedals)."""
     lines = ["[controls]  # written by `accompanist learn`"]
     if program_bank:
         lines.append(f"program_bank = {program_bank}   # the pedal's bank switches don't remap it")
@@ -68,8 +68,9 @@ def controls_toml(switches: dict[str, tuple[str, int, bool]],
             lines.append(f'{key} = {{ action = "{action}", latching = true }}')
         else:
             lines.append(f'{key} = "{action}"')
-    if expression:
-        cc, target = expression
+    if expressions and isinstance(expressions[0], int):
+        expressions = [expressions]                 # a single (cc, parameter)
+    for cc, target in expressions or []:
         lines.append(f'"cc:{cc}" = "{target}"   # expression pedal')
     return "\n".join(lines) + "\n"
 

@@ -69,6 +69,15 @@ def test_config_is_rewritten_and_still_loads():
     assert cfg.controls[("cc", 81)].latching and cfg.controls[("cc", 11)].target == "pad.feel"
 
 
+def test_two_expression_pedals_and_banks_of_ten_like_an_fcb1010():
+    block = controls_toml({"tap_tempo": ("pc", 1, False), "panic": ("pc", 10, False)},
+                          [(7, "pad.feel"), (27, "response.feel")], program_bank=10)
+    cfg = c.from_dict(tomllib.loads(update_config(OLD, block, "USB MIDI Interface")))
+    assert cfg.program_bank == 10
+    assert cfg.controls[("cc", 7)].target == "pad.feel"
+    assert cfg.controls[("cc", 27)].target == "response.feel"
+
+
 def test_a_pedal_already_listed_is_not_added_twice():
     text = OLD.replace('port = "LPK25"', f'port = "{P}"')
     new = update_config(text, controls_toml({"panic": ("cc", 85, False)}, None), P)
