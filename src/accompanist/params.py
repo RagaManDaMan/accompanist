@@ -387,6 +387,17 @@ PARAMS: list[Param] = [
       "Dynamics", 0, 1, 0.05),
     P("dynamics.pad_floor", float, 0.25, "Pad floor",
       "The quietest the pad gets (share of full expression).", "Dynamics", 0, 1, 0.05),
+    P("dynamics.pad_space", float, 0.7, "Pad makes room",
+      "How far the pad sits back while anyone plays (you or the answer) and swells in the "
+      "quiet: 0 = as set by follow and duck; 1 = down to pad_floor while you play, full in "
+      "the pauses.", "Dynamics", 0, 1, 0.05),
+    P("dynamics.swell_after_s", float, 1.5, "Swell after",
+      "Quiet all round (you and the answer) this long before the pad swells (seconds).",
+      "Dynamics", 0, 30, 0.1),
+    P("dynamics.swell_s", float, 4.0, "Swell time",
+      "Seconds for the pad to swell to full in the quiet.", "Dynamics", 0.1, 30, 0.1),
+    P("dynamics.recede_s", float, 0.6, "Recede time",
+      "Seconds for the pad to sit back when someone plays again.", "Dynamics", 0.05, 10, 0.05),
     P("dynamics.busy_notes_per_s", float, 4.0, "Busy at",
       "Notes per second that count as fully busy.", "Dynamics", 0.5, 20, 0.5),
     P("dynamics.reference_velocity", float, 80.0, "Your normal velocity",

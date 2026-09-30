@@ -24,6 +24,7 @@ MACROS: dict[str, list[tuple[str, tuple]]] = {
         ("harmony.color", (0.1, 0.5, 0.8)),              # plain chords .. colour tones
         ("harmony.wander", (0.0, 0.3, 0.6)),             # best fit .. wandering
         ("dynamics.duck", (0.0, 0.5, 0.8)),              # fixed level .. breathes with you
+        ("dynamics.pad_space", (0.0, 0.7, 0.9)),         # fixed level .. swells in the quiet
         ("pad.strum_ms", (0.0, 0.0, 40.0)),              # together .. a slight strum
         ("pad.velocity_spread", (0, 0, 10)),
     ],

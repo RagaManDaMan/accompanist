@@ -237,7 +237,11 @@ Any of them can go on a knob with `[controls]`, e.g. `21 = "response.yield_to_yo
 The pad's level rides on MIDI Expression (CC11, `pad.expression_cc`) so a held chord can
 swell and fade: it follows how loudly you play (`dynamics.follow`) and steps back while you
 play busily (`dynamics.duck`, never below `dynamics.pad_floor`), coming forward again when
-you pause. The bass (pulse) velocity follows your loudness too, but never ducks. Most Logic
+you pause. On top of that the pad makes room (`dynamics.pad_space`, 0.7): it sits back
+while anyone plays, you or the answer, and swells only once it has been quiet all round for
+`dynamics.swell_after_s` (1.5 s), taking `dynamics.swell_s` (4 s) to reach full and
+`dynamics.recede_s` (0.6 s) to sit back when someone plays again. The bass (pulse) velocity
+follows your loudness too, but never ducks. Most Logic
 instruments respond to CC11; if yours doesn't, set `expression_cc = 7` (volume).
 
 The drums follow you harder (`drums.dynamics`, 0 = even): louder when you play louder, a

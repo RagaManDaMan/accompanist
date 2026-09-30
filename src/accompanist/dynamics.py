@@ -3,6 +3,9 @@
 Pure (no clock of its own): feed note velocities with their times, ask for levels at `now`.
 Both measures fade with a half-life of dynamics.memory_s, so a pause lets the
 accompaniment come forward again and a burst of notes makes the pad step back.
+
+The pad also makes room (dynamics.pad_space): it sits back while anyone plays, you or the
+answer (heard()), and only swells once it has been quiet all round for swell_after_s.
 """
 from __future__ import annotations
 
@@ -16,6 +19,9 @@ class Dynamics:
         self._sum = 0.0                # decaying sum of velocities
         self._count = 0.0              # decaying count of notes
         self._t: Optional[float] = None
+        self._sound_t: Optional[float] = None    # when you, or the answer, last played
+        self._level: Optional[float] = None      # the pad's level last time, and when
+        self._level_t = 0.0
 
     def _decay_to(self, t: float) -> None:
         if self._t is not None and t > self._t:
@@ -28,6 +34,11 @@ class Dynamics:
         self._decay_to(t)
         self._sum += velocity
         self._count += 1.0
+        self.heard(t)
+
+    def heard(self, t: float) -> None:
+        """Someone (you, or the answer) is playing at time t: not quiet all round."""
+        self._sound_t = t if self._sound_t is None else max(self._sound_t, t)
 
     def loudness(self) -> Optional[float]:
         """Your recent average velocity (0-127), or None before any notes."""
@@ -48,9 +59,22 @@ class Dynamics:
         return min(max(g, MIN_GAIN), MAX_GAIN)
 
     def pad_level(self, now: float) -> float:
-        """The pad's level, 0-1 of full expression: follows you, and steps back when busy."""
-        level = NOMINAL_LEVEL * self.follow_gain() * (1.0 - self.cfg.duck * self.busyness(now))
-        return min(max(level, self.cfg.pad_floor), 1.0)
+        """The pad's level, 0-1 of full expression: follows you, steps back when busy, sits
+        back further while anyone plays and swells when it's quiet all round (pad_space)."""
+        c = self.cfg
+        level = NOMINAL_LEVEL * self.follow_gain() * (1.0 - c.duck * self.busyness(now))
+        level = min(max(level, c.pad_floor), 1.0)
+        if c.pad_space <= 0:
+            return level
+        low = c.pad_floor + (level - c.pad_floor) * (1.0 - c.pad_space)
+        high = level + (1.0 - level) * c.pad_space
+        quiet = float("inf") if self._sound_t is None else now - self._sound_t
+        swell = min(max((quiet - c.swell_after_s) / c.swell_s, 0.0), 1.0)
+        target = low + (high - low) * swell
+        if self._level is not None and target < self._level:    # recede quickly, not at once
+            target = max(target, self._level - (now - self._level_t) / c.recede_s)
+        self._level, self._level_t = target, now
+        return target
 
 
 # The pad's level when you play at reference_velocity and aren't busy (leaves headroom to

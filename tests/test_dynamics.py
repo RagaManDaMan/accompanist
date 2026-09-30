@@ -71,3 +71,32 @@ def test_expression_can_be_turned_off():
     ctl = Controller(c.from_dict({"pad": {"expression_cc": None}}), SafeOutput(port))
     run(ctl, [(0.0, 62, 90)], 2.0)
     assert pad_expressions(port) == []
+
+
+def test_pad_sits_back_while_you_play_and_swells_only_in_the_quiet():
+    d = dyn(pad_space=1.0, pad_floor=0.2, duck=0.0, follow=0.0,
+            swell_after_s=1.5, swell_s=4.0, recede_s=0.5)
+    for i in range(20):
+        d.observe(i * 0.5, 80)                     # playing, not busy
+    assert d.pad_level(9.6) == pytest.approx(0.2)  # sat back to the floor
+    assert d.pad_level(10.5) == pytest.approx(0.2)   # 1 s of quiet: not yet
+    assert 0.4 < d.pad_level(13.5) < 0.9             # swelling
+    assert d.pad_level(20.0) == pytest.approx(1.0)   # full in the long quiet
+    d.observe(20.0, 80)                              # you come back in
+    assert d.pad_level(20.2) > 0.5                   # receding, not a jump
+    assert d.pad_level(20.6) == pytest.approx(0.2)
+
+
+def test_the_answer_playing_is_not_quiet():
+    d = dyn(pad_space=1.0, pad_floor=0.2, duck=0.0, follow=0.0, recede_s=0.5)
+    d.observe(0.0, 80)
+    for i in range(80):
+        d.heard(1.0 + i * 0.05)                    # the answer plays for 4 s
+    assert d.pad_level(5.0) == pytest.approx(0.2)
+
+
+def test_no_pad_space_is_the_old_level():
+    d = dyn(pad_space=0.0, duck=1.0, pad_floor=0.25, follow=0.0)
+    for i in range(80):
+        d.observe(i * 0.1, 80)
+    assert d.pad_level(8.0) == pytest.approx(0.25)

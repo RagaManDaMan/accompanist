@@ -104,6 +104,8 @@ class Engine:
         voicing = self.frozen if self.chord_held else self.proposal
         waiting = self.is_chart and not self.song_playing   # before the chart starts: no band
 
+        if self.response.playing(now):
+            self.dynamics.heard(now)                 # the answer is playing: not quiet
         self._shape_pad(now)
         if not self.cfg.pad.enabled or waiting:
             self.pad.release_all()

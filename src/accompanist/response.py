@@ -264,6 +264,10 @@ class ResponseResponder:
         for off, note, vel, dur in notes:
             heapq.heappush(self._queue, (start + off, next(self._seq), note, vel, dur))
 
+    def playing(self, now: float) -> bool:
+        """An answer is sounding or still to come."""
+        return bool(self._queue) or any(end > now for end in self._sounding.values())
+
     def cancel(self) -> None:
         """Stop the answer: drop what is still to come, silence what is sounding."""
         self._queue.clear()
