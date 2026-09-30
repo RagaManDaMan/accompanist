@@ -101,10 +101,13 @@ def make_answer(phrase: list[tuple[float, int, int]], chord_pcs, scale_pcs, rng:
 
 def render(pitches: list[int], iois: list[float], vels: list[int], cfg: Any, period: float,
            gain: float = 1.0, grid: bool = False) -> list[tuple[float, int, int, float]]:
-    """Notes + intervals -> [(offset s, note, velocity, duration s)], one note at a time."""
+    """Notes + intervals -> [(offset s, note, velocity, duration s)], one note at a time.
+    grid: the rhythm moves toward eighth notes by response.quantize (1 = on the grid)."""
     if grid:
         step = period / 2
-        iois = [min(max(round(x / step), 1), int(MAX_IOI_BEATS * 2)) * step for x in iois]
+        q = cfg.quantize
+        iois = [q * min(max(round(x / step), 1), int(MAX_IOI_BEATS * 2)) * step + (1 - q) * x
+                for x in iois]
     mean_vel = sum(vels) / len(vels)
     out, t = [], 0.0
     for i, p in enumerate(pitches):
@@ -240,8 +243,11 @@ class ResponseResponder:
         if self.rng.random() < self.cfg.variety:            # a variation of what you just played
             notes = make_answer(current, chord_pcs, scale_pcs, self.rng, self.cfg, period, gain, grid)
         else:                                               # one of your own phrases
-            phrase, used = choose_phrase(current, self.memory, chord_pcs, scale_pcs, self.rng,
-                                         self.cfg, self._last_used)
+            if self.cfg.curate >= 1 or self.rng.random() < self.cfg.curate:   # an earlier one...
+                phrase, used = choose_phrase(current, self.memory, chord_pcs, scale_pcs,
+                                             self.rng, self.cfg, self._last_used)
+            else:                                           # ...or an echo of the last one
+                phrase, used = current[: self.cfg.max_notes], None
             self._last_used = used
             pitches = [n for _, n, _ in phrase]
             if self.cfg.octave is not None:                 # a fixed register, contour kept

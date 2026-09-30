@@ -424,7 +424,7 @@ def cmd_params(args) -> int:
         return 0
     group = None
     for p in registry.PARAMS:
-        if p.deprecated:
+        if p.deprecated or (args.primary and not p.primary):
             continue
         if p.group != group:
             group = p.group
@@ -475,6 +475,8 @@ def main(argv=None) -> int:
                     help="also save the notes heard as a take, for `replay`")
     sp = sub.add_parser("params", help="list every setting (with --json: the schema a UI is built from)")
     sp.add_argument("--json", action="store_true")
+    sp.add_argument("--primary", action="store_true",
+                    help="only the few controls a simple interface shows (the feel knobs)")
     args = p.parse_args(argv)
     try:
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,

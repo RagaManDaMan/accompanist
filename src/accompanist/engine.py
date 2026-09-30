@@ -38,8 +38,8 @@ class Engine:
         self.harmony = make_model(cfg)
         self.clock = BeatClock(cfg.pulse.phase_gain)
         self.pad = PadResponder(cfg.pad, out, cfg.harmony.seed)
-        self.pulse = PulseResponder(cfg.pulse, out)
-        self.drums = DrumResponder(cfg.drums, out)
+        self.pulse = PulseResponder(cfg.pulse, out, cfg.harmony.seed)
+        self.drums = DrumResponder(cfg.drums, out, cfg.harmony.seed)
         self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
         self.beat_count = 0                       # beats since the clock started (bar position)
         # A chart is a song: silent until started (count-in), then it plays until panic.

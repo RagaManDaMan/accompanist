@@ -10,6 +10,13 @@ from .config import PadCfg, PulseCfg
 from .harmony import Voicing
 from .output import SafeOutput
 
+def humanize_velocity(velocity: int, spread: int, rng: random.Random) -> int:
+    """velocity, up to `spread` softer or louder (0 = unchanged)."""
+    if spread <= 0:
+        return velocity
+    return min(max(velocity + rng.randint(-spread, spread), 1), 127)
+
+
 # Pad voicing range (MIDI notes) and how many semitones of voice movement variation=1 may
 # trade for novelty.
 VOICE_LOW, VOICE_HIGH = 36, 88
@@ -113,7 +120,11 @@ class PadResponder:
         old_notes = set(self.current.notes) if self.current else set()
         new_notes = set(new.notes)
         for n in sorted(new_notes - old_notes):
-            self.out.note_on(ch, n, self.cfg.velocity)
+            vel = humanize_velocity(self.cfg.velocity, self.cfg.velocity_spread, self.rng)
+            if self.cfg.strum_ms > 0:                # humanize: a slight strum, low to high
+                self.out.note_on_at(now + self.rng.uniform(0, self.cfg.strum_ms) / 1000, ch, n, vel)
+            else:
+                self.out.note_on(ch, n, vel)
         for n in sorted(old_notes - new_notes):
             self.out.note_off_at(now + self.cfg.overlap_s, ch, n)
         if not force_new:                  # a re-voicing is not a change of harmony: it must
@@ -122,6 +133,7 @@ class PadResponder:
         self._bars_since_change = 0
 
     def release_all(self) -> None:
+        self.out.cancel_ons(self.cfg.channel - 1)     # a strummed note not yet started
         if self.current is not None:
             for n in self.current.notes:
                 self.out.note_off(self.cfg.channel - 1, n)
@@ -135,8 +147,9 @@ class PadResponder:
 class PulseResponder:
     """A soft note on every beat, accented once per bar."""
 
-    def __init__(self, cfg: PulseCfg, out: SafeOutput) -> None:
+    def __init__(self, cfg: PulseCfg, out: SafeOutput, seed: int = 0) -> None:
         self.cfg, self.out = cfg, out
+        self.rng = random.Random(seed + 1)
         self.beat_count = 0
 
     def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
@@ -145,11 +158,15 @@ class PulseResponder:
         pos = self.beat_count % max(1, self.cfg.beats_per_bar) if bar_position is None else bar_position
         accent = self.cfg.accent if pos == 0 else self.cfg.accent // 2 if group_start else 0
         vel = round(self.cfg.velocity * gain) + accent + boost
-        vel = min(max(vel, 1), 127)
+        vel = humanize_velocity(min(max(vel, 1), 127), self.cfg.velocity_spread, self.rng)
         note = 12 * (self.cfg.octave + 1) + root_pc
         ch = self.cfg.channel - 1
-        self.out.note_on(ch, note, vel)
-        self.out.note_off_at(now + self.cfg.note_length_s, ch, note)
+        if self.cfg.timing_ms > 0:                   # humanize: laid back, a little each time
+            t = now + self.rng.uniform(0, self.cfg.timing_ms) / 1000
+            self.out.note_on_at(t, ch, note, vel, off_at=t + self.cfg.note_length_s)
+        else:
+            self.out.note_on(ch, note, vel)
+            self.out.note_off_at(now + self.cfg.note_length_s, ch, note)
         self.beat_count += 1
 
     def reset(self) -> None:
@@ -164,8 +181,9 @@ class DrumResponder:
     starts. Changing drums.pattern live takes effect at the next beat.
     """
 
-    def __init__(self, cfg, out: SafeOutput) -> None:
+    def __init__(self, cfg, out: SafeOutput, seed: int = 0) -> None:
         self.cfg, self.out = cfg, out
+        self.rng = random.Random(seed + 2)
         self.beat_count = 0
         self._queue: list[tuple[float, int, int, int]] = []   # (time, seq, note, velocity)
         self._seq = itertools.count()
@@ -194,13 +212,16 @@ class DrumResponder:
             k = step - first
             if 0 <= k < spb:
                 offset = (k + (swing if k % 2 == 1 else 0.0)) * period / spb
+                if self.cfg.timing_ms > 0:           # humanize: a little early or late
+                    offset += self.rng.uniform(-self.cfg.timing_ms, self.cfg.timing_ms) / 1000
+                    offset = max(offset, 0.0) if k == 0 else offset
                 vel = self.cfg.velocity * gain + (boost if k == 0 else 0)
                 if level == "accent":
                     vel += self.cfg.accent
                 elif level == "ghost":
                     vel *= self.cfg.ghost
-                heapq.heappush(self._queue, (beat_t + offset, next(self._seq), note,
-                                             min(max(round(vel), 1), 127)))
+                vel = humanize_velocity(min(max(round(vel), 1), 127), self.cfg.velocity_spread, self.rng)
+                heapq.heappush(self._queue, (beat_t + offset, next(self._seq), note, vel))
         self.beat_count += 1
 
     def tick(self, now: float) -> None:

@@ -88,6 +88,16 @@ auto = true             # lock by itself once the tempo has been clear for a whi
 # confidence = 0.8
 # after_s = 25
 
+# One knob per voice: 0 = algorithmic ... 1 = humanize (see README). Defaults shown.
+# [pad]
+# feel = 0.5
+# [pulse]
+# feel = 0.3
+# [drums]
+# feel = 0.4
+# [response]
+# feel = 0.6
+
 [controls]
 # Optional: map MIDI controller numbers (from any input) to actions or settings.
 # Actions (panic, resume, tap_tempo) fire when the value is >= 64, e.g. a foot switch.

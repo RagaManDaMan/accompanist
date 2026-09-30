@@ -271,6 +271,12 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
     )
     if cfg.panic.cc is not None:
         cfg.controls.setdefault(cfg.panic.cc, "panic")
+    # The feel knobs set their detailed settings, except those given explicitly.
+    from .feel import MACROS, apply
+
+    explicit = frozenset(f"{sec}.{k}" for sec, v in d.items() if isinstance(v, dict) for k in v)
+    for knob in MACROS:
+        apply(cfg, knob, skip=explicit)
     check(cfg)
     return cfg
 

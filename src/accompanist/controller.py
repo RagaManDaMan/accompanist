@@ -16,6 +16,7 @@ from typing import Any, Optional
 from . import params as registry
 from .config import ACTIONS, Config, ConfigError, check
 from .engine import Engine
+from .feel import MACROS, apply as apply_feel
 from .output import SafeOutput
 
 COUNT_METERS = (3, 4, 5, 6, 7)   # taps in a count-off: the meter
@@ -87,6 +88,8 @@ class Controller:
             setattr(section, p.name, old)
             raise
         self.overrides[key] = value
+        if key in MACROS:                        # a feel knob: set everything it controls
+            apply_feel(self.cfg, key)
 
     def get_param(self, key: str) -> Any:
         p = registry.get(key)

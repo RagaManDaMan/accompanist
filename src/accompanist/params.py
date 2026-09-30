@@ -29,6 +29,7 @@ class Param:
     nullable: bool = False           # None ("not set") is allowed
     deprecated: bool = False         # accepted in old config files, ignored
     bool_as_number: bool = False     # true/false accepted for a 0-1 number (was a switch)
+    primary: bool = False            # one of the few controls a simple GUI shows
     check: Optional[Callable[[Any], None]] = None  # extra validation; raises ValueError
 
     @property
@@ -46,6 +47,7 @@ class Param:
             "choices": list(self.choices) if self.choices else None,
             "group": self.group, "label": self.label, "help": self.help,
             "live": self.live, "nullable": self.nullable, "deprecated": self.deprecated,
+            "primary": self.primary,
         }
 
 
@@ -197,7 +199,10 @@ PARAMS: list[Param] = [
       "drone model: a new root must outweigh the old one by this factor.", "Harmony", 1, 4, 0.05),
 
     # ---- pad ------------------------------------------------------------------
-    P("pad.enabled", bool, True, "Pad on", "Play the sustained pad.", "Pad"),
+    P("pad.enabled", bool, True, "Pad on", "Play the sustained pad.", "Pad", primary=True),
+    P("pad.feel", float, 0.5, "Pad feel",
+      "Algorithmic (0: changes on bar lines, one steady voicing, plain chords, fixed level) to humanize (1: changes on any beat, varied voicings, colour and wandering chords, breathes with you, a slight strum).",
+      "Pad", 0, 1, 0.01, primary=True),
     P("pad.channel", int, 1, "Pad channel", "MIDI channel (1-16).", "Pad", 1, 16, 1, live=False),
     P("pad.octave", int, 3, "Pad octave", "Octave of the pad's root (3 = C3 upward).", "Pad", 0, 7, 1),
     P("pad.velocity", int, 55, "Pad velocity", "Loudness of pad notes.", "Pad", 1, 127, 1),
@@ -216,13 +221,20 @@ PARAMS: list[Param] = [
     P("pad.expression_cc", int, 11, "Pad level controller",
       "Controller that shapes the pad's level continuously (11 = Expression, 7 = Volume; "
       "unset = fixed level).", "Pad", 0, 127, 1, nullable=True),
+    P("pad.strum_ms", float, 0.0, "Pad strum",
+      "The notes of a new chord start up to this many ms apart (0 = together).", "Pad", 0, 120, 1),
+    P("pad.velocity_spread", int, 0, "Pad velocity spread",
+      "Each pad note up to this much softer or louder (humanize).", "Pad", 0, 40, 1),
     P("pad.overlap_s", float, 0.25, "Pad overlap",
       "Old notes ring this long under a new chord.", "Pad", 0, 5, 0.05),
     P("pad.idle_release_s", float, 20.0, "Pad release after",
       "Release the pad after this much silence (seconds).", "Pad", 1, 36000, 1),
 
     # ---- pulse ----------------------------------------------------------------
-    P("pulse.enabled", bool, True, "Pulse on", "Play a soft note on every beat.", "Pulse"),
+    P("pulse.enabled", bool, True, "Pulse on", "Play a soft note on every beat.", "Pulse", primary=True),
+    P("pulse.feel", float, 0.3, "Bass feel",
+      "Algorithmic (0: every beat, even, on the grid) to humanize (1: leans toward your timing, follows your phrasing and dynamics, slightly varied and laid back).",
+      "Pulse", 0, 1, 0.01, primary=True),
     P("pulse.channel", int, 2, "Pulse channel", "MIDI channel (1-16).", "Pulse", 1, 16, 1, live=False),
     P("pulse.octave", int, 2, "Pulse octave", "Octave of the pulse note.", "Pulse", 0, 7, 1),
     P("pulse.velocity", int, 45, "Pulse velocity", "Loudness of the pulse.", "Pulse", 1, 127, 1),
@@ -245,13 +257,20 @@ PARAMS: list[Param] = [
       "follows without lurching (0 = at once).", "Pulse", 0, 0.5, 0.01),
     P("pulse.max_tempo_step", float, 0.02, "Tempo easing",
       "Its beat spacing changes by at most this share per beat (0 = at once).", "Pulse", 0, 0.5, 0.01),
+    P("pulse.timing_ms", float, 0.0, "Bass lay-back",
+      "Each bass note up to this many ms behind the beat (humanize).", "Pulse", 0, 60, 1),
+    P("pulse.velocity_spread", int, 0, "Bass velocity spread",
+      "Each bass note up to this much softer or louder.", "Pulse", 0, 40, 1),
     P("pulse.hint_window", float, 0.15, "On-beat window",
       "Only notes within this fraction of a beat from the pulse nudge it.", "Pulse", 0, 0.5, 0.01),
     P("pulse.note_length_s", float, 0.2, "Pulse note length", "Seconds.", "Pulse", 0.01, 2, 0.01),
 
     # ---- drums -----------------------------------------------------------------
     P("drums.enabled", bool, False, "Drums on", "Play a drum pattern on the beat (General MIDI).",
-      "Drums"),
+      "Drums", primary=True),
+    P("drums.feel", float, 0.4, "Drums feel",
+      "Algorithmic (0: the pattern exactly, straight, even) to humanize (1: follows your swing and dynamics, more ghost notes, small timing and velocity variation).",
+      "Drums", 0, 1, 0.01, primary=True),
     P("drums.channel", int, 10, "Drums channel", "MIDI channel (1-16); GM drums are on 10.",
       "Drums", 1, 16, 1, live=False),
     P("drums.pattern", str, "basic", "Pattern",
@@ -267,6 +286,10 @@ PARAMS: list[Param] = [
       "Delay every second step by this share of a step (0 = straight, 0.33 = triplet swing).",
       "Drums", 0, 0.5, 0.01),
     P("drums.note_length_s", float, 0.1, "Drum note length", "Seconds.", "Drums", 0.01, 1, 0.01),
+    P("drums.timing_ms", float, 0.0, "Drums timing spread",
+      "Each hit up to this many ms early or late (humanize).", "Drums", 0, 40, 1),
+    P("drums.velocity_spread", int, 0, "Drums velocity spread",
+      "Each hit up to this much softer or louder.", "Drums", 0, 40, 1),
     P("drums.count_in_note", int, 37, "Count-in click",
       "Drum note for the chart count-in clicks (37 = side stick, 75 = claves), on the drums "
       "channel.", "Drums", 0, 127, 1),
@@ -302,7 +325,10 @@ PARAMS: list[Param] = [
     # ---- response (call and response) -----------------------------------------
     P("response.enabled", bool, False, "Answer your phrases",
       "When you pause after a phrase, answer it with a short line on its own channel.",
-      "Response"),
+      "Response", primary=True),
+    P("response.feel", float, 0.6, "Response feel",
+      "Algorithmic (0: an exact, on-the-grid echo of your last phrase, every pause) to humanize (1: curated earlier phrases, sometimes varied, in your own timing, not every pause, gives way partly).",
+      "Response", 0, 1, 0.01, primary=True),
     P("response.channel", int, 4, "Response channel", "MIDI channel (1-16), e.g. a guitar track.",
       "Response", 1, 16, 1, live=False),
     P("response.octave", int, None, "Response octave",
@@ -328,6 +354,12 @@ PARAMS: list[Param] = [
     P("response.fit", float, 0.75, "Fit to the harmony",
       "A remembered phrase is played only if at least this share of its notes belong to the "
       "chord and key of the moment; else your last phrase is echoed.", "Response", 0, 1, 0.05),
+    P("response.curate", float, 1.0, "Curate",
+      "How often the answer is one of your earlier phrases rather than an echo of the one you "
+      "just played (0 = always an echo).", "Response", 0, 1, 0.05),
+    P("response.quantize", float, 1.0, "Quantize",
+      "With the beat running: 1 = the answer's rhythm on eighth notes, 0 = in your own timing.",
+      "Response", 0, 1, 0.05),
     P("response.variety", float, 0.0, "Variety",
       "How often to play a variation of your last phrase (moved a scale step, inverted or "
       "reversed) instead of one of your own phrases (0 = never).", "Response", 0, 1, 0.05),

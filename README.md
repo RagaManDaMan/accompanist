@@ -32,6 +32,26 @@ below), **s** = chart: count in and play from the top, **q** = quit. Every key p
 panic and a chart count-in, a key press never moves the beat.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
+## Four knobs: algorithmic to humanize
+
+Each voice has one knob, `pad.feel`, `pulse.feel` (bass), `drums.feel`, `response.feel`,
+from 0 (algorithmic: strict, even, on the grid, predictable) to 1 (humanize: varied,
+breathing with you, a little loose). Each knob sets a group of detailed settings together;
+at its default it reproduces the detailed defaults exactly. `accompanist params --primary`
+shows just these (and each voice's on/off), which is all a simple interface needs. Put them
+on a MIDI controller's knobs:
+
+```toml
+[controls]
+21 = "pad.feel"
+22 = "pulse.feel"
+23 = "drums.feel"
+24 = "response.feel"
+```
+
+A detailed setting you give in `config.toml` wins over its knob at start-up; turning the knob
+live takes over everything it controls.
+
 ## Settings, presets, controllers
 
 - `accompanist params` lists every setting with its range and meaning;
