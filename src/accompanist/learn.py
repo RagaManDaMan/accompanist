@@ -19,11 +19,27 @@ STEPS = (
     ("lock_toggle", "LOCK / UNLOCK the tempo"),
     ("chord_toggle", "HOLD / RELEASE the chord"),
     ("panic", "PANIC (silence everything)"),
-    ("resume", "RESUME after a panic"),
-    ("chart_restart", "CHART: count in and play from the top"),
+    ("resume", "RESUME after a panic (the panic switch again = one switch for both)"),
+    ("song_start", "START THE SONG: count in at its tempo (a chart from the top)"),
 )
 EXPRESSION_TARGETS = ("pad.feel", "pulse.feel", "drums.feel", "response.feel")
 MIN_SWEEP_VALUES = 8                     # an expression pedal sends many different values
+
+
+def assign(switches: dict[str, tuple[str, int, bool]], action: str,
+           switch: tuple[str, int, bool]) -> str:
+    """Give `switch` (kind, number, latching) to `action` in `switches`. One switch can't do
+    two things, with one exception: the panic switch pressed again for resume becomes a
+    panic/resume toggle. Returns what happened, for the display."""
+    kind, number, latching = switch
+    taken = next((a for a, (k, n, _) in switches.items() if (k, n) == (kind, number)), None)
+    if taken is None:
+        switches[action] = switch
+        return f"{kind} {number}" + (" (toggles on each press)" if latching else "")
+    if taken == "panic" and action == "resume":
+        switches["panic_toggle"] = switches.pop("panic")
+        return f"{kind} {number}: one switch for panic, and again to resume"
+    return f"that switch is already {taken}: skipped (run learn again to use another one)"
 
 
 def press_of(messages: list[Msg]) -> Optional[Msg]:

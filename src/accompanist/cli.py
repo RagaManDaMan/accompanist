@@ -153,7 +153,7 @@ def cmd_monitor(args) -> int:
 
 def cmd_learn(args) -> int:
     """Press each switch when asked; the [controls] of config.toml are written for you."""
-    from .learn import (EXPRESSION_TARGETS, STEPS, classify_switch, controls_toml,
+    from .learn import (EXPRESSION_TARGETS, STEPS, assign, classify_switch, controls_toml,
                         pick_expression, update_config)
     from .midi_io import open_all_inputs
 
@@ -237,9 +237,8 @@ def cmd_learn(args) -> int:
                                       for i in cfg.inputs):
                 print(f"  that is a note on '{port}', which you play music on: use another switch")
                 continue
-            switches[action] = (kind, number, latching)
+            print(f"  {assign(switches, action, (kind, number, latching))}  ('{port}')")
             pedal_ports.add(port)
-            print(f"  {kind} {number} on '{port}'" + (" (toggles on each press)" if latching else ""))
         expressions = []                           # (cc, knob): e.g. the FCB1010 has two
         while len(expressions) < len(EXPRESSION_TARGETS):
             which = "an" if not expressions else "another"
@@ -273,7 +272,11 @@ def cmd_learn(args) -> int:
                {"y", "n"}) == "y":
             text = cfg_path.read_text()
             new = update_config(text, block, port)
-            cfgmod.from_dict(cfgmod.tomllib.loads(new))              # check before writing
+            try:                                                      # check before writing
+                cfgmod.from_dict(cfgmod.tomllib.loads(new))
+            except (cfgmod.tomllib.TOMLDecodeError, cfgmod.ConfigError) as e:
+                print(f"\nNot written: the result would not load ({e}). config.toml unchanged.")
+                return 2
             cfg_path.with_name(cfg_path.name + ".bak").write_text(text)
             cfg_path.write_text(new)
             print(f"Written. `accompanist run` will use it" +

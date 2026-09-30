@@ -78,6 +78,31 @@ def test_two_expression_pedals_and_banks_of_ten_like_an_fcb1010():
     assert cfg.controls[("cc", 27)].target == "response.feel"
 
 
+def test_the_owners_fcb1010_session_panic_and_resume_on_one_switch():
+    """Regression: the same switch for panic and resume wrote a duplicate key and crashed."""
+    from accompanist.learn import assign
+
+    switches = {}
+    for action, pc in (("tap_tempo", 11), ("lock_toggle", 22), ("chord_toggle", 33),
+                       ("panic", 44), ("resume", 44), ("song_start", 55)):
+        assign(switches, action, ("pc", pc, False))
+    assert switches["panic_toggle"] == ("pc", 44, False) and "panic" not in switches
+    assert "resume" not in switches
+    block = controls_toml(switches, [(27, "pad.feel")])
+    cfg = c.from_dict(tomllib.loads(update_config(OLD, block, "GHMidi Interface")))
+    assert cfg.controls[("pc", 44)].target == "panic_toggle"
+    assert cfg.controls[("pc", 55)].target == "song_start"
+
+
+def test_one_switch_cannot_do_two_other_things():
+    from accompanist.learn import assign
+
+    switches = {}
+    assign(switches, "tap_tempo", ("pc", 11, False))
+    message = assign(switches, "lock_toggle", ("pc", 11, False))
+    assert "already tap_tempo" in message and switches == {"tap_tempo": ("pc", 11, False)}
+
+
 def test_a_pedal_already_listed_is_not_added_twice():
     text = OLD.replace('port = "LPK25"', f'port = "{P}"')
     new = update_config(text, controls_toml({"panic": ("cc", 85, False)}, None), P)

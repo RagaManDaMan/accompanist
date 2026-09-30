@@ -276,6 +276,12 @@ def test_a_pedal_bank_switch_does_not_remap_the_switches():
     assert ctl.on_midi(0.2, "pc", 9, 127) == (None, None)          # switch 2: not mapped
 
 
+def test_one_switch_for_panic_and_resume():
+    _, ctl = make({"controls": {"pc:44": "panic_toggle"}})
+    assert ctl.on_midi(0.0, "pc", 44, 127)[1].startswith("PANIC") and ctl.engine.muted
+    assert ctl.on_midi(0.5, "pc", 44, 127)[1] == "resumed" and not ctl.engine.muted
+
+
 def test_a_latching_switch_acts_on_every_press():
     _, ctl = make({"controls": {"80": {"action": "lock_toggle", "latching": True}}})
     ctl.on_note(0.0, 62, 90)

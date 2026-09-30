@@ -120,6 +120,8 @@ class Controller:
             raise ConfigError(f"unknown action '{action}'; use one of {list(ACTIONS)}")
         self._started(now)
         eng = self.engine
+        if action == "panic_toggle":                 # one switch: silence, and again to resume
+            action = "resume" if eng.muted else "panic"
         if action == "panic":
             self.panic()
             return "PANIC: silenced and muted (r = resume)"
