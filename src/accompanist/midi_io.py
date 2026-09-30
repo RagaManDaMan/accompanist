@@ -75,3 +75,16 @@ def open_inputs(cfg: Config, q: "queue.Queue"):
 
         ports.append(mido.open_input(name, callback=make_cb(inp)))
     return ports
+
+
+def open_all_inputs(q: "queue.Queue"):
+    """Open every MIDI input (for `learn`). Messages land on q as (time, port name, msg)."""
+    mido = _mido()
+    ports = []
+    for name in mido.get_input_names():
+        def make_cb(port_name: str):
+            def cb(msg):
+                q.put((time.monotonic(), port_name, msg))
+            return cb
+        ports.append(mido.open_input(name, callback=make_cb(name)))
+    return ports

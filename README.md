@@ -52,6 +52,21 @@ on a MIDI controller's knobs:
 A detailed setting you give in `config.toml` wins over its knob at start-up; turning the knob
 live takes over everything it controls.
 
+## Setting up a foot pedal or controller
+
+Plug it in (USB), then:
+
+```bash
+accompanist monitor          # optional: see what it sends
+accompanist learn            # press each switch when asked (twice), Enter to skip
+```
+
+`learn` asks for count-off, lock, chord hold, panic, resume and chart restart, then for an
+expression pedal (which feel knob it should turn). It works out what each switch sends
+(CC, program change or note; momentary or toggling), whether your pedal's bank switches
+shift its numbers, adds the pedal as a `role = "control"` input, and writes `[controls]`
+into `config.toml` (keeping `config.toml.bak`). No need to program the pedal itself.
+
 ## Settings, presets, controllers
 
 - `accompanist params` lists every setting with its range and meaning;

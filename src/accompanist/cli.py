@@ -151,6 +151,138 @@ def cmd_monitor(args) -> int:
     return 0
 
 
+def cmd_learn(args) -> int:
+    """Press each switch when asked; the [controls] of config.toml are written for you."""
+    from .learn import (EXPRESSION_TARGETS, STEPS, classify_switch, controls_toml,
+                        pick_expression, update_config)
+    from .midi_io import open_all_inputs
+
+    cfg_path = Path(args.config)
+    cfg = cfgmod.load(cfg_path)                  # a readable error now, not after all the pressing
+    if not sys.stdin.isatty():
+        raise cfgmod.ConfigError("learn asks questions: run it in a terminal")
+    q: queue.Queue = queue.Queue()
+    ports = open_all_inputs(q)
+    keys = KeyReader()
+
+    def as_msg(port, msg):
+        if msg.type == "control_change":
+            return (port, "cc", msg.control, msg.value)
+        if msg.type == "program_change":
+            return (port, "pc", msg.program, 127)
+        if msg.type in ("note_on", "note_off"):
+            return (port, "note", msg.note, msg.velocity if msg.type == "note_on" else 0)
+        return None
+
+    def drain():
+        while not q.empty():
+            q.get_nowait()
+
+    def collect(seconds):
+        """Messages for `seconds` (e.g. a switch's release, a pedal's sweep)."""
+        out, end = [], time.monotonic() + seconds
+        while time.monotonic() < end:
+            try:
+                _, port, msg = q.get(timeout=0.02)
+            except queue.Empty:
+                continue
+            m = as_msg(port, msg)
+            if m:
+                out.append(m)
+        return out
+
+    def wait_press(prompt, timeout=None):
+        """The first message after `prompt`, plus what follows within 0.6 s; None if Enter."""
+        drain()
+        print(prompt, end=" ", flush=True)
+        start = time.monotonic()
+        while timeout is None or time.monotonic() - start < timeout:
+            if keys.poll() in ("\n", "\r"):
+                print("(skipped)")
+                return None
+            try:
+                _, port, msg = q.get(timeout=0.02)
+            except queue.Empty:
+                continue
+            m = as_msg(port, msg)
+            if m and (m[1] != "note" or m[3] > 0):
+                return [m] + collect(0.6)
+        print("(no answer)")
+        return None
+
+    def ask(prompt, choices):
+        print(prompt, end=" ", flush=True)
+        while True:
+            k = keys.poll()
+            if k and k.lower() in choices:
+                print(k)
+                return k.lower()
+            time.sleep(0.02)
+
+    switches, pedal_ports = {}, set()
+    try:
+        print("Learning your pedal/controller. For each command, press the switch you want for it "
+              "(twice), or press Enter to skip.\n")
+        for action, label in STEPS:
+            first = wait_press(f"Press the switch for {label}:")
+            if not first:
+                continue
+            second = wait_press("  ...and once more:", timeout=10) or []
+            found = classify_switch(first, second)
+            if not found:
+                print("  (nothing usable heard)")
+                continue
+            port, kind, number, latching = found
+            if kind == "note" and any(i.port and i.port.lower() in port.lower() and i.role == "note_source"
+                                      for i in cfg.inputs):
+                print(f"  that is a note on '{port}', which you play music on: use another switch")
+                continue
+            switches[action] = (kind, number, latching)
+            pedal_ports.add(port)
+            print(f"  {kind} {number} on '{port}'" + (" (toggles on each press)" if latching else ""))
+        expression = None
+        sweep = wait_press("\nMove an EXPRESSION PEDAL from one end to the other (or Enter to skip):")
+        if sweep:
+            found = pick_expression(sweep + collect(2.0))
+            if found:
+                port, cc = found
+                menu = "  ".join(f"[{i + 1}] {t}" for i, t in enumerate(EXPRESSION_TARGETS))
+                k = ask(f"\n  cc {cc} on '{port}'. Which knob should it turn? {menu}",
+                        {str(i + 1) for i in range(len(EXPRESSION_TARGETS))})
+                expression = (cc, EXPRESSION_TARGETS[int(k) - 1])
+                pedal_ports.add(port)
+            else:
+                print("  (that did not look like a pedal sweep)")
+        bank = 0
+        if any(kind == "pc" for kind, _, _ in switches.values()):
+            if ask("\nDo your pedal's bank up/down switches change these numbers (e.g. Blackstar "
+                   "Live Logic)? [y/n]", {"y", "n"}) == "y":
+                bank = 4
+        if not switches and not expression:
+            print("\nNothing learnt; config.toml unchanged.")
+            return 0
+        block = controls_toml(switches, expression, bank)
+        print("\n" + block)
+        port = next(iter(pedal_ports)) if len(pedal_ports) == 1 else None
+        if ask(f"Write this into {cfg_path} (a backup is kept as {cfg_path}.bak)? [y/n]",
+               {"y", "n"}) == "y":
+            text = cfg_path.read_text()
+            new = update_config(text, block, port)
+            cfgmod.from_dict(cfgmod.tomllib.loads(new))              # check before writing
+            cfg_path.with_name(cfg_path.name + ".bak").write_text(text)
+            cfg_path.write_text(new)
+            print(f"Written. `accompanist run` will use it" +
+                  (f"; the pedal '{port}' is now an input with role = \"control\"." if port else "."))
+        return 0
+    except KeyboardInterrupt:
+        print("\nStopped; config.toml unchanged.")
+        return 0
+    finally:
+        keys.close()
+        for p in ports:
+            p.close()
+
+
 def cmd_listen(args) -> int:
     """Run a recording through the note detector, offline: the audio version of replay."""
     from .audio_io import read_wav
@@ -471,6 +603,8 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("learn", help="press each pedal/controller switch when asked: writes [controls]")
+    sp.add_argument("-c", "--config", default="config.toml")
     sp = sub.add_parser("listen", help="run an audio recording (WAV) through the note detector, offline")
     sp.add_argument("audio", help="a WAV file, e.g. saved by `monitor --record-audio`")
     sp.add_argument("--channel", type=int, default=1, help="which channel of the file (default 1)")
@@ -485,7 +619,7 @@ def main(argv=None) -> int:
     try:
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
-                "listen": cmd_listen}[args.cmd](args)
+                "listen": cmd_listen, "learn": cmd_learn}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
