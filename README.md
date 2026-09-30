@@ -133,6 +133,26 @@ New patterns: `swing` (ride "spang-a-lang", hi-hat on 2 and 4) and `march` (2/4)
 off with `[groove] auto = false` (then `pulse.beats_per_bar` and `drums.pattern` rule). With
 a chart, the chart's meter rules.
 
+## Groove library (experimental, not used live yet)
+
+A library of signature grooves, learnt from open data, to recognise a groove from the last
+bar or two of melody (`src/accompanist/grooves.py`). It is built on your machine, not
+shipped (the datasets have their own licences):
+
+```bash
+mkdir -p datasets && cd datasets
+curl -LO https://jazzomat.hfm-weimar.de/download/downloads/wjazzd.db        # Weimar Jazz Database (ODbL)
+curl -L -o nottingham.zip https://github.com/jukedeck/nottingham-dataset/archive/refs/heads/master.zip
+unzip -q nottingham.zip && cd ..                                             # Nottingham (GPL-3.0)
+python tools/build_grooves.py      # -> grooves/library.json
+python tools/eval_grooves.py       # how well it recognises tunes it never saw
+```
+
+Findings so far: on folk melodies it recognises jig, march and reel from one or two bars
+(meter ~95-100%, 1 ~90%), far faster than listening alone; on jazz solos it is moderate.
+On improvised sax over a counted groove it mostly fails (a solo line does not carry the
+groove's signature; the band does), so counting off stays the way to set the groove.
+
 ## Call and response
 
 `[response] enabled = true` adds a voice (channel 4, e.g. a guitar track) that answers you
