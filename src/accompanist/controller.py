@@ -41,19 +41,33 @@ class Controller:
         self._started(t)
         self.engine.on_note(t, note, velocity)
 
+    def on_midi(self, t: float, kind: str, number: int, value: int) -> tuple[Optional[str], Optional[str]]:
+        """A controller message: kind 'cc', 'pc' (program change) or 'note' (a note from a
+        control input). Returns (action performed or None, message for the display or None)."""
+        ctl = self.cfg.controls.get((kind, number))
+        if ctl is None and kind == "pc" and self.cfg.program_bank:
+            # A pedal with bank switches (e.g. banks of 4): the same switch in any bank.
+            bank = self.cfg.program_bank
+            ctl = next((c for (k, n), c in self.cfg.controls.items()
+                        if k == "pc" and n % bank == number % bank), None)
+        if ctl is None:
+            return None, None
+        if ctl.target in ACTIONS:
+            # A press: a program change, a note-on, a CC switch going down (>= 64), or any
+            # message from a latching switch (it alternates 127 / 0 on each press).
+            pressed = kind == "pc" or value >= 64 or (kind == "cc" and ctl.latching) or (
+                kind == "note" and value > 0)
+            if not pressed:
+                return None, None
+            return ctl.target, self.do(ctl.target, t)
+        p = registry.get(ctl.target)
+        self.set_param(ctl.target, cc_to_value(p, value))
+        return None, f"{ctl.target} = {self.get_param(ctl.target)}"
+
     def on_cc(self, t: float, control: int, value: int) -> Optional[str]:
-        """A controller message from any input. Returns what it did (for display), if anything."""
-        target = self.cfg.controls.get(control)
-        if target is None:
-            return None
-        if target in ACTIONS:
-            if value >= 64:            # a switch pressed (foot switches send 127, then 0)
-                self.do(target, t)
-                return target
-            return None
-        p = registry.get(target)
-        self.set_param(target, cc_to_value(p, value))
-        return f"{target} = {self.get_param(target)}"
+        """A CC from any input. Returns the action performed, or a message, or None."""
+        action, message = self.on_midi(t, "cc", control, value)
+        return action or message
 
     def tick(self, now: float) -> None:
         self._check_count(now)

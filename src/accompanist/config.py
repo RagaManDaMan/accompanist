@@ -28,7 +28,7 @@ _FLATS = {"DB": 1, "EB": 3, "GB": 6, "AB": 8, "BB": 10}
 
 # Roles an input channel can play. Only note_source exists in V0; the audio
 # roles are declared so config files written today stay valid later.
-VALID_ROLES = ("note_source",)
+VALID_ROLES = ("note_source", "control")    # control: a pedal/controller: commands only
 PLANNED_ROLES = ("pitch_contour", "voice")
 
 # Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
@@ -112,7 +112,8 @@ class Config:
     response: Any = field(default_factory=ResponseCfg)
     groove: Any = field(default_factory=GrooveCfg)
     panic: Any = field(default_factory=PanicCfg)
-    controls: dict[int, str] = field(default_factory=dict)   # CC number -> action or param key
+    controls: dict = field(default_factory=dict)   # (kind, number) -> ControlCfg
+    program_bank: int = 0           # program changes folded into banks of this size (0 = off)
     preset: Optional[str] = None
 
     @property
@@ -142,32 +143,66 @@ def _section(name: str, data: Any):
     return SECTION_CLASSES[name](**values)
 
 
-def _controls(data: Any) -> dict[int, str]:
+@dataclass(frozen=True)
+class ControlCfg:
+    target: str                     # an action (ACTIONS) or a live parameter key
+    latching: bool = False          # a switch that toggles 127/0 on each press
+
+
+CONTROL_KINDS = ("cc", "pc", "note")
+
+
+def control_key(k: Any) -> tuple[str, int]:
+    """'85' or 'cc:85' -> ('cc', 85); 'pc:3' -> ('pc', 3); 'note:36' -> ('note', 36)."""
+    s = str(k).strip().lower()
+    kind, _, num = s.partition(":") if ":" in s else ("cc", "", s)
+    if kind not in CONTROL_KINDS or not num.isdigit():
+        raise ConfigError(f"[controls] '{k}' is not a controller: use a number (a CC), or "
+                          f"\"cc:N\", \"pc:N\" (program change) or \"note:N\"")
+    n = int(num)
+    if not 0 <= n <= 127:
+        raise ConfigError(f"[controls] '{k}': the number must be 0-127")
+    return kind, n
+
+
+def _controls(data: Any) -> tuple[dict[tuple[str, int], ControlCfg], int]:
+    """[controls] -> ({(kind, number): ControlCfg}, program_bank)."""
     if data is None:
-        return {}
+        return {}, 0
     if not isinstance(data, dict):
-        raise ConfigError("[controls] must map controller numbers to actions or parameters")
+        raise ConfigError("[controls] must map controllers to actions or parameters")
+    data = dict(data)
+    bank = data.pop("program_bank", 0)
+    if isinstance(bank, bool) or not isinstance(bank, int) or not 0 <= bank <= 128:
+        raise ConfigError("[controls] program_bank must be a whole number (0 = off, e.g. 4)")
     out = {}
-    for k, target in data.items():
-        try:
-            cc = int(k)
-        except ValueError:
-            raise ConfigError(f"[controls] '{k}' is not a controller number (0-127)") from None
-        if not 0 <= cc <= 127:
-            raise ConfigError(f"[controls] controller {cc} must be 0-127")
+    for k, v in data.items():
+        kind, n = control_key(k)
+        latching = False
+        if isinstance(v, dict):
+            extra = set(v) - {"action", "param", "latching"}
+            if extra or ("action" in v) == ("param" in v):
+                raise ConfigError(f"[controls] {k}: use {{ action = \"...\" }} or "
+                                  f"{{ param = \"...\" }}, optionally with latching = true")
+            target, latching = v.get("action") or v.get("param"), bool(v.get("latching", False))
+        else:
+            target = v
         if target in ACTIONS:
-            out[cc] = target
+            out[(kind, n)] = ControlCfg(target, latching)
             continue
         p = registry.REGISTRY.get(target) if isinstance(target, str) else None
         if p is None or p.deprecated:
-            raise ConfigError(f"[controls] {cc} = {target!r}: not an action {list(ACTIONS)} "
+            raise ConfigError(f"[controls] {k} = {target!r}: not an action {list(ACTIONS)} "
                               f"or a parameter (see `accompanist params`)")
+        if kind != "cc":
+            raise ConfigError(f"[controls] {k} = '{target}': only a CC (a knob or pedal) can "
+                              f"set a parameter; switches trigger actions")
         if not p.live:
-            raise ConfigError(f"[controls] {cc} = '{target}': this parameter can't change while running")
+            raise ConfigError(f"[controls] {k} = '{target}': this parameter can't change while running")
         if p.type in (int, float) and (p.min is None or p.max is None):
-            raise ConfigError(f"[controls] {cc} = '{target}': parameter has no range to map a CC onto")
-        out[cc] = target
-    return out
+            raise ConfigError(f"[controls] {k} = '{target}': parameter has no range to map a CC onto")
+        out[(kind, n)] = ControlCfg(target, latching)
+    return out, bank
 
 
 def _check_channel(ch: Optional[int], where: str) -> None:
@@ -266,11 +301,12 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         response=_section("response", d.get("response")),
         groove=_section("groove", d.get("groove")),
         panic=_section("panic", d.get("panic")),
-        controls=_controls(d.get("controls")),
+        controls=_controls(d.get("controls"))[0],
+        program_bank=_controls(d.get("controls"))[1],
         preset=name,
     )
     if cfg.panic.cc is not None:
-        cfg.controls.setdefault(cfg.panic.cc, "panic")
+        cfg.controls.setdefault(("cc", cfg.panic.cc), ControlCfg("panic"))
     # The feel knobs set their detailed settings, except those given explicitly.
     from .feel import MACROS, apply
 

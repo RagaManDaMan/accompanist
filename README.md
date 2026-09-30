@@ -62,6 +62,12 @@ live takes over everything it controls.
   `preset = "ambient"` at the top of `config.toml`. Built in: `ambient` (slow wide pad,
   no pulse) and `modal-drone` (a steady drone that barely moves, quiet pulse). Put your
   own in `./presets/NAME.toml`; they may set anything except ports and inputs.
+- **Pedals and controllers:** `[controls]` keys are a CC number (`64`), or `"cc:64"`,
+  `"pc:0"` (program change) or `"note:36"`. A switch that toggles 127/0 on each press:
+  `"cc:80" = { action = "lock_toggle", latching = true }`. A pedal whose bank switches shift
+  its program numbers (e.g. Blackstar Live Logic: banks of 4): `program_bank = 4`, so a switch
+  means the same in every bank. Give a pedal its own input with `role = "control"`: its
+  notes are then commands, never music. `accompanist learn` writes all this for you.
 - **[controls]** maps MIDI controllers to actions (`panic`, `resume`, `lock`, `unlock`,
   `chord_hold`, `chord_release`, `chord_toggle`, `tap_tempo`) or to
   any live setting (`7 = "pad.velocity"`). See `config.example.toml`.

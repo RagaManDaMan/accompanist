@@ -301,23 +301,27 @@ def cmd_run(args) -> int:
                     t, icfg, msg = q.get_nowait()
                 except queue.Empty:
                     break
-                if msg.type == "note_on" and msg.velocity > 0 and icfg.role == "note_source":
-                    ctl.on_note(t, msg.note, msg.velocity)
-                    if rec:
-                        rec.note_on(t, msg.note, msg.velocity, icfg.name or icfg.port)
-                elif msg.type == "control_change":
-                    target = cfg.controls.get(msg.control)
-                    try:
-                        if target in cfgmod.ACTIONS:
-                            if msg.value >= 64:        # a switch pressed
-                                say(ctl.do(target, t))
-                                if rec:
-                                    rec.action(t, target)
-                        elif target is not None:
-                            say(ctl.on_cc(t, msg.control, msg.value))
-                    except cfgmod.ConfigError as e:
-                        say(str(e))
+                fired = (None, None)
+                try:
+                    if msg.type == "note_on" and msg.velocity > 0:
+                        if icfg.role == "note_source":
+                            ctl.on_note(t, msg.note, msg.velocity)
+                            if rec:
+                                rec.note_on(t, msg.note, msg.velocity, icfg.name or icfg.port)
+                        else:                          # a control input: its notes are commands
+                            fired = ctl.on_midi(t, "note", msg.note, msg.velocity)
+                    elif msg.type == "control_change":
+                        fired = ctl.on_midi(t, "cc", msg.control, msg.value)
+                    elif msg.type == "program_change":
+                        fired = ctl.on_midi(t, "pc", msg.program, 127)
+                except cfgmod.ConfigError as e:
+                    fired = (None, str(e))
+                action, message = fired
+                if message:
+                    say(message)
                     last_print = 0.0
+                if action and rec:
+                    rec.action(t, action)
             while True:
                 try:
                     t, icfg, block = audio_q.get_nowait()

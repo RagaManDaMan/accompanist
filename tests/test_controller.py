@@ -179,7 +179,7 @@ def test_legacy_panic_cc_still_works():
     assert ctl.engine.muted
 
 
-@pytest.mark.parametrize("controls,msg", [({"x": "panic"}, "controller number"),
+@pytest.mark.parametrize("controls,msg", [({"x": "panic"}, "not a controller"),
                                            ({"200": "panic"}, "0-127"),
                                            ({"5": "explode"}, "not an action"),
                                            ({"5": "pad.channel"}, "while running")])
@@ -255,3 +255,45 @@ def test_status_flags_come_first_so_a_narrow_window_still_shows_them():
     assert format_status(ctl.get_state(0.1)).startswith("0:00.1  LOCKED ")
     ctl.panic()
     assert format_status(ctl.get_state(0.2)).startswith("0:00.2  MUTED ")
+
+
+
+# ---- pedals: program changes, notes, latching switches, banks -------------------------
+def test_program_changes_and_notes_trigger_actions():
+    _, ctl = make({"controls": {"pc:0": "lock_toggle", "note:36": "panic"}})
+    ctl.on_note(0.0, 62, 90)
+    ctl.tick(0.1)
+    assert ctl.on_midi(0.1, "pc", 0, 127)[0] == "lock_toggle" and ctl.engine.locked
+    assert ctl.on_midi(0.2, "note", 36, 100)[0] == "panic" and ctl.engine.muted
+    assert ctl.on_midi(0.3, "note", 36, 0) == (None, None)         # a note-off is no press
+
+
+def test_a_pedal_bank_switch_does_not_remap_the_switches():
+    _, ctl = make({"controls": {"program_bank": 4, "pc:0": "lock_toggle"}})
+    ctl.on_note(0.0, 62, 90)
+    ctl.tick(0.1)
+    assert ctl.on_midi(0.1, "pc", 8, 127)[0] == "lock_toggle"      # switch 1, in bank 3
+    assert ctl.on_midi(0.2, "pc", 9, 127) == (None, None)          # switch 2: not mapped
+
+
+def test_a_latching_switch_acts_on_every_press():
+    _, ctl = make({"controls": {"80": {"action": "lock_toggle", "latching": True}}})
+    ctl.on_note(0.0, 62, 90)
+    ctl.tick(0.1)
+    ctl.on_cc(0.1, 80, 127)
+    assert ctl.engine.locked
+    ctl.on_cc(0.2, 80, 0)                                           # the next press sends 0
+    assert not ctl.engine.locked
+
+
+def test_only_ccs_can_set_parameters_and_old_panic_cc_still_works():
+    with pytest.raises(c.ConfigError, match="only a CC"):
+        c.from_dict({"controls": {"pc:3": "pad.feel"}})
+    _, ctl = make({"panic": {"cc": 85}})
+    ctl.on_cc(0.0, 85, 127)
+    assert ctl.engine.muted
+
+
+def test_a_control_input_role_is_accepted():
+    cfg = c.from_dict({"inputs": [{"name": "pedal", "port": "Live Logic", "role": "control"}]})
+    assert cfg.inputs[0].role == "control"
