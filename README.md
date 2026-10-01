@@ -68,6 +68,21 @@ expression pedal (which feel knob it should turn). It works out what each switch
 shift its numbers, adds the pedal as a `role = "control"` input, and writes `[controls]`
 into `config.toml` (keeping `config.toml.bak`). No need to program the pedal itself.
 
+**A small pedal: tap and hold.** With 4 switches, each can do two things: a quick tap, and a
+hold (`pedal.hold_s`, 0.6 s). `learn` offers this layout:
+
+| Switch | Tap | Hold |
+|---|---|---|
+| 1 | count off (3-7 taps) | start the song |
+| 2 | lock / unlock the tempo | hold / release the chord |
+| 3 | finish | |
+| 4 | panic / resume | |
+
+In `[controls]` it reads `"cc:80" = { tap = "tap_tempo", hold = "song_start" }`. The switches
+must send momentary CCs (a value on the press, 0 on the release) or notes: a program change
+can't say how long it was held. Count-off taps count the moment the switch goes down (their
+timing is the tempo); other taps act on the release.
+
 ## Settings, presets, controllers
 
 - `accompanist params` lists every setting with its range and meaning;

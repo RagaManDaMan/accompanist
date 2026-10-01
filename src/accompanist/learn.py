@@ -23,6 +23,13 @@ STEPS = (
     ("song_start", "START THE SONG: count in at its tempo (a chart from the top)"),
     ("finish", "FINISH the song: a last chord on the next 1"),
 )
+# A small pedal (4 switches): each switch taps one command and holds another.
+TAP_HOLD_STEPS = (
+    ("tap_tempo", "song_start", "tap = COUNT OFF (3-7 taps), hold = START THE SONG"),
+    ("lock_toggle", "chord_toggle", "tap = LOCK / UNLOCK the tempo, hold = HOLD / RELEASE the chord"),
+    ("finish", None, "tap = FINISH the song (a last chord on the next 1)"),
+    ("panic_toggle", None, "tap = PANIC, and again to RESUME"),
+)
 EXPRESSION_TARGETS = ("pad.feel", "pulse.feel", "drums.feel", "response.feel")
 MIN_SWEEP_VALUES = 8                     # an expression pedal sends many different values
 
@@ -60,6 +67,13 @@ def classify_switch(first: list[Msg], second: list[Msg]) -> Optional[tuple[str, 
     return port, kind, number, latching
 
 
+def has_release(messages: list[Msg], kind: str, number: int) -> bool:
+    """Did the switch also say when it came up (a momentary CC going to 0, or a note-off)?
+    Tap and hold needs that."""
+    return any(k == kind and n == number and v < 64 for _, k, n, v in messages[1:]) or (
+        kind == "note" and any(k == "note" and n == number and v == 0 for _, k, n, v in messages))
+
+
 def pick_expression(messages: list[Msg]) -> Optional[tuple[str, int]]:
     """(port, cc) of the controller swept through the most values (an expression pedal)."""
     values: dict[tuple[str, int], set] = {}
@@ -73,10 +87,15 @@ def pick_expression(messages: list[Msg]) -> Optional[tuple[str, int]]:
 
 
 def controls_toml(switches: dict[str, tuple[str, int, bool]],
-                  expressions, program_bank: int = 0) -> str:
+                  expressions, program_bank: int = 0,
+                  tap_hold: Optional[list[tuple[str, int, str, Optional[str]]]] = None) -> str:
     """The [controls] table: switches {action: (kind, number, latching)}; expressions: one
-    (cc, parameter) or a list of them (expression pedals)."""
+    (cc, parameter) or a list of them (expression pedals); tap_hold: switches with a tap and
+    a hold action, [(kind, number, tap, hold)]."""
     lines = ["[controls]  # written by `accompanist learn`"]
+    for kind, number, tap, hold in tap_hold or []:
+        held = f', hold = "{hold}"' if hold else ""
+        lines.append(f'"{kind}:{number}" = {{ tap = "{tap}"{held} }}')
     if program_bank:
         lines.append(f"program_bank = {program_bank}   # the pedal's bank switches don't remap it")
     for action, (kind, number, latching) in switches.items():

@@ -519,6 +519,11 @@ PARAMS: list[Param] = [
       "Beats per bar for the count-in and the band: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 = 3+2+2.",
       "Song", 3, 7, 1, nullable=True),
 
+    # ---- pedal (switches with a tap and a hold action) --------------------------
+    P("pedal.hold_s", float, 0.6, "Hold time",
+      "A switch with a tap and a hold action ([controls] \"cc:80\" = { tap = ..., hold = ... }): "
+      "held this long, it does its hold action instead.", "Controls", 0.2, 3, 0.05),
+
     # ---- panic ----------------------------------------------------------------
     P("panic.cc", int, None, "Panic CC",
       "This controller (value >= 64) on any input = panic. Same as mapping it in [controls].",

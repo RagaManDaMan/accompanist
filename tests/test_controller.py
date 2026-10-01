@@ -303,3 +303,56 @@ def test_only_ccs_can_set_parameters_and_old_panic_cc_still_works():
 def test_a_control_input_role_is_accepted():
     cfg = c.from_dict({"inputs": [{"name": "pedal", "port": "Live Logic", "role": "control"}]})
     assert cfg.inputs[0].role == "control"
+
+
+def _tap_hold_ctl():
+    from accompanist.output import RecordingPort, SafeOutput
+
+    cfg = c.from_dict({"controls": {"cc:80": {"tap": "tap_tempo", "hold": "song_start"},
+                                    "cc:81": {"tap": "lock_toggle", "hold": "chord_toggle"},
+                                    "cc:83": "panic_toggle"},
+                       "song": {"tempo": 120, "count": 4}, "lock": {"auto": False}})
+    return Controller(cfg, SafeOutput(RecordingPort()))
+
+
+def test_tap_and_hold_a_count_off_taps_count_on_the_press():
+    ctl = _tap_hold_ctl()
+    for i in range(4):                                   # four quick taps: 4/4 at 100
+        ctl.on_midi(1.0 + i * 0.6, "cc", 80, 127)
+        ctl.on_midi(1.1 + i * 0.6, "cc", 80, 0)
+        ctl.tick(1.1 + i * 0.6)
+    for k in range(200):
+        ctl.tick(3.5 + k * 0.01)
+    assert ctl.engine.groove.label().startswith("4/4")
+    assert abs(ctl.engine.tempo.bpm - 100) < 1
+
+
+def test_holding_the_count_switch_starts_the_song_instead():
+    ctl = _tap_hold_ctl()
+    ctl.on_midi(1.0, "cc", 80, 127)
+    for k in range(80):
+        ctl.tick(1.0 + k * 0.01)                          # held 0.8 s
+    ctl.on_midi(1.8, "cc", 80, 0)
+    assert ctl._taps == [] and ctl.engine._count_total == 4          # counting in at 120
+    assert ctl.take_holds()[0][1] == "song_start"
+
+
+def test_lock_acts_on_release_and_hold_holds_the_chord():
+    ctl = _tap_hold_ctl()
+    for i in range(8):
+        ctl.on_note(i * 0.5, 62 + (i % 3) * 2, 90)
+    for k in range(400):
+        ctl.tick(k * 0.01)
+    assert ctl.on_midi(4.0, "cc", 81, 127) == (None, None)            # nothing yet
+    action, _ = ctl.on_midi(4.2, "cc", 81, 0)
+    assert action == "lock_toggle" and ctl.engine.locked
+    ctl.on_midi(5.0, "cc", 81, 127)
+    for k in range(80):
+        ctl.tick(5.0 + k * 0.01)
+    ctl.on_midi(5.8, "cc", 81, 0)
+    assert ctl.engine.locked and ctl.engine.chord_held                # held: chord, not lock
+
+
+def test_tap_and_hold_needs_a_switch_with_a_release():
+    with pytest.raises(c.ConfigError, match="momentary CC or a note"):
+        c.from_dict({"controls": {"pc:3": {"tap": "finish", "hold": "panic"}}})

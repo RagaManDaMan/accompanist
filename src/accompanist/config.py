@@ -84,10 +84,11 @@ GrooveCfg = _section_class("groove")
 SongCfg = _section_class("song")
 EndingCfg = _section_class("ending")
 PanicCfg = _section_class("panic")
+PedalCfg = _section_class("pedal")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
                    "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
                    "drums": DrumsCfg, "percussion": PercussionCfg, "audio": AudioCfg, "response": ResponseCfg,
-                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "panic": PanicCfg}
+                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "pedal": PedalCfg, "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
@@ -122,6 +123,7 @@ class Config:
     groove: Any = field(default_factory=GrooveCfg)
     song: Any = field(default_factory=SongCfg)
     ending: Any = field(default_factory=EndingCfg)
+    pedal: Any = field(default_factory=PedalCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict = field(default_factory=dict)   # (kind, number) -> ControlCfg
     program_bank: int = 0           # program changes folded into banks of this size (0 = off)
@@ -158,6 +160,7 @@ def _section(name: str, data: Any):
 class ControlCfg:
     target: str                     # an action (ACTIONS) or a live parameter key
     latching: bool = False          # a switch that toggles 127/0 on each press
+    hold: Optional[str] = None      # an action for holding the switch (pedal.hold_s); target = tap
 
 
 CONTROL_KINDS = ("cc", "pc", "note")
@@ -190,6 +193,17 @@ def _controls(data: Any) -> tuple[dict[tuple[str, int], ControlCfg], int]:
     for k, v in data.items():
         kind, n = control_key(k)
         latching = False
+        if isinstance(v, dict) and "tap" in v:      # a tap action and a hold action
+            extra = set(v) - {"tap", "hold"}
+            bad = [a for a in (v.get("tap"), v.get("hold")) if a is not None and a not in ACTIONS]
+            if extra or bad:
+                raise ConfigError(f"[controls] {k}: use {{ tap = \"...\", hold = \"...\" }} "
+                                  f"with actions from {list(ACTIONS)}")
+            if kind not in ("cc", "note"):
+                raise ConfigError(f"[controls] {k}: tap and hold needs a switch that also sends "
+                                  f"its release: a momentary CC or a note (not a program change)")
+            out[(kind, n)] = ControlCfg(v["tap"], False, v.get("hold"))
+            continue
         if isinstance(v, dict):
             extra = set(v) - {"action", "param", "latching"}
             if extra or ("action" in v) == ("param" in v):
@@ -356,6 +370,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         groove=_section("groove", d.get("groove")),
         song=_section("song", d.get("song")),
         ending=_section("ending", d.get("ending")),
+        pedal=_section("pedal", d.get("pedal")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls"))[0],
         program_bank=_controls(d.get("controls"))[1],

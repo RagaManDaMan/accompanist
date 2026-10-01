@@ -30,6 +30,10 @@ class Controller:
         self.overrides: dict[str, Any] = {}     # live changes on top of the config file
         self._taps: list[float] = []
         self.events: list[str] = []
+        # Tap-and-hold switches pressed now: (kind, number) -> [pressed at, tapped already,
+        # held already].
+        self._down: dict[tuple[str, int], list] = {}
+        self._holds: list[tuple[float, str]] = []   # hold actions done, for a take
         self.t0: Optional[float] = None         # first note or action: the take's clock starts here
 
     # ---- input --------------------------------------------------------------
@@ -52,6 +56,9 @@ class Controller:
                         if k == "pc" and n % bank == number % bank), None)
         if ctl is None:
             return None, None
+        if ctl.hold is not None or (ctl.target in ACTIONS and kind in ("cc", "note")
+                                    and (kind, number) in self._down):
+            return self._tap_or_hold(t, (kind, number), ctl, value > 0 if kind == "note" else value >= 64)
         if ctl.target in ACTIONS:
             # A press: a program change, a note-on, a CC switch going down (>= 64), or any
             # message from a latching switch (it alternates 127 / 0 on each press).
@@ -69,7 +76,45 @@ class Controller:
         action, message = self.on_midi(t, "cc", control, value)
         return action or message
 
+    def _tap_or_hold(self, t: float, key: tuple[str, int], ctl, pressed: bool
+                     ) -> tuple[Optional[str], Optional[str]]:
+        """A switch with a tap and a hold action. A count-off tap counts the moment the switch
+        goes down (its timing is the tempo); other taps act when it comes up. Held for
+        pedal.hold_s, it does the hold action instead (tick() notices), taking back a tap."""
+        if pressed:
+            if key in self._down:
+                return None, None                   # a repeated press message: ignore
+            early = ctl.target == "tap_tempo"
+            self._down[key] = [t, early, False]
+            if early:
+                return ctl.target, self.do(ctl.target, t)
+            return None, None
+        state = self._down.pop(key, None)
+        if state is None or state[1] or state[2]:
+            return None, None                       # tapped already, or held
+        return ctl.target, self.do(ctl.target, t)
+
+    def _check_holds(self, now: float) -> None:
+        for key, state in self._down.items():
+            pressed_at, tapped, held = state
+            if held or now - pressed_at < self.cfg.pedal.hold_s:
+                continue
+            ctl = self.cfg.controls.get(key)
+            state[2] = True
+            if ctl is None or ctl.hold is None:
+                continue
+            if tapped and ctl.target == "tap_tempo" and self._taps and self._taps[-1] == pressed_at:
+                self._taps.pop()                    # it was a hold, not a count
+            self.events.append(f"(held) {self.do(ctl.hold, now)}")
+            self._holds.append((now, ctl.hold))
+
+    def take_holds(self) -> list[tuple[float, str]]:
+        """Hold actions done since last asked: (time, action), e.g. for recording a take."""
+        held, self._holds = self._holds, []
+        return held
+
     def tick(self, now: float) -> None:
+        self._check_holds(now)
         self._check_count(now)
         self.engine.tick(now)
 

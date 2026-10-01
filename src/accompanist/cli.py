@@ -153,8 +153,8 @@ def cmd_monitor(args) -> int:
 
 def cmd_learn(args) -> int:
     """Press each switch when asked; the [controls] of config.toml are written for you."""
-    from .learn import (EXPRESSION_TARGETS, STEPS, assign, classify_switch, controls_toml,
-                        pick_expression, update_config)
+    from .learn import (EXPRESSION_TARGETS, STEPS, TAP_HOLD_STEPS, assign, classify_switch,
+                        controls_toml, has_release, pick_expression, update_config)
     from .midi_io import open_all_inputs
 
     cfg_path = Path(args.config)
@@ -219,11 +219,43 @@ def cmd_learn(args) -> int:
                 return k.lower()
             time.sleep(0.02)
 
-    switches, pedal_ports = {}, set()
+    switches, pedal_ports, tap_hold = {}, set(), []
     try:
-        print("Learning your pedal/controller. For each command, press the switch you want for it "
-              "(twice), or press Enter to skip.\n")
-        for action, label in STEPS:
+        mode = ask("Learning your pedal/controller. How should the switches work?\n"
+                   "  [1] one command per switch (a big pedal, e.g. the FCB1010)\n"
+                   "  [2] tap and hold: each switch does two commands (a small 4-switch pedal;\n"
+                   "      set its switches to send momentary CCs first)\n", {"1", "2"})
+        steps = STEPS if mode == "1" else ()
+        if mode == "2":
+            print("\nFor each switch, press it once (a quick tap), or press Enter to skip.\n")
+        for n, (tap, hold, label) in enumerate(TAP_HOLD_STEPS if mode == "2" else ()):
+            press = wait_press(f"Switch {n + 1}: {label}. Tap it:")
+            if not press:
+                continue
+            found = classify_switch(press, [])
+            if not found:
+                print("  (nothing usable heard)")
+                continue
+            port, kind, number, _ = found
+            used = [(k, m) for k, m, _, _ in tap_hold] + [(k, m) for k, m, _ in switches.values()]
+            if (kind, number) in used:
+                print("  that switch already has a command: skipped")
+                continue
+            if hold and not has_release(press, kind, number):
+                print(f"  {kind} {number} doesn't say when it comes up, so it can only tap "
+                      f"(set it to a momentary CC in the pedal's app for hold)")
+                assign(switches, tap, (kind, number, False))
+            else:
+                if hold:
+                    tap_hold.append((kind, number, tap, hold))
+                else:
+                    assign(switches, tap, (kind, number, False))
+                print(f"  {kind} {number}" + (" (tap and hold)" if hold else "") + f"  ('{port}')")
+            pedal_ports.add(port)
+        if mode == "1":
+            print("\nFor each command, press the switch you want for it (twice), or press Enter "
+                  "to skip.\n")
+        for action, label in steps:
             first = wait_press(f"Press the switch for {label}:")
             if not first:
                 continue
@@ -262,10 +294,10 @@ def cmd_learn(args) -> int:
                     "[4] banks of 4 (Blackstar Live Logic)  [0] banks of 10 (Behringer FCB1010)  "
                     "[n] no", {"4", "0", "n"})
             bank = {"4": 4, "0": 10, "n": 0}[k]
-        if not switches and not expressions:
+        if not switches and not expressions and not tap_hold:
             print("\nNothing learnt; config.toml unchanged.")
             return 0
-        block = controls_toml(switches, expressions, bank)
+        block = controls_toml(switches, expressions, bank, tap_hold)
         print("\n" + block)
         port = next(iter(pedal_ports)) if len(pedal_ports) == 1 else None
         if ask(f"Write this into {cfg_path} (a backup is kept as {cfg_path}.bak)? [y/n]",
@@ -503,6 +535,9 @@ def cmd_run(args) -> int:
                     rec.action(now, KEYS[key])
                 last_print = 0.0               # show the new state at once
             ctl.tick(now)
+            for t_held, held in ctl.take_holds():  # a switch held: its hold action
+                if rec:
+                    rec.action(t_held, held)
             for message in ctl.take_events():     # e.g. a count-off completing
                 say(message)
                 last_print = 0.0

@@ -107,3 +107,16 @@ def test_a_pedal_already_listed_is_not_added_twice():
     text = OLD.replace('port = "LPK25"', f'port = "{P}"')
     new = update_config(text, controls_toml({"panic": ("cc", 85, False)}, None), P)
     assert tomllib.loads(new)["inputs"][0]["port"] == P and new.count(P) == 1
+
+
+def test_tap_and_hold_switches_are_written_and_load():
+    from accompanist.learn import has_release
+
+    press = [(P, "cc", 80, 127), (P, "cc", 80, 0)]
+    assert has_release(press, "cc", 80) and not has_release([(P, "pc", 4, 127)], "pc", 4)
+    block = controls_toml({"finish": ("cc", 82, False)}, None,
+                          tap_hold=[("cc", 80, "tap_tempo", "song_start")])
+    cfg = c.from_dict(tomllib.loads(update_config(OLD, block, P)))
+    ctl = cfg.controls[("cc", 80)]
+    assert (ctl.target, ctl.hold) == ("tap_tempo", "song_start")
+    assert cfg.controls[("cc", 82)].target == "finish"
