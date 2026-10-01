@@ -409,7 +409,14 @@ def cmd_run(args) -> int:
     if args.record_audio and not any(i.is_audio for i in cfg.inputs):
         raise cfgmod.ConfigError("--record-audio needs an audio input in the config ([[inputs]] audio = ...)")
     q: queue.Queue = queue.Queue()
-    in_ports = open_inputs(cfg, q)
+    missing: list = []
+    in_ports = open_inputs(cfg, q, missing)
+    for icfg, _ in missing:
+        role = "controls" if icfg.role == "control" else "notes"
+        print(f"warning: MIDI input '{icfg.name or icfg.port}' ('{icfg.port}', {role}) is not "
+              f"plugged in: carrying on without it (plug it in and restart to use it)")
+    if missing and not in_ports and not any(i.is_audio for i in cfg.inputs):
+        raise PortError(missing[0][1])
     port = open_output(cfg.output)
     out = SafeOutput(port)
     ctl = Controller(cfg, out)

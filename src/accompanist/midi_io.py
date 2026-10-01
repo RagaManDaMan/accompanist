@@ -53,8 +53,12 @@ def open_output(cfg: OutputCfg):
     return mido.open_output(cfg.virtual_name, virtual=True)
 
 
-def open_inputs(cfg: Config, q: "queue.Queue"):
-    """Open every configured input. Messages land on q as (monotonic_time, InputCfg, msg)."""
+def open_inputs(cfg: Config, q: "queue.Queue", missing: Optional[list] = None):
+    """Open every configured input. Messages land on q as (monotonic_time, InputCfg, msg).
+
+    missing: a list to collect the MIDI inputs that aren't plugged in (each as
+    (InputCfg, message)) instead of stopping: a gig goes on without a pedal. Without it, a
+    missing input is an error."""
     mido = _mido()
 
     if not cfg.inputs:
@@ -64,7 +68,13 @@ def open_inputs(cfg: Config, q: "queue.Queue"):
     for inp in cfg.inputs:
         if inp.is_audio:
             continue                  # audio inputs: see audio_io.py
-        name = find_port(names, inp.port, "input")
+        try:
+            name = find_port(names, inp.port, "input")
+        except PortError as e:
+            if missing is None or not str(e).startswith("No MIDI"):
+                raise
+            missing.append((inp, str(e)))
+            continue
 
         def make_cb(icfg: InputCfg):
             def cb(msg):
