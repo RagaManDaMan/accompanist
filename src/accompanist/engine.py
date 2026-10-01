@@ -297,19 +297,21 @@ class Engine:
     def resume(self) -> None:
         self.muted = False
 
-    def lock(self, now: float) -> bool:
+    def lock(self, now: float, settle: bool = True) -> bool:
         """Lock the tempo: pad and pulse keep going through silence, the tempo follows only
         slowly and never jumps. Chords still follow you (see hold_chord). Needs something
         heard first. Returns True if locked.
 
         The beat is never moved: the lock is usually pressed on a computer key, whose timing
-        has nothing to do with the music. Only the beat spacing settles on your notes."""
+        has nothing to do with the music. Only the beat spacing settles on your notes
+        (settle=False: not even that, for a tempo just counted or set by the song: notes
+        played before it were at another tempo)."""
         if self.muted or (self.last_onset_t is None and not self.clock.running):
             return False
         self.locked, self._confident_since = True, None
         # Settle the tempo on the beat grid your recent notes fit best (a small, inaudible
         # change in beat spacing), but never move where the next beat falls.
-        if len(self.tempo.onsets) >= self.cfg.tempo.min_onsets:
+        if settle and len(self.tempo.onsets) >= self.cfg.tempo.min_onsets:
             period, _ = self.tempo.refine(now)
             self.tempo.set_bpm(60.0 / period)
             self.clock.set_period(self.tempo.period)
@@ -355,7 +357,7 @@ class Engine:
         self._count_in_left = 0
         self.restart_form()
         self.song_playing = True
-        self.lock(last_tap)
+        self.lock(last_tap, settle=False)
 
     def count_off(self, beats: int, bpm: float, downbeat_t: float, now: float) -> bool:
         """A count-off of `beats` taps: tempo, and that meter with 1 at downbeat_t (the beat
@@ -366,7 +368,7 @@ class Engine:
         self.clock.start(downbeat_t - self.tempo.period, self.tempo.period)   # next beat: 1
         self.restart_form()
         self.groove.pin(beats)
-        self.lock(now)
+        self.lock(now, settle=False)
         return True
 
     def start_song(self, now: float) -> Optional[float]:
@@ -396,7 +398,7 @@ class Engine:
             self._count_meter = self.cfg.song.count
             beats = self.cfg.song.count or self.cfg.pulse.beats_per_bar
         self._count_in_left = self._count_total = max(1, beats)
-        self.lock(now)
+        self.lock(now, settle=False)
         return self.tempo.bpm
 
     def _click(self, t: float, first: bool) -> None:

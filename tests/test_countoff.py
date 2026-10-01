@@ -86,11 +86,12 @@ def test_a_chart_count_in_is_on_time_after_one_bar_of_taps():
 
 def test_a_fast_five_count_is_taken_at_its_tempo_not_capped():
     """Regression (takes/ms-4): five taps at ~305 bpm became 5/4 at 180, the listening cap."""
-    fast = 0.195
-    taps = [(1.0 + i * fast, "tap_tempo") for i in range(5)]
+    fast, start = 0.195, 12.0
+    before = [(i * 0.4, 62 + i % 3, 80) for i in range(28)]       # playing at 150 first
+    taps = [(start + i * fast, "tap_tempo") for i in range(5)]
     cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
                        "harmony": {"root": "D"}})
-    res = simulate.run(cfg, onsets=[], actions=taps, total=6.0)
+    res = simulate.run(cfg, onsets=before, actions=taps, total=start + 5.0)
     eng = res.engine
     assert eng.groove.label().startswith("5/4") and eng.locked
     assert eng.tempo.bpm == pytest.approx(60 / fast, rel=0.02)
