@@ -268,6 +268,15 @@ patterns (`accompanist params` lists them): `basic`, `halftime`, `soft`, `sparse
 start when it starts, follow your loudness, and stop on panic. `drums.swing` swings the
 off-steps.
 
+## Percussion
+
+A second player, `[percussion] enabled = true`: latin hand percussion on its own channel
+(`percussion.channel`, 11), so it can have its own kit (a percussion or conga kit, GM notes:
+claves, congas, shaker, cowbell). It plays on the same beat as the drums and follows the
+meter: `latin` in 4 (son clave 3-2, a conga tumbao, shaker), `latin-waltz` in 3,
+`latin-five`, `bembe` in 6/8 (the 12-pulse bell) and `latin-seven` (3+2+2). It follows your
+loudness (`percussion.dynamics`) but plays no fills. Its knob is `percussion.feel`.
+
 A pattern is a small text file, so new grooves need no code. Put your own in
 `./patterns/NAME.toml`:
 

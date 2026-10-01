@@ -364,7 +364,7 @@ class DrumResponder:
         if d > 0:
             energy = gain ** (1 + FOLLOW_BOOST * d) * (1 + BUSY_LIFT * d * (busy - 0.5))
             bpb = max(1, beats_per_bar or pat.beats)
-            phrase, bar_pos = self.cfg.phrase_bars, where % bpb
+            phrase, bar_pos = getattr(self.cfg, "phrase_bars", 0), where % bpb   # none: no fills
             bar_in_phrase = (where // bpb) % phrase if phrase > 0 else 0
             if phrase > 1:
                 energy *= 1 + PHRASE_CRESCENDO * d * bar_in_phrase / (phrase - 1)

@@ -1,0 +1,8 @@
+description = "3/4 latin: conga slap on 2, open tones on 3 and 3-and, clave on 1, shaker"
+beats = 3
+steps_per_beat = 2
+[hits]
+claves     = "x. .. .."
+conga_mute = "gg Xg .."
+conga_high = ".. .. xx"
+shaker     = "xg xg xg"

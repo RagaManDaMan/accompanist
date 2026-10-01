@@ -347,10 +347,13 @@ def voices_summary(cfg) -> str:
     bass = f"bass ch {cfg.pulse.channel}" if cfg.pulse.enabled else "bass: off"
     drums = (f"drums ch {cfg.drums.channel} ({cfg.drums.pattern})" if cfg.drums.enabled
              else "drums: off ([drums] enabled = true)")
+    perc = (f"percussion ch {cfg.percussion.channel} ({cfg.percussion.pattern})"
+            if cfg.percussion.enabled else "")
     response = (f"response ch {cfg.response.channel}" if cfg.response.enabled
                 else "response: off")
     lock = "tempo lock: auto" if cfg.lock.auto else "tempo lock: manual (l)"
-    voices = f"Voices: {pad} | {bass} | {drums} | {response} | {lock}"
+    voices = " | ".join(v for v in (pad, bass, drums, perc, response, lock) if v)
+    voices = f"Voices: {voices}"
     s = cfg.song
     if s.title:
         meter = {3: "3/4", 4: "4/4", 5: "5/4", 6: "6/8", 7: "7 (3+2+2)"}.get(s.count, "")

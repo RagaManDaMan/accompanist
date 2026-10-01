@@ -42,6 +42,12 @@ MACROS: dict[str, list[tuple[str, tuple]]] = {
         ("drums.velocity_spread", (0, 0, 14)),
         ("drums.dynamics", (0.0, 0.5, 0.9)),             # even .. follows you, marks phrases
     ],
+    "percussion.feel": [
+        ("percussion.ghost", (0.25, 0.4, 0.6)),          # quiet ghosts .. more ghost notes
+        ("percussion.timing_ms", (0.0, 0.0, 15.0)),
+        ("percussion.velocity_spread", (0, 0, 14)),
+        ("percussion.dynamics", (0.0, 0.5, 0.9)),        # even .. follows you
+    ],
     "response.feel": [
         ("response.chance", (1.0, 0.9, 0.6)),            # every pause .. not every pause
         ("response.curate", (0.0, 1.0, 1.0)),            # echo of your last phrase .. curated

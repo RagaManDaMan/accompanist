@@ -1,0 +1,8 @@
+description = "6/8 (two bars of 6): the bembe bell (x.x.xx.x.x.x), congas, shaker"
+beats = 12
+steps_per_beat = 1
+[hits]
+cowbell    = "X.x .xx .x. x.x"
+conga_mute = "x.. ... x.. ..."
+conga_high = "... x.x ... x.x"
+shaker     = "xgg xgg xgg xgg"

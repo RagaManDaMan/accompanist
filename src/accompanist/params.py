@@ -309,6 +309,39 @@ PARAMS: list[Param] = [
       "Drum note for the chart count-in clicks (37 = side stick, 75 = claves), on the drums "
       "channel.", "Drums", 0, 127, 1),
 
+    # ---- percussion (a second player: latin hand percussion) ------------------
+    P("percussion.enabled", bool, False, "Percussion on",
+      "A second percussionist (congas, clave, shaker, bell) with the drums (General MIDI "
+      "percussion notes, on its own channel).", "Percussion", primary=True),
+    P("percussion.feel", float, 0.4, "Percussion feel",
+      "Algorithmic (0: the pattern exactly, even) to humanize (1: follows your dynamics, more "
+      "ghost notes, small timing and velocity variation).", "Percussion", 0, 1, 0.01,
+      primary=True),
+    P("percussion.channel", int, 11, "Percussion channel",
+      "MIDI channel (1-16): a second drum or percussion kit.", "Percussion", 1, 16, 1, live=False),
+    P("percussion.pattern", str, "latin", "Percussion pattern",
+      "Its pattern in 4 (in 3, 5, 6 and 7 it plays latin-waltz, latin-five, bembe and "
+      "latin-seven).", "Percussion",
+      choices=("latin", "latin-waltz", "latin-five", "bembe", "latin-seven"), check=_check_pattern),
+    P("percussion.velocity", int, 60, "Percussion velocity", "Velocity of a normal hit (x).",
+      "Percussion", 1, 127, 1),
+    P("percussion.accent", int, 20, "Percussion accent", "Extra velocity for an accent (X).",
+      "Percussion", 0, 127, 1),
+    P("percussion.ghost", float, 0.4, "Percussion ghost level",
+      "A ghost note (g) at this share of a hit.", "Percussion", 0.05, 1, 0.05),
+    P("percussion.swing", float, 0.0, "Percussion swing",
+      "Delay every second step by this share of a step (the swing heard overrides it).",
+      "Percussion", 0, 0.5, 0.01),
+    P("percussion.note_length_s", float, 0.1, "Percussion note length", "Seconds.",
+      "Percussion", 0.01, 1, 0.01),
+    P("percussion.timing_ms", float, 0.0, "Percussion timing spread",
+      "Each hit up to this many ms early or late (humanize).", "Percussion", 0, 40, 1),
+    P("percussion.velocity_spread", int, 0, "Percussion velocity spread",
+      "Each hit up to this much softer or louder.", "Percussion", 0, 40, 1),
+    P("percussion.dynamics", float, 0.5, "Percussion dynamics",
+      "0 = even; higher = follows your loudness more, lifts when you play busily, softer "
+      "off-beats.", "Percussion", 0, 1, 0.05),
+
     # ---- groove (meter, downbeat, feel) ----------------------------------------
     P("groove.auto", bool, True, "Hear the groove",
       "Hear the meter (in 3 or in 4), where 1 is, and straight vs swing from your playing; "

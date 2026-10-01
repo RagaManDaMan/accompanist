@@ -1,0 +1,8 @@
+description = "5/4 (3+2) latin: bell on each group, congas, shaker"
+beats = 5
+steps_per_beat = 2
+[hits]
+cowbell    = "X. .. .. | x. .."
+conga_mute = "gg Xg .. | gg .."
+conga_high = ".. .. xx | .. xx"
+shaker     = "xg xg xg | xg xg"

@@ -25,6 +25,7 @@ from .tempo import REALIGN_ADVANTAGE, TempoEstimator
 # Drum patterns for a meter heard, when yours does not fit it: (meter, feel) or meter.
 GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing", 5: "five", 6: "six-eight",
                    7: "seven-322"}
+PERCUSSION_PATTERNS = {3: "latin-waltz", 4: "latin", 5: "latin-five", 6: "bembe", 7: "latin-seven"}
 
 # Pad expression: resend when it moves this many steps (of 127), at most this often.
 EXPRESSION_STEP = 2
@@ -40,6 +41,7 @@ class Engine:
         self.pad = PadResponder(cfg.pad, out, cfg.harmony.seed)
         self.pulse = PulseResponder(cfg.pulse, out, cfg.harmony.seed)
         self.drums = DrumResponder(cfg.drums, out, cfg.harmony.seed)
+        self.percussion = DrumResponder(cfg.percussion, out, cfg.harmony.seed + 7)
         self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
         self.beat_count = 0                       # beats since the clock started (bar position)
         # A chart is a song: silent until started (count-in), then it plays until panic.
@@ -121,9 +123,10 @@ class Engine:
                                self.clock.next_beat if self.clock.running else None)
 
         # The beat clock runs while bass (pulse) or drums need it, or a chart is counting in.
-        if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.is_chart):
+        if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.cfg.percussion.enabled
+                or self.is_chart):
             self.clock.stop()
-            self.drums.reset()
+            self._reset_drums()
             return
         p = self.cfg.pulse
         if self.is_chart:
@@ -148,7 +151,7 @@ class Engine:
             self.clock.start(fit[0] if fit else self.last_onset_t, period, now)
         elif not active and self.clock.running:
             self.clock.stop()
-            self.drums.reset()
+            self._reset_drums()
         if self.clock.running:
             # The pulse follows the harmony that is actually sounding, so pad and
             # pulse never disagree while the pad is still catching up.
@@ -198,8 +201,16 @@ class Engine:
                         self._choose_drums()
                     self.drums.on_beat(beat_t, self.clock.period, gain, form_beat, swing, boost,
                                        bpb, self.dynamics.busyness(now))
+                if self.cfg.percussion.enabled:
+                    swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
+                             and self.groove.meter and not self.is_chart else None)
+                    if self.percussion.pattern_name is None and self.groove.pinned:
+                        self._choose_drums()
+                    self.percussion.on_beat(beat_t, self.clock.period, gain, form_beat, swing,
+                                            boost, bpb, self.dynamics.busyness(now))
                 self.beat_count += 1
             self.drums.tick(now)
+            self.percussion.tick(now)
 
     def _bar(self, beat: int) -> tuple[int, int, int, bool]:
         """(beats per bar, position in the bar, beats since a downbeat, groove heard clearly)
@@ -215,10 +226,14 @@ class Engine:
         bpb = max(1, self.cfg.pulse.beats_per_bar)
         return bpb, beat % bpb, beat, False
 
+    def _reset_drums(self) -> None:
+        self.drums.reset()
+        self.percussion.reset()
+
     def _choose_drums(self) -> None:
         """Keep your drum pattern if its cycle fits the meter heard; else one that does."""
         g = self.groove
-        self.drums.pattern_name = None
+        self.drums.pattern_name = self.percussion.pattern_name = None
         if not ((self.cfg.groove.auto_drums or g.pinned) and g.meter):
             return
         from .patterns import load
@@ -226,6 +241,8 @@ class Engine:
         if load(self.cfg.drums.pattern).beats % g.meter != 0:
             self.drums.pattern_name = GROOVE_PATTERNS.get((g.meter, g.feel),
                                                           GROOVE_PATTERNS.get(g.meter))
+        if load(self.cfg.percussion.pattern).beats % g.meter != 0:
+            self.percussion.pattern_name = PERCUSSION_PATTERNS.get(g.meter)
 
     def _scale_pcs(self) -> Optional[set[int]]:
         """The key's scale, when the harmony model knows one (modal); else None."""
@@ -290,7 +307,7 @@ class Engine:
         self._expression_sent = None           # re-send the pad level after resume
         self.pad.reset()
         self.pulse.reset()
-        self.drums.reset()
+        self._reset_drums()
         self.response.reset()
         self.clock.stop()
 
@@ -339,7 +356,7 @@ class Engine:
     def restart_form(self) -> None:
         """The next beat is beat 1 of bar 1: for the bar count, the drums and a chart."""
         self.pulse.reset()
-        self.drums.reset()
+        self._reset_drums()
         self.groove.reset()                    # beat numbers start again
         self.beat_count = 0
         if hasattr(self.harmony, "restart"):

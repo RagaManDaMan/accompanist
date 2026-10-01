@@ -103,3 +103,21 @@ def test_panic_stops_scheduled_drum_hits():
     n = len(res.port.sent)
     eng.tick(res.end_time + 5.0)
     assert not [m for m in res.port.sent[n:] if m.type == "note_on"]
+
+
+def test_the_percussionist_plays_latin_on_its_own_channel_in_the_counted_meter():
+    from accompanist.patterns import GM_DRUMS
+
+    for taps, pattern in ((4, "latin"), (3, "latin-waltz"), (5, "latin-five"), (6, "bembe"),
+                          (7, "latin-seven")):
+        actions = [(1.0 + i * 0.5, "tap_tempo") for i in range(taps)]
+        cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                           "percussion": {"enabled": True}, "harmony": {"root": "D"}})
+        res = simulate.run(cfg, onsets=[], actions=actions, total=12.0)
+        assert res.engine.percussion.pattern_name in (None, pattern)
+        assert (res.engine.percussion.pattern_name or cfg.percussion.pattern) == pattern
+        perc = [m.note for _, m in res.timeline if m.type == "note_on" and m.channel == 10]
+        assert perc and set(perc) <= {GM_DRUMS[n] for n in
+                                      ("claves", "conga_mute", "conga_high", "shaker", "cowbell")}
+        drums = [m.note for _, m in res.timeline if m.type == "note_on" and m.channel == 9]
+        assert drums                                              # the drummer plays too

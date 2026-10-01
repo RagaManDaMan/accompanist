@@ -72,6 +72,11 @@ pattern = "basic"       # basic, halftime, soft, sparse, waltz, seven-322, or yo
 velocity = 70
 # swing = 0.0           # 0.33 = triplet swing
 
+[percussion]            # a second player: latin hand percussion (see README)
+enabled = false
+channel = 11            # its own kit: congas, clave, shaker, cowbell (GM notes)
+pattern = "latin"       # in 4; in 3, 5, 6, 7 it picks latin-waltz, latin-five, bembe, latin-seven
+
 [response]              # call and response: answers your phrases (see README)
 enabled = false
 channel = 4             # e.g. an electric guitar track

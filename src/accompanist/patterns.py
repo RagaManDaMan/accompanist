@@ -26,7 +26,9 @@ GM_DRUMS = {
     "pedal_hat": 44, "open_hat": 46, "tom_mid": 47, "tom_high": 50, "crash": 49, "ride": 51,
     "ride_bell": 53, "tambourine": 54, "cowbell": 56, "bongo_high": 60, "bongo_low": 61,
     "conga_mute": 62, "conga_high": 63, "conga_low": 64, "shaker": 70, "claves": 75,
-    "woodblock_high": 76, "woodblock_low": 77, "triangle": 81,
+    "woodblock_high": 76, "woodblock_low": 77, "triangle": 81, "triangle_mute": 80,
+    "timbale_high": 65, "timbale_low": 66, "agogo_high": 67, "agogo_low": 68, "cabasa": 69,
+    "guiro_short": 73, "guiro_long": 74,
 }
 LEVELS = {"X": "accent", "x": "hit", "g": "ghost"}
 
