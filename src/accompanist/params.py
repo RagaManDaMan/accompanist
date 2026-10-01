@@ -264,7 +264,7 @@ PARAMS: list[Param] = [
       "Each bass note up to this many ms behind the beat (humanize).", "Pulse", 0, 60, 1),
     P("pulse.velocity_spread", int, 0, "Bass velocity spread",
       "Each bass note up to this much softer or louder.", "Pulse", 0, 40, 1),
-    P("pulse.movement", float, 0.7, "Bass movement",
+    P("pulse.movement", float, 0.8, "Bass movement",
       "0 = the root on every beat; higher = bass shapes more often: fifths, thirds, octaves "
       "and a step into the next bar.", "Pulse", 0, 1, 0.05),
     P("pulse.shape_bars", int, 2, "Bass shape length",

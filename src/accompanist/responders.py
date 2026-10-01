@@ -144,15 +144,25 @@ class PadResponder:
         self._bars_since_change = 0
 
 
-# Bass shapes, one character per beat: R root, 3 third, 5 fifth, 8 octave, 7 seventh (of the
-# scale), A a step into the next bar's root. A shape for a meter not listed is made from its
-# groups (see _generic_shape).
+# Bass shapes, one character per beat: R root, 8 the root an octave up, 2 3 4 5 6 7 the
+# chord's or scale's second, third, fourth, fifth, sixth and seventh (6 and 7 just under the
+# octave, walking down), A a step into the next bar's root, e two eighths (the fifth, then
+# a step into the next beat's note). A shape for a meter not listed is made from its groups
+# (see _generic_shape).
 BASS_SHAPES = {
-    2: ("R5", "R8", "RA"),
-    3: ("R55", "R58", "R35", "R5A", "R85", "R3A"),
-    4: ("R5R5", "R585", "R35A", "R5RA", "RR5A", "R853", "R358", "R587", "R3R5"),
-    6: ("R55R55", "R58R5A", "R35R3A"),
+    2: ("R5", "R8", "RA", "Re", "85", "R3"),
+    3: ("R55", "R58", "R35", "R5A", "R85", "R3A", "R23", "R5e", "876", "R45", "853", "8e5",
+        "R3e"),
+    4: ("R5R5", "R585", "R35A", "R5RA", "RR5A", "R853", "R358", "R587", "R3R5", "R235",
+        "8765", "R345", "R5Re", "R35e", "853A", "R45A", "R8e5", "R2e5"),
+    6: ("R55R55", "R58R5A", "R35R3A", "R5eR5A", "R23R5A", "876R5A"),
 }
+# A plain shape (the root on every beat) comes up with chance (1 - movement) ** this.
+PLAIN_POWER = 2
+# Eighth notes in a shape: their length (share of an eighth, at most note_length_s) and the
+# second one's velocity (share of the first).
+EIGHTH_LENGTH = 0.9
+EIGHTH_SOFTER = 0.8
 
 
 class PulseResponder:
@@ -176,9 +186,10 @@ class PulseResponder:
     def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
                 bar_position: Optional[int] = None, boost: int = 0, group_start: bool = False,
                 chord: Optional[Voicing] = None, beats_per_bar: Optional[int] = None,
-                scale: Optional[set[int]] = None) -> None:
+                scale: Optional[set[int]] = None, period: Optional[float] = None) -> None:
         """group_start: a beat that starts a group within the bar (the 4 of 3+2): half an accent.
-        chord, beats_per_bar, scale: what the bass shapes are made of (the root alone without)."""
+        chord, beats_per_bar, scale: what the bass shapes are made of (the root alone without);
+        period: the beat's length, for shapes with eighth notes."""
         bpb = max(1, beats_per_bar or self.cfg.beats_per_bar)
         pos = self.beat_count % bpb if bar_position is None else bar_position
         accent = self.cfg.accent if pos == 0 else self.cfg.accent // 2 if group_start else 0
@@ -187,13 +198,32 @@ class PulseResponder:
         root = 12 * (self.cfg.octave + 1) + root_pc
         note = self._shape_note(root, root_pc, pos, bpb, chord, scale)
         ch = self.cfg.channel - 1
-        if self.cfg.timing_ms > 0:                   # humanize: laid back, a little each time
-            t = now + self.rng.uniform(0, self.cfg.timing_ms) / 1000
-            self.out.note_on_at(t, ch, note, vel, off_at=t + self.cfg.note_length_s)
+        eighths = period is not None and pos < len(self._shape) and self._shape[pos] == "e" \
+            and note != root
+        length = min(self.cfg.note_length_s, EIGHTH_LENGTH * period / 2) if eighths \
+            else self.cfg.note_length_s
+        lay_back = self.rng.uniform(0, self.cfg.timing_ms) / 1000 if self.cfg.timing_ms > 0 else 0.0
+        if lay_back > 0:                             # humanize: laid back, a little each time
+            self.out.note_on_at(now + lay_back, ch, note, vel, off_at=now + lay_back + length)
         else:
             self.out.note_on(ch, note, vel)
-            self.out.note_off_at(now + self.cfg.note_length_s, ch, note)
+            self.out.note_off_at(now + length, ch, note)
+        if eighths:                                  # the "and": a step into the next note
+            nxt = self._shape[pos + 1] if pos + 1 < len(self._shape) else "R"
+            target = root + (0 if nxt == "R" else self._interval(nxt, root_pc, chord, scale))
+            passing = self._step_to(target, note, scale)
+            t = now + period / 2 + lay_back
+            self.out.note_on_at(t, ch, passing, max(1, round(vel * EIGHTH_SOFTER)),
+                                off_at=t + length)
         self.beat_count += 1
+
+    def _step_to(self, target: int, current: int, scale: Optional[set[int]]) -> int:
+        """A note a step from target, on the side `current` comes from (in the scale if known)."""
+        direction = 1 if current > target else -1
+        for step in (1, 2) if scale is None else (2, 1):
+            if scale is None or (target + direction * step) % 12 in scale:
+                return target + direction * step
+        return target + direction * 2
 
     def _shape_note(self, root: int, root_pc: int, pos: int, bpb: int,
                     chord: Optional[Voicing], scale: Optional[set[int]]) -> int:
@@ -210,22 +240,34 @@ class PulseResponder:
         if changed or pos >= len(self._shape):
             self._last_interval = 0
             return root                              # a new chord: land on its root
-        self._last_interval = self._interval(self._shape[pos], root_pc, chord, scale)
+        degree = self._shape[pos]
+        if degree == "8" and self._last_interval < 0:
+            degree = "R"                             # stepped up from below: land, don't leap
+        self._last_interval = self._interval(degree, root_pc, chord, scale)
         return root + self._last_interval
 
     def _pick_shape(self, bpb: int) -> str:
-        if self.shape_rng.random() >= self.cfg.movement:
+        """A new shape, never the one just played (so a long chord doesn't loop one riff)."""
+        if self.shape_rng.random() < (1 - self.cfg.movement) ** PLAIN_POWER:
             return "R" * bpb
-        return self.shape_rng.choice(BASS_SHAPES.get(bpb) or (_generic_shape(bpb, self.shape_rng),))
+        shapes = BASS_SHAPES.get(bpb) or (_generic_shape(bpb, self.shape_rng),)
+        fresh = [x for x in shapes if x != self._shape] or list(shapes)
+        return self.shape_rng.choice(fresh)
 
     def _interval(self, degree: str, root_pc: int, chord: Optional[Voicing],
                   scale: Optional[set[int]]) -> int:
         pcs = {n % 12 for n in chord.notes} if chord else set()
         fifth = 7 if not pcs or (root_pc + 7) % 12 in pcs else 6 if (root_pc + 6) % 12 in pcs else 7
-        if degree == "5":
+        if degree in "5e":
             return fifth
         if degree == "8":
             return 12
+        if degree in "246":                          # from the scale (or the chord), else plain
+            options = {"2": (2, 1), "4": (5, 6), "6": (9, 8)}[degree]
+            for i in options:
+                if (root_pc + i) % 12 in (pcs | (scale or set())):
+                    return i
+            return options[0]
         if degree == "3":
             third = chord.third if chord and chord.third else None
             return third if third else fifth         # an open chord: no third to play

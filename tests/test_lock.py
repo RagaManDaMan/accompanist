@@ -13,9 +13,17 @@ PULSE_CH = 2
 OFFSET = 1.0     # replay starts the take 1 s in, as `accompanist replay` does
 
 
+def on_beat_cfg(d):
+    """These tests time the bass against the beat: one note per beat (no bass shapes with
+    eighth notes)."""
+    d = {k: dict(v) if isinstance(v, dict) else v for k, v in d.items()}
+    d.setdefault("pulse", {}).setdefault("movement", 0.0)
+    return c.from_dict(d)
+
+
 def replay(name, cfg=None, actions=None, tail=30.0):
     onsets = [(t + OFFSET, n, v) for t, n, v in load_take(FIXTURES / name)]
-    return simulate.run(cfg or c.from_dict({}), onsets=onsets, actions=actions,
+    return simulate.run(cfg or on_beat_cfg({}), onsets=onsets, actions=actions,
                         total=onsets[-1][0] + tail)
 
 
@@ -67,7 +75,7 @@ def test_rubato_take_locked_by_key_stays_on_the_grid():
 
 
 def test_without_a_lock_the_pulse_stops_in_silence():
-    res = replay("steady-90bpm-pause20.jsonl", c.from_dict({"lock": {"auto": False}}))
+    res = replay("steady-90bpm-pause20.jsonl", on_beat_cfg({"lock": {"auto": False}}))
     beats = res.notes_on(PULSE_CH)
     assert max(b - a for a, b in zip(beats, beats[1:])) > 5.0       # it stopped for the pause
     assert not res.engine.clock.running and res.engine.pad.current is None
@@ -76,7 +84,7 @@ def test_without_a_lock_the_pulse_stops_in_silence():
 # ---- lock and unlock through the Controller ------------------------------------------------
 def controller(d=None):
     port = RecordingPort()
-    return Controller(c.from_dict(d or {}), SafeOutput(port))
+    return Controller(on_beat_cfg(d or {}), SafeOutput(port))
 
 
 def play(ctl, onsets, until, dt=0.01, start=0.0):
@@ -211,7 +219,7 @@ def test_pulse_starts_at_min_confidence_and_stops_only_below_stop_confidence():
 
 def test_stop_confidence_above_min_confidence_is_rejected():
     with pytest.raises(c.ConfigError, match="stop_confidence"):
-        c.from_dict({"pulse": {"min_confidence": 0.3, "stop_confidence": 0.4}})
+        on_beat_cfg({"pulse": {"min_confidence": 0.3, "stop_confidence": 0.4}})
 
 
 def test_pulse_starts_on_the_beat_not_on_an_off_beat_note():

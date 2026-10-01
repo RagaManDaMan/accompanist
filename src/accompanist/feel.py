@@ -33,7 +33,7 @@ MACROS: dict[str, list[tuple[str, tuple]]] = {
         ("dynamics.follow", (0.0, 0.5, 0.9)),            # even .. follows your dynamics
         ("pulse.timing_ms", (0.0, 0.0, 25.0)),           # on the beat .. laid back
         ("pulse.velocity_spread", (0, 0, 14)),
-        ("pulse.movement", (0.0, 0.7, 0.9)),             # root on every beat .. bass shapes
+        ("pulse.movement", (0.0, 0.8, 0.95)),             # root on every beat .. bass shapes
     ],
     "drums.feel": [
         ("groove.auto_drums", (False, True, True)),      # the pattern as set .. follows your swing

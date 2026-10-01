@@ -10,7 +10,7 @@ def count(n, start=1.0, extra=None, notes=(), total=None):
     taps = [(start + i * PERIOD, "tap_tempo") for i in range(n)]
     downbeat = start + n * PERIOD
     cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
-                       "harmony": {"root": "D"}, **(extra or {})})
+                       "harmony": {"root": "D"}, "pulse": {"movement": 0.0}, **(extra or {})})
     res = simulate.run(cfg, onsets=list(notes), actions=taps, total=total or downbeat + 14 * PERIOD)
     return res, downbeat
 

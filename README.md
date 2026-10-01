@@ -251,10 +251,12 @@ with a crash.
 
 ## Bass shapes
 
-The bass plays the root on the 1 of each bar and whenever the chord changes. Between, with
-`pulse.movement` above 0 (0.7), it plays shapes: fifths, thirds, octaves, a seventh walking
-down, and a step into the next bar, in the key; each shape repeats for `pulse.shape_bars`
-bars (2) so it sounds like a line, not a dice roll. `pulse.movement = 0` is the old root on
+The bass plays the root on the 1 of each bar (sometimes an octave up) and whenever the chord
+changes. Between, with `pulse.movement` above 0 (0.8), it plays shapes: fifths, thirds,
+octaves, scale steps walking up or down, a step into the next bar, and now and then two
+eighth notes stepping into the next beat, all in the key. Each shape repeats for
+`pulse.shape_bars` bars (2) so it sounds like a line, not a dice roll, and the next one is
+always a different shape, so a long chord doesn't loop one riff. `pulse.movement = 0` is the old root on
 every beat. Both follow the bass and drums feel knobs.
 
 ## Drums
