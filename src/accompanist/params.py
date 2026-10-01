@@ -89,6 +89,9 @@ PARAMS: list[Param] = [
     P("tempo.initial_bpm", float, 70.0, "Starting tempo",
       "The reading before there is enough playing (min_onsets notes) to go on.",
       "Tempo", 20, 300, 1, live=False),
+    P("tempo.max_count_bpm", float, 320.0, "Fastest count-off",
+      "A count-off, tap tempo or song tempo may go up to this, beyond max_bpm (which only "
+      "limits listening): fast 5/4 and 7/4 counts.", "Tempo", 20, 400, 1),
     P("tempo.prior_bpm", float, 80.0, "Tempo prior",
       "Chooses the beat 'octave' when playing is ambiguous: 80 reads a 120 melody as 60. "
       "Set near your piece's tempo (e.g. 110 for fast pieces).", "Tempo", 20, 300, 1),

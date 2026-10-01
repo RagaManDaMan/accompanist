@@ -69,9 +69,10 @@ class TempoEstimator:
         return self._bpm
 
     def set_bpm(self, bpm: float) -> None:
-        """Force the estimate (tap tempo). Later updates track from here."""
+        """Force the estimate (tap tempo, a count-off, a song): up to max_count_bpm, past the
+        listening range. Later updates track from here."""
         c = self.cfg
-        self._bpm = min(max(bpm, c.min_bpm), c.max_bpm)
+        self._bpm = min(max(bpm, c.min_bpm), max(c.max_bpm, c.max_count_bpm))
         self._locked_on_peak = True
 
     # ---- input ------------------------------------------------------------

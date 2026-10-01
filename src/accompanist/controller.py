@@ -222,11 +222,11 @@ class Controller:
         period = (sum((i - mean_i) * (t - mean_t) for i, t in enumerate(taps))
                   / sum((i - mean_i) ** 2 for i in range(n)))
         t = self.cfg.tempo
-        return min(max(60.0 / period, t.min_bpm), t.max_bpm)
+        return min(max(60.0 / period, t.min_bpm), max(t.max_bpm, t.max_count_bpm))
 
     def _set_tempo_prior(self, bpm: float) -> None:
         t = self.cfg.tempo
-        self.set_param("tempo.prior_bpm", round(bpm, 1))
+        self.set_param("tempo.prior_bpm", round(min(bpm, t.max_bpm), 1))   # listening's range
         if t.prior_sigma_oct > t.tap_sigma_oct:
             self.set_param("tempo.prior_sigma_oct", t.tap_sigma_oct)
 
