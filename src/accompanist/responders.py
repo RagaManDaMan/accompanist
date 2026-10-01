@@ -336,6 +336,7 @@ class DrumResponder:
         self._seq = itertools.count()
         self._pattern = None
         self._crash_next = False
+        self.fill_requested = False                 # a fill on the next last beat of a bar
         self.pattern_name: Optional[str] = None     # chosen by the groove, over drums.pattern
 
     def pattern(self):
@@ -361,15 +362,17 @@ class DrumResponder:
         swing = self.cfg.swing if swing is None else swing
         d = self.cfg.dynamics
         energy, fill = gain, False
+        bpb = max(1, beats_per_bar or pat.beats)
+        if self.fill_requested and where % bpb == bpb - 1:   # asked for (an ending): this beat
+            fill, self.fill_requested = True, False
         if d > 0:
             energy = gain ** (1 + FOLLOW_BOOST * d) * (1 + BUSY_LIFT * d * (busy - 0.5))
-            bpb = max(1, beats_per_bar or pat.beats)
             phrase, bar_pos = getattr(self.cfg, "phrase_bars", 0), where % bpb   # none: no fills
             bar_in_phrase = (where // bpb) % phrase if phrase > 0 else 0
             if phrase > 1:
                 energy *= 1 + PHRASE_CRESCENDO * d * bar_in_phrase / (phrase - 1)
                 if bar_in_phrase == phrase - 1 and bar_pos == bpb - 1:
-                    fill = self.fill_rng.random() < FILL_CHANCE * d
+                    fill = fill or self.fill_rng.random() < FILL_CHANCE * d
                     self._crash_next = self._crash_next or fill
             if bar_pos == 0 and self._crash_next:
                 self._crash_next = False
@@ -419,5 +422,5 @@ class DrumResponder:
 
     def reset(self) -> None:
         self.beat_count = 0
-        self._crash_next = False
+        self._crash_next = self.fill_requested = False
         self._queue.clear()

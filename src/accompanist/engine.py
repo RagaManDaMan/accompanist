@@ -59,6 +59,9 @@ class Engine:
         self._expression_sent: Optional[tuple[int, int]] = None   # (cc, value) last sent to the pad
         self._expression_t = float("-inf")
         self.muted = False
+        self.finished = False                     # muted by an ending (s or t starts again)
+        self._finish_requested = False            # the ending comes on the next 1
+        self._ending: Optional[tuple[float, float]] = None   # (start, end) of the last chord
         self.last_onset_t: Optional[float] = None
         self.last_note: Optional[int] = None
         self.proposal: Optional[Voicing] = None   # what the harmony model last suggested
@@ -100,6 +103,9 @@ class Engine:
         self.proposal = self.harmony.propose(now)
         self._auto_lock(now)
         if self.muted:
+            return
+        if self._ending is not None:
+            self._ring_out(now)
             return
         idle = float("inf") if self.last_onset_t is None else now - self.last_onset_t
         period = self.tempo.period
@@ -174,6 +180,9 @@ class Engine:
                         if self._count_meter:                 # a song's meter, like a count-off
                             self.groove.pin(self._count_meter)
                     continue
+                if self._finish_requested and bar_pos == 0:   # the end: one last chord
+                    self._play_ending(beat_t, now)
+                    break
                 if hasattr(self.harmony, "on_beat"):          # a chart: its chord for this beat
 
                     self.harmony.on_beat(beat_t)
@@ -258,12 +267,16 @@ class Engine:
         """Ride the pad's level on its expression controller: follow your loudness, step back
         while you're busy. Sent only when it moves by EXPRESSION_STEP, at most every
         EXPRESSION_INTERVAL_S."""
-        cc = self.cfg.pad.expression_cc
-        if cc is None or now - self._expression_t < EXPRESSION_INTERVAL_S:
+        if self.cfg.pad.expression_cc is None or now - self._expression_t < EXPRESSION_INTERVAL_S:
             return
-        value = round(127 * self.dynamics.pad_level(now))
+        self._send_expression(now, round(127 * self.dynamics.pad_level(now)))
+
+    def _send_expression(self, now: float, value: int, force: bool = False) -> None:
+        cc = self.cfg.pad.expression_cc
+        if cc is None or (not force and now - self._expression_t < EXPRESSION_INTERVAL_S):
+            return
         last = self._expression_sent
-        if last is None or last[0] != cc or abs(last[1] - value) >= EXPRESSION_STEP:
+        if force or last is None or last[0] != cc or abs(last[1] - value) >= EXPRESSION_STEP:
             self.out.control_change(self.cfg.pad.channel - 1, cc, value)
             self._expression_sent, self._expression_t = (cc, value), now
 
@@ -300,6 +313,7 @@ class Engine:
         """Kill switch: silence now and stay silent until resume(). Also ends both locks, and
         stops a chart (start it again with a count-in)."""
         self.song_playing, self._count_in_left = False, 0
+        self._finish_requested, self._ending, self.finished = False, None, False
         self.unlock()
         self.release_chord()
         self.muted = True
@@ -312,7 +326,72 @@ class Engine:
         self.clock.stop()
 
     def resume(self) -> None:
-        self.muted = False
+        self.muted = self.finished = False
+
+    # ---- the ending ---------------------------------------------------------
+    def finish(self) -> bool:
+        """End the song: the drums fill into the next 1, where the band plays one last chord
+        (the key's tonic, else the chord of the moment) that rings for ending.ring_s and fades,
+        then everything stops (finished: s or a count-off starts again). False if nothing
+        is playing."""
+        if self.muted or not self.clock.running or self._count_in_left > 0:
+            return False
+        self._finish_requested = True
+        if self.cfg.ending.fill:
+            self.drums.fill_requested = True
+        return True
+
+    def _ending_chord(self) -> Optional[Voicing]:
+        key = getattr(self.harmony, "key", None)
+        if key and not self.is_chart:
+            tonic, mode = key
+            third = {"minor": 3, "major": 4}.get(mode)
+            if third is None and self.pad.current is not None and self.pad.current.root_pc == tonic:
+                third = self.pad.current.third
+            base = 12 * (self.cfg.pad.octave + 1) + tonic
+            notes = (base, base + 7, base + 12 + 2) + ((base + 12 + third,) if third else ())
+            return Voicing(tonic, third, notes, scheduled=True)
+        chord = self.pad.current or self.proposal
+        if chord is None:
+            return None
+        return Voicing(chord.root_pc, chord.third, chord.notes, chord.name, scheduled=True)
+
+    def _play_ending(self, beat_t: float, now: float) -> None:
+        """The final 1: the last chord on the pad, the bass's root, a kick and a crash."""
+        from .patterns import GM_DRUMS
+
+        ring = self.cfg.ending.ring_s
+        chord = self._ending_chord()
+        self.response.cancel()
+        self._reset_drums()
+        if chord is not None:
+            if self.cfg.pad.enabled:
+                self.pad.update(now, chord, self.clock.period)
+                self._send_expression(now, round(127 * self.cfg.ending.level), force=True)
+            if self.cfg.pulse.enabled:
+                p = self.cfg.pulse
+                root = 12 * (p.octave + 1) + chord.root_pc
+                self.out.note_on(p.channel - 1, root, min(127, p.velocity + p.accent))
+                self.out.note_off_at(now + ring, p.channel - 1, root)
+        for cfg, notes in ((self.cfg.drums, ("kick", "crash")),
+                           (self.cfg.percussion, ("conga_low",))):
+            if cfg.enabled:
+                for name in notes:
+                    self.out.note_on(cfg.channel - 1, GM_DRUMS[name], min(127, cfg.velocity + cfg.accent))
+                    self.out.note_off_at(now + cfg.note_length_s, cfg.channel - 1, GM_DRUMS[name])
+        self.clock.stop()
+        self._finish_requested = False
+        self._ending = (now, now + ring)
+
+    def _ring_out(self, now: float) -> None:
+        """While the last chord rings: fade the pad out, then stop everything."""
+        start, end = self._ending
+        if now >= end:
+            self.panic()
+            self.finished = True
+            return
+        level = self.cfg.ending.level * (1 - (now - start) / (end - start))
+        self._send_expression(now, round(127 * level))
 
     def lock(self, now: float, settle: bool = True) -> bool:
         """Lock the tempo: pad and pulse keep going through silence, the tempo follows only
@@ -438,6 +517,8 @@ class Engine:
         root = self.pad.current.root_pc if self.pad.current else (
             self.proposal.root_pc if self.proposal else None)
         return {
+            "finished": self.finished,
+            "ending": self._finish_requested or self._ending is not None,
             "time": now,
             "bpm": self.tempo.bpm,
             "confidence": self.tempo.confidence,

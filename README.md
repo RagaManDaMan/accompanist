@@ -28,7 +28,7 @@ If `pip install` fails building `python-rtmidi`, install Xcode command line tool
 
 Keys while running: **space / p** = panic (silence and mute), **r** = resume,
 **l** = lock / unlock the tempo, **c** = hold / release the chord, **t** = count off (see
-below), **s** = chart: count in and play from the top, **q** = quit. Every key press prints what it did. Keys are commands, not music: apart from
+below), **s** = chart: count in and play from the top, **f** = finish (a last chord on the next 1), **q** = quit. Every key press prints what it did. Keys are commands, not music: apart from
 panic and a chart count-in, a key press never moves the beat.
 On exit, and on Ctrl-C, it always sends All Notes Off.
 
@@ -153,6 +153,11 @@ ports, inputs or controls. A chart path in a song may be relative to the song fi
 **s** (or `song_start`) counts the band in: one bar of clicks at the song's tempo and meter,
 then drums and pulse come in with the tempo locked, and the pad once it has heard you. With a
 chart, it plays from bar 1. See `src/accompanist/songs/` for two examples.
+
+**f** (or `finish`) ends it: the drums fill into the next 1 (`ending.fill`), where the band
+plays one last chord, the key's tonic (else the chord of the moment): the pad, the bass's
+root, a kick and a crash. It rings for `ending.ring_s` (4 s), fading out, and then everything
+stops (FINISHED). **s** or a count-off starts again straight away; no resume needed.
 
 ## Counting off
 

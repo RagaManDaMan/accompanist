@@ -120,8 +120,16 @@ class Controller:
             raise ConfigError(f"unknown action '{action}'; use one of {list(ACTIONS)}")
         self._started(now)
         eng = self.engine
+        if eng.finished and action in ("song_start", "chart_restart", "tap_tempo"):
+            self.resume()                            # after an ending: start again at once
         if action == "panic_toggle":                 # one switch: silence, and again to resume
             action = "resume" if eng.muted else "panic"
+        if action == "finish":
+            if eng._finish_requested or eng._ending is not None:
+                return "already finishing"
+            if not eng.finish():
+                return "nothing playing to finish"
+            return "finishing: the last chord on the next 1"
         if action == "panic":
             self.panic()
             return "PANIC: silenced and muted (r = resume)"
@@ -304,7 +312,8 @@ def format_status(s: dict) -> str:
 
     State flags come first, so they stay visible when a narrow window cuts the line."""
     heard = "--" if s["heard"] is None else f"{s['heard']} ({s['heard_ago_s']:0.1f}s ago)"
-    flags = (("MUTED " if s["muted"] else "") + ("LOCKED " if s.get("locked") else "")
+    flags = (("FINISHED " if s.get("finished") else "MUTED " if s["muted"] else "")
+             + ("ENDING " if s.get("ending") else "") + ("LOCKED " if s.get("locked") else "")
              + ("CHORD HELD " if s.get("chord_held") else ""))
     if s.get("groove"):
         flags += s["groove"] + ("  " if s.get("groove_confidence", 0) >= 0.5 else "?  ")

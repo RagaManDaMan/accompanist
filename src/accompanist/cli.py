@@ -391,7 +391,7 @@ def add_chart_args(sp) -> None:
 
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
 KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_toggle",
-        "c": "chord_toggle", "s": "song_start"}
+        "c": "chord_toggle", "s": "song_start", "f": "finish"}
 
 
 def say(message) -> None:
@@ -446,7 +446,8 @@ def cmd_run(args) -> int:
         print(f"Recording the audio to {wav.path}")
     print("Keys: [space]/[p] = PANIC (silence + mute)   [r] = resume   [l] = lock / unlock tempo\n"
           "      [c] = hold / release chord   [t] = count off: 3 waltz, 4 four, 5 = 5/4, 6 = 6/8, 7 = 3+2+2"
-          "\n      [s] = start the song (count in at its tempo; a chart from the top)   [q] = quit\n")
+          "\n      [s] = start the song (count in at its tempo; a chart from the top)"
+          "   [f] = finish (a last chord on the next 1)   [q] = quit\n")
     last_print = 0.0
     try:
         while True:

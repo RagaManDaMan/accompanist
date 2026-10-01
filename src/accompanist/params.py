@@ -496,6 +496,16 @@ PARAMS: list[Param] = [
       "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
       "Groove lock", 0, 1, 0.05),
 
+    # ---- ending (f, or a pedal: finish the song) --------------------------------
+    P("ending.ring_s", float, 4.0, "Last chord rings",
+      "The last chord (on the 1 after you ask to finish) rings this long, fading out (seconds).",
+      "Ending", 0.5, 30, 0.5),
+    P("ending.fill", bool, True, "Fill into the end",
+      "The drums play a short fill on the last beat before the final 1.", "Ending"),
+    P("ending.level", float, 0.8, "Last chord level",
+      "The pad's level on the last chord, before it fades (share of full expression).",
+      "Ending", 0, 1, 0.05),
+
     # ---- song (a song file's own settings; see songs/) ---------------------------
     P("song.title", str, None, "Song", "The song's name (shown when it is loaded).", "Song",
       nullable=True, live=False),

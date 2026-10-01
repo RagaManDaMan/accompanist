@@ -34,7 +34,7 @@ PLANNED_ROLES = ("pitch_contour", "voice")
 # Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
 ACTIONS = ("panic", "resume", "panic_toggle", "lock", "unlock", "lock_toggle", "chord_hold",
            "chord_release",
-           "chord_toggle", "song_start", "chart_restart", "tap_tempo")
+           "chord_toggle", "song_start", "chart_restart", "tap_tempo", "finish")
 
 BUILTIN_PRESETS = Path(__file__).parent / "presets"
 USER_PRESETS = Path("presets")
@@ -82,11 +82,12 @@ AudioCfg = _section_class("audio")
 ResponseCfg = _section_class("response")
 GrooveCfg = _section_class("groove")
 SongCfg = _section_class("song")
+EndingCfg = _section_class("ending")
 PanicCfg = _section_class("panic")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
                    "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
                    "drums": DrumsCfg, "percussion": PercussionCfg, "audio": AudioCfg, "response": ResponseCfg,
-                   "groove": GrooveCfg, "song": SongCfg, "panic": PanicCfg}
+                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
@@ -120,6 +121,7 @@ class Config:
     response: Any = field(default_factory=ResponseCfg)
     groove: Any = field(default_factory=GrooveCfg)
     song: Any = field(default_factory=SongCfg)
+    ending: Any = field(default_factory=EndingCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict = field(default_factory=dict)   # (kind, number) -> ControlCfg
     program_bank: int = 0           # program changes folded into banks of this size (0 = off)
@@ -353,6 +355,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         response=_section("response", d.get("response")),
         groove=_section("groove", d.get("groove")),
         song=_section("song", d.get("song")),
+        ending=_section("ending", d.get("ending")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls"))[0],
         program_bank=_controls(d.get("controls"))[1],

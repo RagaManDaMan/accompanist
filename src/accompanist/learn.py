@@ -21,6 +21,7 @@ STEPS = (
     ("panic", "PANIC (silence everything)"),
     ("resume", "RESUME after a panic (the panic switch again = one switch for both)"),
     ("song_start", "START THE SONG: count in at its tempo (a chart from the top)"),
+    ("finish", "FINISH the song: a last chord on the next 1"),
 )
 EXPRESSION_TARGETS = ("pad.feel", "pulse.feel", "drums.feel", "response.feel")
 MIN_SWEEP_VALUES = 8                     # an expression pedal sends many different values
