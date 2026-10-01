@@ -118,6 +118,15 @@ class ModalModel:
         self.key_memory.half_life = self.cfg.harmony.half_life_s
         self.chord_memory.half_life = self.cfg.harmony.chord_memory_s
 
+    def heard_key(self, now: float) -> Optional[tuple[int, str]]:
+        """The key your recent playing fits best, whatever key is set: (tonic, mode), or None
+        before enough has been heard. For ending a song where you actually are."""
+        hist = self.key_memory.snapshot(now)
+        if sum(hist) < MIN_KEY_EVIDENCE:
+            return None
+        _, tonic, mode = max(key_scores(hist, None, "auto"))
+        return tonic, mode
+
     def _update_key(self, hist: list[float]) -> None:
         h = self.cfg.harmony
         tonic = self.cfg.root_pc

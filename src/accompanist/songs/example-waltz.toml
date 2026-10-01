@@ -10,8 +10,8 @@ count = 3                # ...in this meter: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 =
 
 [harmony]
 model = "modal"
-root = "D"
-mode = "minor"
+root = "auto"            # hear the key from your playing; or fix it: root = "D", mode = "minor"
+mode = "auto"
 
 [drums]
 enabled = true

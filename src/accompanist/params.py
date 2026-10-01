@@ -323,7 +323,7 @@ PARAMS: list[Param] = [
       "Its pattern in 4 (in 3, 5, 6 and 7 it plays latin-waltz, latin-five, bembe and "
       "latin-seven).", "Percussion",
       choices=("latin", "latin-waltz", "latin-five", "bembe", "latin-seven"), check=_check_pattern),
-    P("percussion.velocity", int, 60, "Percussion velocity", "Velocity of a normal hit (x).",
+    P("percussion.velocity", int, 75, "Percussion velocity", "Velocity of a normal hit (x).",
       "Percussion", 1, 127, 1),
     P("percussion.accent", int, 20, "Percussion accent", "Extra velocity for an accent (X).",
       "Percussion", 0, 127, 1),

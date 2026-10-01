@@ -331,7 +331,7 @@ class Engine:
     # ---- the ending ---------------------------------------------------------
     def finish(self) -> bool:
         """End the song: the drums fill into the next 1, where the band plays one last chord
-        (the key's tonic, else the chord of the moment) that rings for ending.ring_s and fades,
+        (the tonic of the key you're playing in, else the chord of the moment) that rings for ending.ring_s and fades,
         then everything stops (finished: s or a count-off starts again). False if nothing
         is playing."""
         if self.muted or not self.clock.running or self._count_in_left > 0:
@@ -341,8 +341,11 @@ class Engine:
             self.drums.fill_requested = True
         return True
 
-    def _ending_chord(self) -> Optional[Voicing]:
-        key = getattr(self.harmony, "key", None)
+    def _ending_chord(self, now: float) -> Optional[Voicing]:
+        """The key you are actually playing in (heard, even if a key is set), else the key
+        set, else the chord of the moment."""
+        heard = getattr(self.harmony, "heard_key", None)
+        key = (heard(now) if heard else None) or getattr(self.harmony, "key", None)
         if key and not self.is_chart:
             tonic, mode = key
             third = {"minor": 3, "major": 4}.get(mode)
@@ -361,7 +364,7 @@ class Engine:
         from .patterns import GM_DRUMS
 
         ring = self.cfg.ending.ring_s
-        chord = self._ending_chord()
+        chord = self._ending_chord(now)
         self.response.cancel()
         self._reset_drums()
         if chord is not None:

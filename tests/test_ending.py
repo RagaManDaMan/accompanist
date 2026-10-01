@@ -62,3 +62,20 @@ def test_finish_with_nothing_playing_says_so():
 
     ctl = Controller(c.from_dict({}), SafeOutput(RecordingPort()))
     assert ctl.do("finish", 0.0) == "nothing playing to finish"
+
+
+def test_the_ending_is_in_the_key_you_play_not_the_key_set():
+    """Regression (takes/ms-6): the song set D minor, the sax played in F minor; the last
+    chord was D minor."""
+    f_minor = (65, 67, 68, 70, 72, 73, 75, 77)
+    notes = [(0.2 + i * 0.3, f_minor[(i * 3) % 8], 80) for i in range(40)] + \
+            [(12.0 + i * 0.6, (65, 68, 72)[i % 3], 90) for i in range(4)]
+    taps = [(1.0 + i * PERIOD, "tap_tempo") for i in range(4)]
+    cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                       "harmony": {"model": "modal", "root": "D", "mode": "minor"}})
+    res = simulate.run(cfg, onsets=notes, actions=taps + [(14.0, "finish")], total=24.0)
+    crash = [t for t, n in hits(res, 9) if n == GM_DRUMS["crash"]][-1]
+    bass = [n for t, n in hits(res, 1) if t >= crash - 0.01]
+    assert bass and bass[0] % 12 == 5                                     # F
+    pad = {n % 12 for t, n in hits(res, 0) if abs(t - crash) < 0.05}
+    assert 5 in pad and 8 in pad                                           # F minor
