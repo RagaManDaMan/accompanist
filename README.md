@@ -20,6 +20,7 @@ cp config.example.toml config.toml
 accompanist devices                    # find your MIDI input's name, put it in config.toml
 accompanist monitor                    # confirm your instrument's notes arrive
 accompanist run                        # add --record to save your playing as a take
+                                       # ([output] record = true: every run, --no-record to skip)
 accompanist replay takes/<file>        # run a take through the engine offline
 ```
 

@@ -422,8 +422,9 @@ def cmd_run(args) -> int:
     ctl = Controller(cfg, out)
     keys = KeyReader()
     rec = None
-    if args.record:
-        rec = Recorder(auto_path() if args.record == "auto" else args.record)
+    record = args.record or ("auto" if cfg.output.record and not args.no_record else None)
+    if record:
+        rec = Recorder(auto_path(name=args.song) if record == "auto" else record)
 
     def heard(t, note, velocity, source):
         ctl.on_note(t, note, velocity)
@@ -623,7 +624,10 @@ def main(argv=None) -> int:
             sp.add_argument("--record-audio", default=None, metavar="FILE.wav",
                             help="also save the (first) audio input to a WAV file")
             sp.add_argument("--record", nargs="?", const="auto", default=None, metavar="FILE",
-                            help="save your notes as a take (default: takes/take-<time>.jsonl)")
+                            help="save your notes as a take (default: takes/take-<time>.jsonl, "
+                                 "or takes/<song>-<time>.jsonl with --song)")
+            sp.add_argument("--no-record", action="store_true",
+                            help="don't record this run, even with [output] record = true")
     sp = sub.add_parser("replay", help="run a recorded take through the engine offline (no hardware)")
     sp.add_argument("take", help="a take file made with `run --record`")
     sp.add_argument("-c", "--config", default=None, help="default: ./config.toml if present, else defaults")

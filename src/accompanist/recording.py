@@ -43,8 +43,10 @@ class Recorder:
         self._f.close()
 
 
-def auto_path(directory: str | Path = "takes") -> Path:
-    return Path(directory) / f"take-{datetime.now():%Y%m%d-%H%M%S}.jsonl"
+def auto_path(directory: str | Path = "takes", name: str | None = None) -> Path:
+    """takes/take-<date>-<time>.jsonl, or takes/<name>-<date>-<time>.jsonl (e.g. the song)."""
+    slug = "".join(ch if ch.isalnum() else "-" for ch in (name or "take").lower()).strip("-")
+    return Path(directory) / f"{slug or 'take'}-{datetime.now():%Y%m%d-%H%M%S}.jsonl"
 
 
 def _rows(path: str | Path) -> list[dict]:

@@ -6,6 +6,7 @@
 # preset = "ambient"
 
 [output]
+# record = true        # save every run as a take in takes/ (small data files, not audio)
 # Default: create a virtual MIDI source called "Accompanist". Logic should list it
 # as a MIDI input automatically, with no IAC setup.
 virtual_name = "Accompanist"

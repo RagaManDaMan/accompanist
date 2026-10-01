@@ -24,3 +24,11 @@ def test_a_missing_pedal_is_skipped_when_asked(monkeypatch):
     assert [i.name for i, _ in missing] == ["pedal"]
     with pytest.raises(midi_io.PortError, match="No MIDI input port matching 'GHMidi'"):
         midi_io.open_inputs(cfg, queue.Queue())
+
+
+def test_takes_are_named_after_the_song():
+    from accompanist.recording import auto_path
+
+    assert auto_path(name="example-waltz").name.startswith("example-waltz-")
+    assert auto_path().name.startswith("take-")
+    assert c.from_dict({"output": {"record": True}}).output.record is True

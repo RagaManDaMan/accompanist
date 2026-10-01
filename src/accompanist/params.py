@@ -84,6 +84,9 @@ PARAMS: list[Param] = [
     P("output.port", str, None, "Output port",
       "Send to an existing port instead, matched by part of its name (e.g. 'IAC Driver Bus 1').",
       "Output", nullable=True, live=False),
+    P("output.record", bool, False, "Record every run",
+      "Save every `run` as a take in takes/ (your notes and key presses: small data files, "
+      "not audio), as if --record were given; --no-record skips it once.", "Output", live=False),
 
     # ---- tempo ----------------------------------------------------------------
     P("tempo.initial_bpm", float, 70.0, "Starting tempo",
