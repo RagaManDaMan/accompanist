@@ -79,3 +79,17 @@ def test_the_ending_is_in_the_key_you_play_not_the_key_set():
     assert bass and bass[0] % 12 == 5                                     # F
     pad = {n % 12 for t, n in hits(res, 0) if abs(t - crash) < 0.05}
     assert 5 in pad and 8 in pad                                           # F minor
+
+
+def test_landing_on_the_relative_minor_ends_there():
+    """Regression (home take 2026-10-02): the band followed E-flat major; the player ended on
+    C (the relative minor's tonic), and the ending should land with them."""
+    eb_major = (63, 65, 67, 68, 70, 72, 74, 75)
+    notes = [(0.2 + i * 0.3, eb_major[(i * 3) % 8], 80) for i in range(40)] + [(12.4, 60, 90)]
+    taps = [(1.0 + i * PERIOD, "tap_tempo") for i in range(4)]
+    cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                       "harmony": {"model": "modal"}})
+    res = simulate.run(cfg, onsets=notes, actions=taps + [(13.0, "finish")], total=22.0)
+    crash = [t for t, n in hits(res, 9) if n == GM_DRUMS["crash"]][-1]
+    bass = [n for t, n in hits(res, 1) if t >= crash - 0.01]
+    assert bass and bass[0] % 12 == 0                                     # C minor

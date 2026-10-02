@@ -342,10 +342,21 @@ class Engine:
         return True
 
     def _ending_chord(self, now: float) -> Optional[Voicing]:
-        """The key you are actually playing in (heard, even if a key is set), else the key
-        set, else the chord of the moment."""
-        heard = getattr(self.harmony, "heard_key", None)
-        key = (heard(now) if heard else None) or getattr(self.harmony, "key", None)
+        """The tonic of the key you're playing in: the key the harmony has been following (or,
+        if a key is set, the one heard from your playing), turned to its relative minor or
+        major if that's the note you last played (you land on the tonic); else the chord of
+        the moment."""
+        h = self.cfg.harmony
+        key = getattr(self.harmony, "key", None)
+        if h.mode != "auto" and self.cfg.root_pc is not None:     # a key set: trust your ears
+            heard = getattr(self.harmony, "heard_key", None)
+            key = (heard(now) if heard else None) or key
+        if key and self.last_note is not None:
+            tonic, mode = key
+            relative = {"major": ((tonic + 9) % 12, "minor"),
+                        "minor": ((tonic + 3) % 12, "major")}.get(mode)
+            if relative and self.last_note % 12 == relative[0]:
+                key = relative
         if key and not self.is_chart:
             tonic, mode = key
             third = {"minor": 3, "major": 4}.get(mode)
