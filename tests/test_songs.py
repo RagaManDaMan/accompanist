@@ -148,5 +148,5 @@ def test_a_song_selects_its_mainstage_patch_by_program_change():
     port = RecordingPort()
     cfg = c.from_dict({"song": {"patch": 3}})
     assert cli.select_patch(SafeOutput(port), cfg)
-    assert [(m.type, m.channel, m.program) for m in port.sent] == [("program_change", 15, 3)]
+    assert [(m.type, m.channel, m.program) for m in port.sent] == [("program_change", 15, 2)]
     assert not cli.select_patch(SafeOutput(RecordingPort()), c.from_dict({}))

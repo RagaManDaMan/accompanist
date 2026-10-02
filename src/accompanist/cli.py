@@ -247,10 +247,11 @@ def press_recorder(out: SafeOutput, cfg) -> bool:
 
 
 def select_patch(out: SafeOutput, cfg) -> bool:
-    """The song's MainStage patch (song.patch), as a program change on output.patch_channel."""
+    """The song's MainStage patch (song.patch, numbered 1-128 as MainStage shows it), as a
+    program change (0-127 on the wire) on output.patch_channel."""
     if cfg.song.patch is None:
         return False
-    out.program_change(cfg.output.patch_channel - 1, cfg.song.patch)
+    out.program_change(cfg.output.patch_channel - 1, cfg.song.patch - 1)
     return True
 
 
@@ -260,7 +261,8 @@ def cmd_patch(args) -> int:
     cfg.song.patch = args.number
     out = SafeOutput(open_output(cfg.output))
     select_patch(out, cfg)
-    print(f"Sent program change {args.number} on channel {cfg.output.patch_channel}.")
+    print(f"Asked for patch {args.number} (program change {args.number - 1} on the wire) on "
+          f"channel {cfg.output.patch_channel}.")
     return 0
 
 
@@ -776,7 +778,7 @@ def cmd_run(args) -> int:
           + ("\n      [ / ] or left / right = previous / next song in the set" if set_songs else "")
           + "\n")
     if select_patch(out, cfg):
-        print(f"MainStage patch: program {cfg.song.patch} (channel {cfg.output.patch_channel})")
+        print(f"MainStage patch {cfg.song.patch} (channel {cfg.output.patch_channel})")
     if press_recorder(out, cfg):
         print(f"Pressed the recorder (cc {cfg.output.recorder_cc}, channel "
               f"{cfg.output.recorder_channel}): MainStage should be recording now.")
@@ -1005,7 +1007,8 @@ def main(argv=None) -> int:
     add_chart_args(sp)
     sp = sub.add_parser("patch", help="send one program change (test MainStage patch switching)")
     sp.add_argument("-c", "--config", default="config.toml")
-    sp.add_argument("number", type=int, help="program number, 0-127")
+    sp.add_argument("number", type=int, help="the patch's Program Change number as MainStage "
+                                             "shows it, 1-128")
     sp = sub.add_parser("recorder", help="press the recorder switch once (to map it in "
                                          "MainStage, or to test it)")
     sp.add_argument("-c", "--config", default="config.toml")

@@ -615,8 +615,8 @@ PARAMS: list[Param] = [
       nullable=True),
     P("song.patch", int, None, "MainStage patch",
       "Program change sent when this song is loaded (in a set, or with --song), so MainStage "
-      "(or your DAW) switches to the song's sounds: the patch's Program Change number, 0-127.",
-      "Song", 0, 127, 1, nullable=True),
+      "(or your DAW) switches to the song's sounds: the Program Change number as MainStage "
+      "shows it, 1-128 (sent as 0-127 on the wire).", "Song", 1, 128, 1, nullable=True),
     P("song.count", int, None, "Song meter",
       "Beats per bar for the count-in and the band: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 = 3+2+2.",
       "Song", 3, 7, 1, nullable=True),
