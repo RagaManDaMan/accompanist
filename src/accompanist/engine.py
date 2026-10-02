@@ -69,6 +69,9 @@ class Engine:
         self.muted = False
         self.finished = False                     # muted by an ending (s or t starts again)
         self._finish_requested = False            # the ending comes on the next 1
+        self._break_requested = False             # a break starts on the next 1
+        self._break_left = 0                      # beats of the break still to come
+        self._break_return = False                # the band comes back in on this 1
         self._ending: Optional[tuple[float, float]] = None   # (start, end) of the last chord
         self.last_onset_t: Optional[float] = None
         self.last_note: Optional[int] = None
@@ -140,6 +143,9 @@ class Engine:
                             self.dynamics.follow_gain(),
                             self.clock.next_beat if self.clock.running else None, self.response,
                             self.dynamics.quiet(now))
+            if self.in_break:                         # a break: you alone, no answers
+                self.response.cancel()
+                self.piano.cancel()
 
         # The beat clock runs while bass (pulse) or drums need it, or a chart is counting in.
         if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.cfg.percussion.enabled
@@ -196,6 +202,7 @@ class Engine:
                 if self._finish_requested and bar_pos == 0:   # the end: one last chord
                     self._play_ending(beat_t, now)
                     break
+                resting = self._break_beat(bar_pos, bpb, now, pulse_root)
                 if hasattr(self.harmony, "on_beat"):          # a chart: its chord for this beat
 
                     self.harmony.on_beat(beat_t)
@@ -210,6 +217,9 @@ class Engine:
                     self.pad.on_beat(now, bar_pos)
                     if self.pad.current and not self.chord_held:
                         pulse_root = self.pad.current.root_pc
+                if resting:                                   # a break: only the pad plays
+                    self.beat_count += 1
+                    continue
                 if p.enabled and pulse_root is not None:     # no harmony heard yet: no bass
                     group = bar_pos in GROUPS.get(bpb, (0,))
                     bass_chord = next((v for v in (self.pad.current, self.proposal, voicing)
@@ -250,6 +260,62 @@ class Engine:
             return g.meter, form % g.meter, form, sure
         bpb = max(1, self.cfg.pulse.beats_per_bar)
         return bpb, beat % bpb, beat, False
+
+    # ---- breaks -------------------------------------------------------------
+    @property
+    def in_break(self) -> bool:
+        """From the break's 1 until the band is back on the next 1."""
+        return self._break_left > 0 or self._break_return
+
+    def request_break(self) -> str:
+        """A break on the next 1 (or, during one, end it at the next 1). Returns what happens."""
+        if self.muted or not self.clock.running or self._count_in_left > 0:
+            return "nothing playing to break"
+        if self._break_left > 0:
+            bpb = self._bar(self.beat_count)[0]
+            self._break_left = (self._break_left - 1) % bpb + 1     # to the end of this bar
+            return "break ends on the next 1"
+        self._break_requested = True
+        return f"break: the band stops for {self.cfg.breaks.bars} bar(s) on the next 1"
+
+    def _break_beat(self, bar_pos: int, bpb: int, now: float, root_pc: Optional[int]) -> bool:
+        """Before each beat: start or end a break; True while the rhythm section rests."""
+        from .patterns import GM_DRUMS
+
+        if bar_pos == 0 and self._break_return:          # back in on the 1, with a crash
+            self._break_return = False
+            if self.cfg.drums.enabled:
+                d = self.cfg.drums
+                self.out.note_on(d.channel - 1, GM_DRUMS["crash"], min(127, d.velocity + d.accent))
+                self.out.note_off_at(now + d.note_length_s, d.channel - 1, GM_DRUMS["crash"])
+        if bar_pos == 0 and self._break_requested:
+            self._break_requested = False
+            self._break_left = max(1, self.cfg.breaks.bars) * bpb
+            self.response.cancel()
+            self.piano.cancel()
+            self._reset_drums()
+            if self.cfg.breaks.hit:
+                self._hit(now, root_pc)
+        if self._break_left <= 0:
+            return False
+        self._break_left -= 1
+        if self._break_left == 0:
+            self._break_return = True
+        return True
+
+    def _hit(self, now: float, root_pc: Optional[int]) -> None:
+        """One short band hit: the bass's root, a kick and a crash."""
+        from .patterns import GM_DRUMS
+
+        p, d = self.cfg.pulse, self.cfg.drums
+        if p.enabled and root_pc is not None:
+            root = 12 * (p.octave + 1) + root_pc
+            self.out.note_on(p.channel - 1, root, min(127, p.velocity + p.accent))
+            self.out.note_off_at(now + p.note_length_s, p.channel - 1, root)
+        if d.enabled:
+            for name in ("kick", "crash"):
+                self.out.note_on(d.channel - 1, GM_DRUMS[name], min(127, d.velocity + d.accent))
+                self.out.note_off_at(now + d.note_length_s, d.channel - 1, GM_DRUMS[name])
 
     def _percussion_spell(self, bar: int, now: float) -> None:
         """At the start of each spell: does the percussion play the next spell_bars bars?
@@ -294,7 +360,10 @@ class Engine:
         EXPRESSION_INTERVAL_S."""
         if self.cfg.pad.expression_cc is None or now - self._expression_t < EXPRESSION_INTERVAL_S:
             return
-        self._send_expression(now, round(127 * self.dynamics.pad_level(now)))
+        level = self.dynamics.pad_level(now)
+        if self.in_break:                             # a break: the pad stays back
+            level = min(level, self.cfg.breaks.pad_level)
+        self._send_expression(now, round(127 * level))
 
     def _send_expression(self, now: float, value: int, force: bool = False) -> None:
         cc = self.cfg.pad.expression_cc
@@ -339,6 +408,7 @@ class Engine:
         stops a chart (start it again with a count-in)."""
         self.song_playing, self._count_in_left = False, 0
         self._finish_requested, self._ending, self.finished = False, None, False
+        self._break_requested, self._break_left, self._break_return = False, 0, False
         self.unlock()
         self.release_chord()
         self.muted = True
@@ -560,6 +630,7 @@ class Engine:
             self.proposal.root_pc if self.proposal else None)
         return {
             "finished": self.finished,
+            "break": self.in_break or self._break_requested,
             "ending": self._finish_requested or self._ending is not None,
             "time": now,
             "bpm": self.tempo.bpm,

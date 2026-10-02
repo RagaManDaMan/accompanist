@@ -552,6 +552,17 @@ PARAMS: list[Param] = [
       "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
       "Groove lock", 0, 1, 0.05),
 
+    # ---- breaks (b, or a pedal: the band stops, you play alone) ------------------
+    P("breaks.bars", int, 2, "Break length",
+      "A break: from the next 1 the rhythm section stops for this many bars (the pad stays, "
+      "low), then comes back in on the 1.", "Breaks", 1, 16, 1),
+    P("breaks.hit", bool, True, "Hit the 1",
+      "The band plays the first 1 of the break (bass, kick, crash), then stops: stop-time.",
+      "Breaks"),
+    P("breaks.pad_level", float, 0.15, "Pad in a break",
+      "The pad's level during a break (share of full expression): recessed, no swells.",
+      "Breaks", 0, 1, 0.05),
+
     # ---- ending (f, or a pedal: finish the song) --------------------------------
     P("ending.ring_s", float, 4.0, "Last chord rings",
       "The last chord (on the 1 after you ask to finish) rings this long, fading out (seconds).",

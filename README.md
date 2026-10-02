@@ -75,7 +75,7 @@ hold (`pedal.hold_s`, 0.6 s). `learn` offers this layout:
 |---|---|---|
 | 1 | count off (3-7 taps) | start the song |
 | 2 | lock / unlock the tempo | hold / release the chord |
-| 3 | finish | |
+| 3 | finish | break |
 | 4 | panic / resume | |
 
 In `[controls]` it reads `"cc:80" = { tap = "tap_tempo", hold = "song_start" }`. The switches
@@ -169,6 +169,11 @@ ports, inputs or controls. A chart path in a song may be relative to the song fi
 **s** (or `song_start`) counts the band in: one bar of clicks at the song's tempo and meter,
 then drums and pulse come in with the tempo locked, and the pad once it has heard you. With a
 chart, it plays from bar 1. See `src/accompanist/songs/` for two examples.
+
+**b** (or `break`) is a break: on the next 1 the band hits (bass, kick, crash; `breaks.hit`)
+and then stops for `breaks.bars` bars (2) so your line rings alone; the pad stays, recessed
+(`breaks.pad_level`), and no one answers. The band comes back in on the 1 with a crash. **b**
+again during a break ends it at the next 1.
 
 **f** (or `finish`) ends it: the drums fill into the next 1 (`ending.fill`), where the band
 plays one last chord, the key's tonic (else the chord of the moment): the pad, the bass's

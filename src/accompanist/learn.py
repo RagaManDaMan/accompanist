@@ -24,12 +24,13 @@ STEPS = (
     ("resume", "RESUME after a panic (the panic switch again = one switch for both)"),
     ("song_start", "START THE SONG: count in at its tempo (a chart from the top)"),
     ("finish", "FINISH the song: a last chord on the next 1"),
+    ("break", "BREAK: the band stops for a bar or two, you play alone"),
 )
 # A small pedal (4 switches): each switch taps one command and holds another.
 TAP_HOLD_STEPS = (
     ("tap_tempo", "song_start", "tap = COUNT OFF (3-7 taps), hold = START THE SONG"),
     ("lock_toggle", "chord_toggle", "tap = LOCK / UNLOCK the tempo, hold = HOLD / RELEASE the chord"),
-    ("finish", None, "tap = FINISH the song (a last chord on the next 1)"),
+    ("finish", "break", "tap = FINISH the song, hold = a BREAK (the band stops, you alone)"),
     ("panic_toggle", None, "tap = PANIC, and again to RESUME"),
 )
 EXPRESSION_TARGETS = ("pad.feel", "pulse.feel", "drums.feel", "response.feel")
