@@ -166,6 +166,20 @@ Layering, later wins: defaults < preset < `config.toml` < song < command line. S
 `config.toml` holds your rig and general taste; the song only what differs. A song can't set
 ports, inputs or controls. A chart path in a song may be relative to the song file.
 
+**A set list** puts songs in order for a gig, in `sets/NAME.toml`:
+
+```toml
+title = "Temple gig"
+songs = ["waltz", "seven", "tamil-standard"]
+```
+
+`accompanist run --set NAME` loads and checks every song before the first note (as does
+`accompanist check --set NAME` at soundcheck), starts on song 1, and **]** or the right arrow
+moves to the next song, **[** or the left arrow back (or a pedal: `song_next`, `song_prev`).
+Each song brings its own setup; then **s** counts it in. One run plays the whole set, and each
+song gets its own take file. While the band is playing, **q**, **[** and **]** need a second
+press within 2 s, so a slip of the finger can't end the set or change the song mid-song.
+
 **s** (or `song_start`) counts the band in: one bar of clicks at the song's tempo and meter,
 then drums and pulse come in with the tempo locked, and the pad once it has heard you. With a
 chart, it plays from bar 1. See `src/accompanist/songs/` for two examples.

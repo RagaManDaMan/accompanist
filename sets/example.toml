@@ -1,0 +1,5 @@
+# A set list: the songs of a gig, in order. Copy it to sets/<gig>.toml and make it yours.
+# Use: accompanist run --set example     ([ ] or the arrow keys: previous / next song)
+#      accompanist check --set example   (at soundcheck: every song loads?)
+title = "Example set"
+songs = ["example-waltz", "example-seven"]

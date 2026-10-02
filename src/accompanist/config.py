@@ -34,7 +34,8 @@ PLANNED_ROLES = ("pitch_contour", "voice")
 # Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
 ACTIONS = ("panic", "resume", "panic_toggle", "lock", "unlock", "lock_toggle", "chord_hold",
            "chord_release",
-           "chord_toggle", "song_start", "chart_restart", "tap_tempo", "finish", "break")
+           "chord_toggle", "song_start", "chart_restart", "tap_tempo", "finish", "break",
+           "song_next", "song_prev")
 
 BUILTIN_PRESETS = Path(__file__).parent / "presets"
 USER_PRESETS = Path("presets")
@@ -269,6 +270,30 @@ def load_preset(name: str) -> dict:
                                   f"not {sorted(bad)}")
             return data
     raise ConfigError(f"unknown preset '{name}'; available: {', '.join(available_presets()) or '(none)'}")
+
+
+USER_SETS = Path("sets")
+
+
+def available_sets() -> list[str]:
+    return sorted(p.stem for p in USER_SETS.glob("*.toml")) if USER_SETS.is_dir() else []
+
+
+def load_set(name: str) -> tuple[str, list[str]]:
+    """A set list (./sets/NAME.toml): (title, song names in order). Every song must exist."""
+    p = USER_SETS / f"{name}.toml"
+    if not p.is_file():
+        raise ConfigError(f"unknown set '{name}'; available: {', '.join(available_sets()) or '(none)'}"
+                          f" (set lists go in ./sets/NAME.toml with songs = [\"...\", ...])")
+    data = _read_toml(p)
+    songs = data.get("songs")
+    if not isinstance(songs, list) or not songs or not all(isinstance(s, str) for s in songs):
+        raise ConfigError(f"set '{name}' ({p}): needs songs = [\"song-name\", ...] (at least one)")
+    missing = [s for s in songs if s not in available_songs()]
+    if missing:
+        raise ConfigError(f"set '{name}': no song file for {', '.join(missing)} "
+                          f"(available: {', '.join(available_songs())})")
+    return str(data.get("title", name)), songs
 
 
 def available_songs() -> list[str]:

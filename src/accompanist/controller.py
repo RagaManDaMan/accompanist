@@ -34,6 +34,7 @@ class Controller:
         # held already].
         self._down: dict[tuple[str, int], list] = {}
         self._holds: list[tuple[float, str]] = []   # hold actions done, for a take
+        self.song_step = 0                         # a set list: next (+1) or previous (-1) asked
         self.t0: Optional[float] = None         # first note or action: the take's clock starts here
 
     # ---- input --------------------------------------------------------------
@@ -169,6 +170,9 @@ class Controller:
             self.resume()                            # after an ending: start again at once
         if action == "panic_toggle":                 # one switch: silence, and again to resume
             action = "resume" if eng.muted else "panic"
+        if action in ("song_next", "song_prev"):          # the run (a set list) switches songs
+            self.song_step = 1 if action == "song_next" else -1
+            return ""
         if action == "break":
             return eng.request_break()
         if action == "finish":

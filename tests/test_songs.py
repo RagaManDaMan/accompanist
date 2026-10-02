@@ -78,3 +78,65 @@ def test_chart_restart_still_works_as_before():
     ctl = Controller(c.from_dict({"harmony": {"model": "chart", "chart": chart, "chart_bpm": 100}}),
                      SafeOutput(RecordingPort()))
     assert ctl.do("chart_restart", 0.0).startswith("counting in at 100 bpm: 1 2 3 4")
+
+
+def test_a_set_list_names_its_songs_in_order_and_checks_them(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "sets").mkdir()
+    (tmp_path / "sets" / "gig.toml").write_text(
+        'title = "Temple gig"\nsongs = ["example-waltz", "example-seven"]\n')
+    assert c.load_set("gig") == ("Temple gig", ["example-waltz", "example-seven"])
+    (tmp_path / "sets" / "bad.toml").write_text('songs = ["example-waltz", "nope"]\n')
+    with pytest.raises(c.ConfigError, match="no song file for nope"):
+        c.load_set("bad")
+    with pytest.raises(c.ConfigError, match="unknown set 'missing'"):
+        c.load_set("missing")
+
+
+def test_next_and_previous_song_are_actions_for_a_pedal():
+    from accompanist.controller import Controller
+    from accompanist.output import RecordingPort, SafeOutput
+
+    ctl = Controller(c.from_dict({"controls": {"pc:66": "song_next"}}), SafeOutput(RecordingPort()))
+    ctl.on_midi(0.0, "pc", 66, 127)
+    assert ctl.song_step == 1
+
+
+def test_run_moves_through_a_set_with_the_bracket_keys(tmp_path, monkeypatch, capsys):
+    """The live loop, with fake ports and a scripted keyboard: ] twice, then q."""
+    import shutil
+    from pathlib import Path
+
+    from accompanist import cli
+
+    root = Path(__file__).parent.parent
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "sets").mkdir()
+    (tmp_path / "sets" / "gig.toml").write_text('songs = ["example-waltz", "example-seven"]\n')
+    (tmp_path / "config.toml").write_text('[output]\nport = "fake"\n[[inputs]]\nport = "fake in"\n')
+
+    class Keys:
+        script = iter([None] * 5 + ["]"] + [None] * 5 + ["]"] + [None] * 5 + ["q"])
+
+        def poll(self):
+            return next(self.script, "q")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "KeyReader", Keys)
+    class Port:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "open_inputs", lambda cfg, q, missing=None: [Port()])
+    class Out(RecordingPort):
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "open_output", lambda cfg: Out())
+    monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+    assert cli.main(["run", "--set", "gig", "--no-record"]) in (0, None)
+    out = capsys.readouterr().out
+    assert "Song 2/2: Example in seven" in out
+    assert "last song of the set" in out

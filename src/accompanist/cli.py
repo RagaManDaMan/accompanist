@@ -20,6 +20,9 @@ from .output import SafeOutput
 from .recording import Recorder, TakeError, auto_path, load_actions, load_take
 
 
+ARROWS = {"[C": "right", "[D": "left", "OC": "right", "OD": "left"}
+
+
 class KeyReader:
     """Single-keypress input (no Enter needed) so the kill switch is one tap."""
 
@@ -35,10 +38,19 @@ class KeyReader:
             tty.setcbreak(self._fd)
 
     def poll(self):
+        """One key: a character, or "left"/"right" for the arrow keys."""
         if not self.enabled:
             return None
         r, _, _ = select.select([sys.stdin], [], [], 0)
-        return sys.stdin.read(1) if r else None
+        if not r:
+            return None
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":                             # an escape sequence: maybe an arrow
+            seq = ""
+            while len(seq) < 2 and select.select([sys.stdin], [], [], 0.01)[0]:
+                seq += sys.stdin.read(1)
+            return ARROWS.get(seq)
+        return ch
 
     def close(self) -> None:
         if self.enabled and self._old is not None:
@@ -267,7 +279,15 @@ def cmd_check(args) -> int:
     except cfgmod.ConfigError as e:
         report(False, "does not load", str(e))
         return 2
-    songs = args.songs or cfgmod.available_songs()
+    if args.set:
+        try:
+            title, songs = cfgmod.load_set(args.set)
+            report(True, f"set '{title}'", f"{len(songs)} songs")
+        except cfgmod.ConfigError as e:
+            report(False, f"set '{args.set}'", str(e))
+            songs = []
+    else:
+        songs = args.songs or cfgmod.available_songs()
     print("Songs:")
     for name in songs:
         try:
@@ -560,6 +580,8 @@ def chart_overrides(args) -> dict:
 
 
 def add_chart_args(sp) -> None:
+    sp.add_argument("--set", default=None, metavar="NAME",
+                    help="play a set list (sets/NAME.toml): its songs in order, [ ] to move")
     sp.add_argument("--song", default=None, metavar="NAME",
                     help="load a song's setup (songs/NAME.toml): groove, harmony, drums, feel...")
     sp.add_argument("--chart", default=None, metavar="FILE",
@@ -572,7 +594,11 @@ def add_chart_args(sp) -> None:
 
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"
 KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_toggle",
-        "c": "chord_toggle", "s": "song_start", "f": "finish", "b": "break"}
+        "c": "chord_toggle", "s": "song_start", "f": "finish", "b": "break",
+        "]": "song_next", "right": "song_next", "[": "song_prev", "left": "song_prev"}
+# Keys that need a second press within this long while the band is playing (a slip of the
+# finger mustn't end the set or change the song mid-song).
+CONFIRM_S = 2.0
 
 
 def say(message) -> None:
@@ -662,6 +688,12 @@ def cmd_run(args) -> int:
     from .audio_io import AudioInput, WavWriter
     from .audio_notes import AudioFeed
 
+    set_title, set_songs = (cfgmod.load_set(args.set) if args.set else (None, []))
+    if set_songs:
+        for name in set_songs:                       # all of them load, before the first note
+            cfgmod.load(args.config, args.preset, chart_overrides(args), song=name)
+        args.song = set_songs[0]
+    song_index = 0
     cfg = load_for_run(args)
     if args.record_audio and not any(i.is_audio for i in cfg.inputs):
         raise cfgmod.ConfigError("--record-audio needs an audio input in the config ([[inputs]] audio = ...)")
@@ -711,6 +743,9 @@ def cmd_run(args) -> int:
     where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
     print(f"Playing to {where}." + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     print(voices_summary(cfg))
+    if set_songs:
+        print(f"Set: {set_title}: " + ", ".join(f"{i + 1}. {s}" for i, s in enumerate(set_songs))
+              + "   ([ ] or the arrows: previous / next song)")
     if rec:
         print(f"Recording your notes to {rec.path}")
     if wav:
@@ -719,11 +754,14 @@ def cmd_run(args) -> int:
           "      [c] = hold / release chord   [t] = count off: 3 waltz, 4 four, 5 = 5/4, 6 = 6/8, 7 = 3+2+2"
           "\n      [s] = start the song (count in at its tempo; a chart from the top)"
           "   [f] = finish (a last chord on the next 1)\n"
-          "      [b] = break (the band stops for a bar or two; you alone)   [q] = quit\n")
+          "      [b] = break (the band stops for a bar or two; you alone)   [q] = quit"
+          + ("\n      [ / ] or left / right = previous / next song in the set" if set_songs else "")
+          + "\n")
     if press_recorder(out, cfg):
         print(f"Pressed the recorder (cc {cfg.output.recorder_cc}, channel "
               f"{cfg.output.recorder_channel}): MainStage should be recording now.")
     last_print = 0.0
+    confirm = None                             # (key, until): a second press is due
     guard = LiveGuard()
     try:
         while True:
@@ -764,13 +802,44 @@ def cmd_run(args) -> int:
                         wav.write(block)
                     feeds[id(icfg)].process(block, t)
                 key = keys.poll()
+                playing = ctl.engine.clock.running and not ctl.engine.muted
+                if key == "q" or (key in KEYS and KEYS[key] in ("song_next", "song_prev")):
+                    if playing and not (confirm and confirm[0] == key and now < confirm[1]):
+                        confirm = (key, now + CONFIRM_S)
+                        say(f"playing: press {key} again to "
+                            + ("quit" if key == "q" else "change song"))
+                        key = None
+                    else:
+                        confirm = None
                 if key == "q":
                     break
                 if key in KEYS:
-                    say(ctl.do(KEYS[key], now))
-                    if rec:
+                    message = ctl.do(KEYS[key], now)
+                    if message:
+                        say(message)
+                    if rec and KEYS[key] not in ("song_next", "song_prev"):
                         rec.action(now, KEYS[key])
                     last_print = 0.0               # show the new state at once
+                if ctl.song_step:                  # a set list: another song
+                    step, ctl.song_step = ctl.song_step, 0
+                    if not set_songs:
+                        say("no set list: start with --set NAME to move between songs")
+                    elif not 0 <= song_index + step < len(set_songs):
+                        say("that was the " + ("last" if step > 0 else "first") + " song of the set")
+                    else:
+                        song_index += step
+                        out.panic()
+                        args.song = set_songs[song_index]
+                        cfg = load_for_run(args)
+                        ctl = Controller(cfg, out)
+                        if rec:
+                            rec.close()
+                            rec = Recorder(auto_path(name=args.song))
+                        s = cfg.song
+                        say(f"Song {song_index + 1}/{len(set_songs)}: {s.title or args.song}"
+                            + (f", {s.tempo:g} bpm" if s.tempo else "")
+                            + (f" in {s.count}" if s.count else "") + ": s to count in")
+                        last_print = 0.0
                 ctl.tick(now)
                 for t_held, held in ctl.take_holds():  # a switch held: its hold action
                     if rec:
@@ -929,6 +998,7 @@ def main(argv=None) -> int:
                                       "is every device plugged in?")
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("songs", nargs="*", help="songs to check (default: all of them)")
+    sp.add_argument("--set", default=None, metavar="NAME", help="check a set list's songs")
     sp = sub.add_parser("learn", help="press each pedal/controller switch when asked: writes [controls]")
     sp.add_argument("-c", "--config", default="config.toml")
     sp = sub.add_parser("listen", help="run an audio recording (WAV) through the note detector, offline")
