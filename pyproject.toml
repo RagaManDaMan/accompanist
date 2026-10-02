@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "accompanist"
-version = "0.0.1"
+version = "0.1.0a1"
 description = "Listens to a live performer and plays an adaptive accompaniment into Logic Pro (or any DAW) over MIDI."
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
