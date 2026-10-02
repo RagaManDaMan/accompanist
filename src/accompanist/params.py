@@ -66,6 +66,13 @@ def _multiple_of(v: Any, n: int) -> None:
         raise ValueError(f"must be a multiple of {n}, got {v}")
 
 
+def _check_keys(v: Any) -> None:
+    from .modal import parse_keys
+
+    if v is not None:
+        parse_keys(v)
+
+
 def _check_root(v: Any) -> None:
     from .config import parse_root, ConfigError
 
@@ -179,9 +186,16 @@ PARAMS: list[Param] = [
     P("harmony.transpose", int, 0, "Transpose",
       "chart model: play the chart this many semitones up (+) or down (-).", "Harmony", -11, 11, 1),
     P("harmony.mode", str, "auto", "Mode",
-      "modal model: 'major', 'minor' (with raised 7th), 'chromatic' (any chord), or 'auto' "
+      "modal model: 'major', 'minor' (with raised 7th), a mode (dorian, lydian, mixolydian...), "
+      "a jazz scale (harmonic-minor, bebop-major...), 'chromatic' (any chord), or 'auto' "
       "(major or minor, detected from your playing).", "Harmony",
-      choices=("auto", "major", "minor", "chromatic")),
+      choices=("auto", "major", "minor", "chromatic", "ionian", "dorian", "phrygian", "lydian",
+               "mixolydian", "aeolian", "locrian", "harmonic-minor", "melodic-minor",
+               "bebop-major", "bebop-dominant")),
+    P("harmony.keys", str, None, "Key palette",
+      "modal model: the song's keys, e.g. 'F lydian, D minor, A minor': it starts in the first "
+      "and follows you between them (overrides root and mode).", "Harmony", nullable=True,
+      check=_check_keys),
     P("harmony.color", float, 0.5, "Colour",
       "modal model: how readily it reaches past plain triads for 7ths, add9, sus, dim "
       "(0 = plain, 1 = adventurous).", "Harmony", 0, 1, 0.05),

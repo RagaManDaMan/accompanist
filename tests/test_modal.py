@@ -107,3 +107,39 @@ def test_a_chord_is_not_held_forever():
     changes = [b for (a, x), (b, y) in zip(chords, chords[1:]) if x != y]
     edges = [0.0] + changes + [40.0]
     assert max(b - a for a, b in zip(edges, edges[1:])) <= 13.0
+
+
+def test_key_palettes_parse_and_reject_nonsense():
+    from accompanist.modal import parse_keys
+
+    assert parse_keys("F lydian, D minor, Bb mixolydian") == [(5, "lydian"), (2, "minor"),
+                                                             (10, "mixolydian")]
+    with pytest.raises(c.ConfigError, match="mode one of"):
+        c.from_dict({"harmony": {"keys": "F lidian"}})
+    with pytest.raises(c.ConfigError, match="tonic and mode"):
+        c.from_dict({"harmony": {"keys": "F"}})
+
+
+def test_a_palette_starts_at_home_and_follows_you_between_its_keys():
+    from accompanist.modal import ModalModel
+
+    cfg = c.from_dict({"harmony": {"model": "modal", "keys": "F lydian, D minor, A minor"}})
+    m = ModalModel(cfg)
+    m.observe(Onset(0.0, 65, 80))
+    m.propose(0.0)
+    assert m.key == (5, "lydian")                                     # home, straight away
+    t = 0.0
+    for name, notes in (("D minor", (62, 65, 69, 70, 62, 60, 62)),     # B-flat, resting on D
+                        ("A minor", (69, 68, 71, 69, 64, 68, 69))):    # G-sharp, resting on A
+        for _ in range(12):
+            for n in notes:
+                t += 0.3
+                m.observe(Onset(t, n, 80))
+                m.propose(t)
+        assert m.key_label == name, (name, m.key_label)
+    for _ in range(12):                                                # B natural, on F
+        for n in (65, 67, 69, 71, 72, 65, 64, 65):
+            t += 0.3
+            m.observe(Onset(t, n, 80))
+            m.propose(t)
+    assert m.key_label == "F lydian"

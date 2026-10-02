@@ -10,8 +10,7 @@ patch = 1
 
 [harmony]
 model = "modal"
-root = "auto"            # until key palettes arrive: F lydian / D minor / A minor
-mode = "auto"
+keys = "F lydian, D minor, A minor"   # starts in F lydian; A minor is the B-section bridge
 max_hold_s = 12
 
 [drums]

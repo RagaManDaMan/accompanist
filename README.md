@@ -215,6 +215,16 @@ tempo locked (**l** to let it follow you). Count again, any time, to change temp
 The counted meter stays until you count again; listening still follows your swing. With a
 chart, one bar of taps is the count-in and the band comes in exactly on 1.
 
+## Keys and modes
+
+A song can name its keys: `[harmony] keys = "F lydian, D minor, A minor"`. The band starts in
+the first (home) from your first note and follows you between them, telling them apart by
+the notes that differ (B natural, B-flat, G-sharp) and by where your lines rest (the tonic
+and its triad). Modes: major, minor (with the raised 7th), ionian, dorian, phrygian,
+lydian, mixolydian, aeolian, locrian, harmonic-minor, melodic-minor, bebop-major and
+bebop-dominant. One fixed key works too: `root = "F"`, `mode = "lydian"`. The ending lands on
+the palette key you're in, or the one whose tonic you finished on.
+
 ## Groove: meter, downbeat, feel
 
 Once the beat is running, the accompanist listens for the **meter** (in 3 or in 4; a 2/4

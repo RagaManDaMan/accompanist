@@ -28,7 +28,67 @@ from .harmony import Onset, PitchClassTracker, Voicing
 MAJOR = frozenset({0, 2, 4, 5, 7, 9, 11})
 MINOR = frozenset({0, 2, 3, 5, 7, 8, 10, 11})       # natural minor + raised 7th
 CHROMATIC = frozenset(range(12))
-SCALES = {"major": MAJOR, "minor": MINOR, "chromatic": CHROMATIC}
+SCALES = {"major": MAJOR, "minor": MINOR, "chromatic": CHROMATIC,
+          # the modes, and a few jazz scales (for key palettes and fixed keys)
+          "ionian": MAJOR,
+          "dorian": frozenset({0, 2, 3, 5, 7, 9, 10}),
+          "phrygian": frozenset({0, 1, 3, 5, 7, 8, 10}),
+          "lydian": frozenset({0, 2, 4, 6, 7, 9, 11}),
+          "mixolydian": frozenset({0, 2, 4, 5, 7, 9, 10}),
+          "aeolian": frozenset({0, 2, 3, 5, 7, 8, 10}),
+          "locrian": frozenset({0, 1, 3, 5, 6, 8, 10}),
+          "harmonic-minor": frozenset({0, 2, 3, 5, 7, 8, 11}),
+          "melodic-minor": frozenset({0, 2, 3, 5, 7, 9, 11}),
+          "bebop-major": frozenset({0, 2, 4, 5, 7, 8, 9, 11}),
+          "bebop-dominant": frozenset({0, 2, 4, 5, 7, 9, 10, 11})}
+MODES = tuple(k for k in SCALES if k != "chromatic")
+
+# Key palettes (harmony.keys): how a palette key is scored against what you played: the
+# share inside its scale, minus OUTSIDE_KEY_COST per unit outside, plus TONIC_KEY_WEIGHT
+# times the share on its tonic and TRIAD_KEY_WEIGHT times the share on its tonic triad
+# (where your lines rest tells F lydian from D minor, or from A minor, which holds all of
+# F lydian's notes).
+OUTSIDE_KEY_COST = 1.5
+TONIC_KEY_WEIGHT = 0.5
+TRIAD_KEY_WEIGHT = 0.5
+HOME_KEY_BONUS = 0.15      # the palette's first key is home: ties and slow returns go there
+
+
+def parse_keys(text: str) -> list[tuple[int, str]]:
+    """"F lydian, D minor, A harmonic-minor" -> [(5, 'lydian'), (2, 'minor'), ...]."""
+    from .config import ConfigError, parse_root
+
+    out = []
+    for part in str(text).split(","):
+        words = part.split()
+        if len(words) != 2:
+            raise ValueError(f"'{part.strip()}': write a key as tonic and mode, e.g. 'F lydian'")
+        try:
+            tonic = parse_root(words[0])
+        except ConfigError:
+            tonic = None
+        mode = words[1].lower()
+        if tonic is None or mode not in MODES:
+            raise ValueError(f"'{part.strip()}': tonic must be a note (F, Bb, C#) and mode one of "
+                             f"{', '.join(MODES)}")
+        out.append((tonic, mode))
+    return out
+
+
+def palette_scores(hist: list[float], palette: list[tuple[int, str]]) -> list[tuple[float, int, str]]:
+    """[(score, tonic, mode)] for the palette's keys against a pitch-class histogram."""
+    total = sum(hist) or 1.0
+    out = []
+    for tonic, mode in palette:
+        scale = {(tonic + i) % 12 for i in SCALES[mode]}
+        inside = sum(hist[pc] for pc in scale) / total
+        ivs = SCALES[mode]
+        third = 4 if 4 in ivs else 3
+        fifth = 7 if 7 in ivs else 6 if 6 in ivs else 8
+        triad = sum(hist[(tonic + i) % 12] for i in (0, third, fifth)) / total
+        out.append((inside - OUTSIDE_KEY_COST * (1 - inside) + TONIC_KEY_WEIGHT * hist[tonic] / total
+                    + TRIAD_KEY_WEIGHT * triad, tonic, mode))
+    return out
 
 # (suffix, intervals, complexity): complexity is a cost that harmony.color scales down.
 CHORDS: tuple[tuple[str, tuple[int, ...], float], ...] = (
@@ -132,6 +192,19 @@ class ModalModel:
 
     def _update_key(self, hist: list[float]) -> None:
         h = self.cfg.harmony
+        if h.keys:                                      # a song's palette: choose among those
+            palette = parse_keys(h.keys)
+            if self.key not in palette:
+                self.key = palette[0]                   # the song's home, from the first note
+            if sum(hist) < MIN_KEY_EVIDENCE:
+                return
+            scores = [(s + (HOME_KEY_BONUS if (t, md) == palette[0] else 0.0), t, md)
+                      for s, t, md in palette_scores(hist, palette)]
+            best = max(scores)
+            current = next(s for s in scores if (s[1], s[2]) == self.key)
+            if best[0] > current[0] + h.key_margin:
+                self.key = (best[1], best[2])
+            return
         tonic = self.cfg.root_pc
         mode = h.mode
         if mode == "chromatic":

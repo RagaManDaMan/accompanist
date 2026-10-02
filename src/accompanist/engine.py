@@ -522,20 +522,28 @@ class Engine:
         if a key is set, the one heard from your playing), turned to its relative minor or
         major if that's the note you last played (you land on the tonic); else the chord of
         the moment."""
+        from .modal import SCALES, parse_keys
+
         h = self.cfg.harmony
         key = getattr(self.harmony, "key", None)
-        if h.mode != "auto" and self.cfg.root_pc is not None:     # a key set: trust your ears
-            heard = getattr(self.harmony, "heard_key", None)
+        palette = parse_keys(h.keys) if h.keys else []
+        if not palette and h.mode != "auto" and self.cfg.root_pc is not None:
+            heard = getattr(self.harmony, "heard_key", None)      # a key set: trust your ears
             key = (heard(now) if heard else None) or key
         if key and self.last_note is not None:
             tonic, mode = key
-            relative = {"major": ((tonic + 9) % 12, "minor"),
-                        "minor": ((tonic + 3) % 12, "major")}.get(mode)
-            if relative and self.last_note % 12 == relative[0]:
-                key = relative
+            if palette:                                # you landed on another palette key's tonic
+                landed = [k for k in palette if k[0] == self.last_note % 12]
+                key = landed[0] if landed and key not in landed else key
+            else:
+                relative = {"major": ((tonic + 9) % 12, "minor"),
+                            "minor": ((tonic + 3) % 12, "major")}.get(mode)
+                if relative and self.last_note % 12 == relative[0]:
+                    key = relative
         if key and not self.is_chart:
             tonic, mode = key
-            third = {"minor": 3, "major": 4}.get(mode)
+            scale = SCALES.get(mode, frozenset())
+            third = 4 if 4 in scale and mode != "chromatic" else 3 if 3 in scale and mode != "chromatic" else None
             if third is None and self.pad.current is not None and self.pad.current.root_pc == tonic:
                 third = self.pad.current.third
             base = 12 * (self.cfg.pad.octave + 1) + tonic
