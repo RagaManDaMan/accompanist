@@ -18,7 +18,7 @@ pattern = "swing"
 swing = 0.33
 
 [percussion]
-enabled = false          # a jazz ballad: no latin percussion
+enabled = true           # MainStage patch 2: "Blocks & Bells"
 
 [piano]
 enabled = true

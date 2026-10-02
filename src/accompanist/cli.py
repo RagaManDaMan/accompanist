@@ -196,6 +196,32 @@ def soundcheck_plan(cfg) -> list[tuple[str, int, list[tuple[float, int, int]]]]:
     return plan
 
 
+def cmd_kitmap(args) -> int:
+    """Play every note of a range on one voice's channel, one at a time, named: to find
+    where a kit keeps its sounds."""
+    from .levels import voice_cfg
+    from .patterns import GM_DRUMS
+
+    cfg = cfgmod.load(args.config, song=args.song)
+    vc = voice_cfg(cfg, args.voice)
+    out = SafeOutput(open_output(cfg.output))
+    select_patch(out, cfg)
+    names = {n: k for k, n in GM_DRUMS.items()}
+    print(f"Channel {vc.channel} ({args.voice}): notes {args.low}-{args.high}. Note what you "
+          f"hear for each; Ctrl-C to stop.")
+    try:
+        for n in range(args.low, args.high + 1):
+            print(f"  {n:3d}  {note_label(n):<4} {names.get(n, '')}", flush=True)
+            out.note_on(vc.channel - 1, n, 100)
+            time.sleep(KITMAP_STEP_S)
+            out.note_off(vc.channel - 1, n)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        out.panic()
+    return 0
+
+
 def cmd_soundcheck(args) -> int:
     """Play a few notes on each voice's channel in turn: is every instrument in MainStage or
     Logic set up and making sound?"""
@@ -716,6 +742,7 @@ FADE_CC = 11
 # accompanist levels: the pad's expression while it is measured (its normal level), and how
 # long to wait for the DAW to finish writing its recording.
 LEVELS_PAD_EXPRESSION = 0.8
+KITMAP_STEP_S = 0.8        # kitmap: how long each note sounds
 LEVELS_WAIT_S = 3.0
 # Keys that need a second press within this long while the band is playing (a slip of the
 # finger mustn't end the set or change the song mid-song).
@@ -1126,6 +1153,13 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("kitmap", help="play a voice's notes one by one, named, to find "
+                                       "where a kit keeps its sounds")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("voice", choices=("pad", "bass", "drums", "percussion", "piano", "guitar"))
+    sp.add_argument("--song", default=None, metavar="NAME", help="switch to this song's patch first")
+    sp.add_argument("--low", type=int, default=35, help="first note (default 35)")
+    sp.add_argument("--high", type=int, default=81, help="last note (default 81)")
     sp = sub.add_parser("levels", help="line check: each voice alone, then you; sets each "
                                        "voice's level under you (written into the song)")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -1173,7 +1207,7 @@ def main(argv=None) -> int:
                 "listen": cmd_listen, "learn": cmd_learn,
                 "check": cmd_check, "soundcheck": cmd_soundcheck,
                 "recorder": cmd_recorder, "patch": cmd_patch,
-                "levels": cmd_levels}[args.cmd](args)
+                "levels": cmd_levels, "kitmap": cmd_kitmap}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
