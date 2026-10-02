@@ -246,6 +246,12 @@ def press_recorder(out: SafeOutput, cfg) -> bool:
     return True
 
 
+def band_channels(cfg) -> list[int]:
+    """The MIDI channels (1-16) of the voices that are on."""
+    voices = (cfg.pad, cfg.pulse, cfg.drums, cfg.percussion, cfg.piano, cfg.response)
+    return sorted({v.channel for v in voices if v.enabled})
+
+
 def select_patch(out: SafeOutput, cfg) -> bool:
     """The song's MainStage patch (song.patch, numbered 1-128 as MainStage shows it), as a
     program change (0-127 on the wire) on output.patch_channel."""
@@ -616,6 +622,11 @@ PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accomp
 KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_toggle",
         "c": "chord_toggle", "s": "song_start", "f": "finish", "b": "break",
         "]": "song_next", "right": "song_next", "[": "song_prev", "left": "song_prev"}
+# Changing song while the band still sounds: fade every voice out on Expression over this
+# long first (resent every EXPRESSION_STEP_S), then restore it for the next song.
+SWITCH_FADE_S = 1.0
+EXPRESSION_STEP_S = 0.05
+FADE_CC = 11
 # Keys that need a second press within this long while the band is playing (a slip of the
 # finger mustn't end the set or change the song mid-song).
 CONFIRM_S = 2.0
@@ -784,6 +795,7 @@ def cmd_run(args) -> int:
               f"{cfg.output.recorder_channel}): MainStage should be recording now.")
     last_print = 0.0
     confirm = None                             # (key, until): a second press is due
+    fade, fade_sent = None, float("-inf")      # (song index, start, end): fading to change song
     guard = LiveGuard()
     try:
         while True:
@@ -848,21 +860,38 @@ def cmd_run(args) -> int:
                         say("no set list: start with --set NAME to move between songs")
                     elif not 0 <= song_index + step < len(set_songs):
                         say("that was the " + ("last" if step > 0 else "first") + " song of the set")
-                    else:
-                        song_index += step
-                        out.panic()
-                        args.song = set_songs[song_index]
-                        cfg = load_for_run(args)
-                        ctl = Controller(cfg, out)
-                        select_patch(out, cfg)
-                        if rec:
-                            rec.close()
-                            rec = Recorder(auto_path(name=args.song))
-                        s = cfg.song
-                        say(f"Song {song_index + 1}/{len(set_songs)}: {s.title or args.song}"
-                            + (f", {s.tempo:g} bpm" if s.tempo else "")
-                            + (f" in {s.count}" if s.count else "") + ": s to count in")
-                        last_print = 0.0
+                    elif fade is None:
+                        eng = ctl.engine
+                        sounding = (eng.clock.running and not eng.muted) or eng._ending is not None
+                        fade = (song_index + step, now, now + (SWITCH_FADE_S if sounding else 0.0))
+                        if sounding:
+                            say("fading out...")
+                if fade is not None:               # fading out before the song changes
+                    target, start, end = fade
+                    if now < end:
+                        if now - fade_sent >= EXPRESSION_STEP_S:
+                            level = round(127 * (end - now) / (end - start))
+                            for ch in band_channels(cfg):
+                                out.control_change(ch - 1, FADE_CC, level)
+                            fade_sent = now
+                        time.sleep(0.005)
+                        continue                   # the band holds still while it fades
+                    fade, song_index = None, target
+                    out.panic()
+                    args.song = set_songs[song_index]
+                    cfg = load_for_run(args)
+                    ctl = Controller(cfg, out)
+                    for ch in band_channels(cfg):  # back to full for the new song
+                        out.control_change(ch - 1, FADE_CC, 127)
+                    select_patch(out, cfg)
+                    if rec:
+                        rec.close()
+                        rec = Recorder(auto_path(name=args.song))
+                    s = cfg.song
+                    say(f"Song {song_index + 1}/{len(set_songs)}: {s.title or args.song}"
+                        + (f", {s.tempo:g} bpm" if s.tempo else "")
+                        + (f" in {s.count}" if s.count else "") + ": s to count in")
+                    last_print = 0.0
                 ctl.tick(now)
                 for t_held, held in ctl.take_holds():  # a switch held: its hold action
                     if rec:

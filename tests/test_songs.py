@@ -150,3 +150,51 @@ def test_a_song_selects_its_mainstage_patch_by_program_change():
     assert cli.select_patch(SafeOutput(port), cfg)
     assert [(m.type, m.channel, m.program) for m in port.sent] == [("program_change", 15, 2)]
     assert not cli.select_patch(SafeOutput(RecordingPort()), c.from_dict({}))
+
+
+def test_changing_song_while_the_band_plays_fades_it_out_first(tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+
+    from accompanist import cli
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "sets").mkdir()
+    (tmp_path / "sets" / "gig.toml").write_text('songs = ["example-waltz", "example-seven"]\n')
+    (tmp_path / "config.toml").write_text('[output]\nport = "fake"\n[[inputs]]\nport = "fake in"\n')
+    sent = []
+
+    class Keys:
+        script = iter(["s"] + [None] * 50 + ["]", "]"])
+
+        def poll(self):
+            k = next(self.script, None)
+            if k is None and "Song 2/2" in capsys.readouterr().out + "".join(sent_text):
+                return "q"
+            return k
+
+        def close(self):
+            pass
+
+    sent_text = []
+
+    class Out(RecordingPort):
+        def send(self, msg):
+            sent.append(msg)
+
+        def close(self):
+            pass
+
+    class Port:
+        def close(self):
+            pass
+
+    real_say = cli.say
+    monkeypatch.setattr(cli, "say", lambda m: (sent_text.append(str(m)), real_say(m)))
+    monkeypatch.setattr(cli, "KeyReader", Keys)
+    monkeypatch.setattr(cli, "open_inputs", lambda cfg, q, missing=None: [Port()])
+    monkeypatch.setattr(cli, "open_output", lambda cfg: Out())
+    cli.main(["run", "--set", "gig", "--no-record"])
+    assert any("Song 2/2" in m for m in sent_text) and any("fading out" in m for m in sent_text)
+    fades = [m.value for m in sent if m.type == "control_change" and m.control == 11
+             and m.channel == 1]                                   # the bass channel
+    assert fades and fades[0] > 100 and min(fades) < 20 and fades[-1] == 127

@@ -180,7 +180,9 @@ Each song brings its own setup (and, with `[song] patch = N`, the patch numbered
 channel 16, `output.patch_channel`, so MainStage switches to the song's patch); then **s**
 counts it in. One run plays the whole set, and each
 song gets its own take file. While the band is playing, **q**, **[** and **]** need a second
-press within 2 s, so a slip of the finger can't end the set or change the song mid-song.
+press within 2 s, so a slip of the finger can't end the set or change the song mid-song; a
+song change while the band still sounds (or the last chord still rings) fades every voice
+out over a second first, on Expression (CC11), then restores it for the next song.
 
 **s** (or `song_start`) counts the band in: one bar of clicks at the song's tempo and meter,
 then drums and pulse come in with the tempo locked, and the pad once it has heard you. With a
