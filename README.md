@@ -358,10 +358,15 @@ at once; on an ending it rolls the last chord. Its knob is `piano.feel`.
 
 When you rest for a while (`interlude.after_beats`, 6 beats after the answers), the band
 carries the music so you can take a proper break: the piano comps (chords on the beat, a
-pattern for each meter, voice-led) and the guitar plays your own remembered phrases, taking
+pattern for each meter, voice-led) and the guitar solos, stringing your own remembered
+phrases together to fill its turn, taking
 turns every `interlude.turn_bars` bars (4). The pad stays back while they play. Play again
 and they stop at once. The status line shows INTERLUDE. `[interlude] enabled = false` turns it
 off.
+
+The guitar varies the rhythm of the phrases it plays back (`response.rhythm_variety`,
+0.4): mostly as you played them, now and then in double time (not above 150 bpm), half time
+(not below 70) or triplets. Answers are up to `response.max_notes` (8) long.
 
 ## Before (and during) a gig
 

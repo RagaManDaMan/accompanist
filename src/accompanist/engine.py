@@ -311,9 +311,10 @@ class Engine:
             self.piano.comp_beat(now, self.clock.period, bar, bar_pos, bpb, chord, gain)
         elif bar_pos == 0 and (bar - self._interlude_bar0) % max(1, il.guitar_every_bars) == 0 \
                 and not self.response.playing(now):
-            self.response.play_from_memory(now, self.clock.period,
+            left = il.turn_bars - (bar - self._interlude_bar0) % max(1, il.turn_bars)
+            self.response.play_from_memory(now, self.clock.period,      # a solo for its turn
                                            {n % 12 for n in chord.notes}, self._scale_pcs(),
-                                           gain, now)
+                                           gain, now, beats=left * bpb - 1)
 
     # ---- breaks -------------------------------------------------------------
     @property

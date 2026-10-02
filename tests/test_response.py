@@ -127,7 +127,7 @@ def test_with_the_beat_running_answers_land_on_the_eighth_note_grid():
         for k, n in enumerate((60, 64, 67)):
             loose.append((t + k * period / 2 + (0.03 if k == 1 else -0.02), n, 90))
         t += 4 * period
-    config = c.from_dict({"response": {"enabled": True, "chance": 1.0},
+    config = c.from_dict({"response": {"enabled": True, "chance": 1.0, "rhythm_variety": 0.0},
                           "harmony": {"root": "C"}, "lock": {"auto": False},
                           "tempo": {"prior_bpm": 100}})
     res = simulate.run(config, onsets=loose, total=t)
@@ -215,3 +215,42 @@ def test_detector_slips_are_cleaned_out_of_remembered_phrases():
     assert [n for _, n, _ in clean_phrase(blip)] == [60, 62]
     leap = [(0.0, 60, 90), (0.3, 72, 90), (0.6, 74, 90)]           # a real octave leap
     assert [n for _, n, _ in clean_phrase(leap)] == [60, 72, 74]
+
+
+def _answers(variety, bpm=100, seed=0):
+    from accompanist.output import RecordingPort, SafeOutput
+    from accompanist.response import ResponseResponder
+
+    cfg = c.from_dict({"response": {"enabled": True, "chance": 1.0, "rhythm_variety": variety,
+                                    "quantize": 1.0}})
+    r = ResponseResponder(cfg.response, SafeOutput(RecordingPort()), seed)
+    period = 60 / bpm
+    phrase = [(i * period / 2, 60 + (0, 2, 4, 5, 7, 5)[i], 90) for i in range(6)]
+    gaps = set()
+    for k in range(40):
+        notes = r._phrase_notes(phrase, period, 1.0, True)
+        gaps |= {round((b[0] - a[0]) / period, 2) for a, b in zip(notes, notes[1:])}
+    return gaps
+
+
+def test_the_guitar_varies_its_rhythm_double_half_and_triplets():
+    assert _answers(0.0) == {0.5}                                       # as played: eighths
+    gaps = _answers(1.0)
+    assert {0.25, 1.0, 0.33} <= gaps or {0.25, 1.0, 0.67} <= gaps        # 16ths, quarters, triplets
+
+
+def test_no_double_time_when_the_tempo_is_fast():
+    assert 0.25 not in _answers(1.0, bpm=200)
+
+
+def test_an_interlude_solo_strings_phrases_together_to_fill_its_turn():
+    from accompanist.output import RecordingPort, SafeOutput
+    from accompanist.response import ResponseResponder
+
+    cfg = c.from_dict({"response": {"enabled": True, "rhythm_variety": 0.0, "fit": 0.0}})
+    r = ResponseResponder(cfg.response, SafeOutput(RecordingPort()), 0)
+    for k in range(4):
+        r.memory.append([(i * 0.25, 60 + i, 90) for i in range(4)])
+    r.play_from_memory(0.0, 0.5, {0, 4, 7}, None, 1.0, 0.0, beats=15)
+    times = sorted(t for t, *_ in r._queue)
+    assert len(times) >= 12 and times[-1] > 4.0                         # several phrases, ~8 s

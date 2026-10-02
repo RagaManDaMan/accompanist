@@ -64,6 +64,7 @@ MACROS: dict[str, list[tuple[str, tuple]]] = {
         ("response.variety", (0.0, 0.0, 0.35)),          # exact .. sometimes varied
         ("response.quantize", (1.0, 1.0, 0.3)),          # on the grid .. your own timing
         ("response.yield_to_you", (1.0, 1.0, 0.5)),      # stops for you .. gives way partly
+        ("response.rhythm_variety", (0.0, 0.4, 0.6)),    # as you played .. 2x, 1/2x, triplets
     ],
 }
 

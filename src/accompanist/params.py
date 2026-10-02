@@ -491,7 +491,7 @@ PARAMS: list[Param] = [
       "...and at least this many seconds.", "Response", 0.1, 3, 0.05),
     P("response.min_notes", int, 2, "Phrase at least",
       "Only answer phrases of at least this many notes.", "Response", 1, 16, 1),
-    P("response.max_notes", int, 6, "Answer at most",
+    P("response.max_notes", int, 8, "Answer at most",
       "The answer uses at most this many notes (the end of your phrase).", "Response", 1, 16, 1),
     P("response.memory", int, 16, "Phrases remembered",
       "The answer is one of your last this-many phrases.", "Response", 1, 128, 1),
@@ -507,6 +507,9 @@ PARAMS: list[Param] = [
     P("response.variety", float, 0.0, "Variety",
       "How often to play a variation of your last phrase (moved a scale step, inverted or "
       "reversed) instead of one of your own phrases (0 = never).", "Response", 0, 1, 0.05),
+    P("response.rhythm_variety", float, 0.4, "Rhythm variations",
+      "How often a phrase is played in double time, half time or triplets instead of as you "
+      "played it (0 = never).", "Response", 0, 1, 0.05),
     P("response.chance", float, 0.9, "How often",
       "Share of your pauses that get an answer (0-1).", "Response", 0, 1, 0.05),
 

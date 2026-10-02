@@ -27,6 +27,14 @@ LAST_NOTE_BEATS = 1.5     # the answer's last note rings this long
 GATE = 0.9                # notes sound for this share of their interval
 SPAN = 9                  # answer notes stay within this many semitones of the voice's centre
 BLIP_S = 0.09             # a remembered phrase drops notes shorter than this
+# Rhythmic variations of a phrase (response.rhythm_variety): name -> (interval scale, grid
+# notes per beat). Double time only up to DOUBLE_MAX_BPM, half time only from HALF_MIN_BPM.
+RHYTHMS = {"double": (0.5, 4), "half": (2.0, 1), "triplet": (1.0, 3)}
+RHYTHM_WEIGHTS = {"double": 0.35, "half": 0.35, "triplet": 0.3}
+DOUBLE_MAX_BPM = 150
+HALF_MIN_BPM = 70
+SOLO_BREATH_BEATS = 1.0   # a solo's phrases are this far apart
+SOLO_MAX_NOTES = 64       # a solo is at most this long
 OUTLIER = 12              # ...and folds notes this far from both neighbours
 
 
@@ -100,14 +108,16 @@ def make_answer(phrase: list[tuple[float, int, int]], chord_pcs, scale_pcs, rng:
 
 
 def render(pitches: list[int], iois: list[float], vels: list[int], cfg: Any, period: float,
-           gain: float = 1.0, grid: bool = False) -> list[tuple[float, int, int, float]]:
+           gain: float = 1.0, grid: bool = False,
+           per_beat: int = 2) -> list[tuple[float, int, int, float]]:
     """Notes + intervals -> [(offset s, note, velocity, duration s)], one note at a time.
-    grid: the rhythm moves toward eighth notes by response.quantize (1 = on the grid)."""
+    grid: the rhythm moves toward a grid of per_beat notes a beat (eighths by default) by
+    response.quantize (1 = on the grid)."""
     if grid:
-        step = period / 2
+        step = period / per_beat
         q = cfg.quantize
-        iois = [q * min(max(round(x / step), 1), int(MAX_IOI_BEATS * 2)) * step + (1 - q) * x
-                for x in iois]
+        iois = [q * min(max(round(x / step), 1), int(MAX_IOI_BEATS * per_beat)) * step
+                + (1 - q) * x for x in iois]
     mean_vel = sum(vels) / len(vels)
     out, t = [], 0.0
     for i, p in enumerate(pitches):
@@ -266,7 +276,25 @@ class ResponseResponder:
             shift = round((centre - sum(pitches) / len(pitches)) / 12) * 12
             pitches = [p + shift for p in pitches]
         iois = [b[0] - a[0] for a, b in zip(phrase, phrase[1:])]
-        return render(pitches, iois, [v for _, _, v in phrase], self.cfg, period, gain, grid)
+        rhythm = self._pick_rhythm(period) if grid else None
+        scale, per_beat = RHYTHMS.get(rhythm, (1.0, 2))
+        return render(pitches, [x * scale for x in iois], [v for _, _, v in phrase], self.cfg,
+                      period, gain, grid, per_beat)
+
+    def _pick_rhythm(self, period: float) -> Optional[str]:
+        """As you played it, or now and then (response.rhythm_variety) in double time, half
+        time or triplets."""
+        v = self.cfg.rhythm_variety
+        if v <= 0 or self.rng.random() >= v:
+            return None
+        bpm = 60.0 / period
+        options = {k: w for k, w in RHYTHM_WEIGHTS.items()
+                   if not (k == "double" and bpm > DOUBLE_MAX_BPM)
+                   and not (k == "half" and bpm < HALF_MIN_BPM)}
+        if not options:
+            return None
+        names = list(options)
+        return self.rng.choices(names, [options[k] for k in names])[0]
 
     def _schedule(self, notes, now: float, period: float, next_beat: Optional[float]) -> None:
         self.cancel()                                       # a new answer replaces an old one
@@ -277,16 +305,29 @@ class ResponseResponder:
             heapq.heappush(self._queue, (start + off, next(self._seq), note, vel, dur))
 
     def play_from_memory(self, now: float, period: float, chord_pcs, scale_pcs, gain: float,
-                         next_beat: Optional[float]) -> bool:
-        """In an interlude (you resting): one of your remembered phrases that fits the harmony,
-        on the beat. False if nothing is remembered yet."""
+                         next_beat: Optional[float], beats: float = 0.0) -> bool:
+        """In an interlude (you resting): a solo of your remembered phrases that fit the
+        harmony, on the beat, each in its own rhythm (as played, double, half or triplets),
+        strung together to last about `beats` beats (0: one phrase). False if nothing is
+        remembered yet."""
         if not self.cfg.enabled or not self.memory:
             return False
-        phrase, used = choose_phrase(self.memory[-1], self.memory, chord_pcs, scale_pcs,
-                                     self.rng, self.cfg, self._last_used)
-        self._last_used = used
-        self._schedule(self._phrase_notes(phrase, period, gain, next_beat is not None), now,
-                       period, next_beat)
+        notes, end = [], 0.0
+        while not notes or end < beats * period:
+            phrase, used = choose_phrase(self.memory[-1], self.memory, chord_pcs, scale_pcs,
+                                         self.rng, self.cfg, self._last_used)
+            self._last_used = used
+            part = self._phrase_notes(phrase, period, gain, next_beat is not None)
+            if not part:
+                break
+            start = end + (SOLO_BREATH_BEATS * period if notes else 0.0)
+            if notes and start + part[-1][0] > beats * period:
+                break                                  # the next phrase wouldn't fit
+            notes += [(start + off, n, v, d) for off, n, v, d in part]
+            end = start + part[-1][0] + part[-1][3]
+            if len(notes) > SOLO_MAX_NOTES:
+                break
+        self._schedule(notes, now, period, next_beat)
         return True
 
     def playing(self, now: float) -> bool:
