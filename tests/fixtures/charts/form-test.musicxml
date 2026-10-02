@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <work><work-title>Form Test</work-title></work>
+  <identification><creator type="lyricist">Medium Swing</creator></identification>
+  <part-list><score-part id="P1"><part-name>Lead sheet</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>768</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <barline location="left"><repeat direction="forward"/></barline>
+      <direction><direction-type><rehearsal>A</rehearsal></direction-type></direction>
+      <harmony><root><root-step>C</root-step></root><kind text="maj7">major-seventh</kind></harmony>
+      <note><rest/><duration>3072</duration></note>
+    </measure>
+    <measure number="2">
+      <barline location="left"><ending type="start" number="1">1.</ending></barline>
+      <barline location="right"><ending type="discontinue" number="1"/></barline>
+      <harmony><root><root-step>D</root-step></root><kind text="m7" parentheses-degrees="yes">minor-seventh</kind>
+        <degree><degree-value>5</degree-value><degree-alter>-1</degree-alter><degree-type>alter</degree-type></degree></harmony>
+      <note><rest/><duration>1536</duration></note>
+      <harmony><root><root-step>G</root-step></root><kind text="7" parentheses-degrees="yes">dominant</kind>
+        <degree><degree-value>9</degree-value><degree-alter>-1</degree-alter><degree-type>add</degree-type></degree></harmony>
+      <note><rest/><duration>1536</duration></note>
+    </measure>
+    <measure number="3">
+      <barline location="right"><repeat direction="backward"/></barline>
+      <harmony><root><root-step>A</root-step></root><kind text="m7">minor-seventh</kind></harmony>
+      <note><rest/><duration>3072</duration></note>
+    </measure>
+    <measure number="4">
+      <barline location="left"><ending type="start" number="2">2.</ending></barline>
+      <barline location="right"><ending type="discontinue" number="2"/></barline>
+      <direction><direction-type><rehearsal>B</rehearsal></direction-type></direction>
+      <harmony><root><root-step>F</root-step></root><kind text="">major</kind>
+        <bass><bass-step>A</bass-step></bass></harmony>
+      <note><rest/><duration>3072</duration></note>
+    </measure>
+    <measure number="5">
+      <note><rest/><duration>3072</duration></note>
+    </measure>
+    <measure number="6">
+      <harmony><root><root-step>B</root-step><root-alter>-1</root-alter></root><kind text="7">dominant</kind></harmony>
+      <note><rest/><duration>3072</duration></note>
+    </measure>
+  </part>
+</score-partwise>
