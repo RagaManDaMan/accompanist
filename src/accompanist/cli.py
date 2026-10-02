@@ -254,6 +254,16 @@ def select_patch(out: SafeOutput, cfg) -> bool:
     return True
 
 
+def cmd_patch(args) -> int:
+    """Send one program change, to test MainStage's patch switching."""
+    cfg = cfgmod.load(args.config)
+    cfg.song.patch = args.number
+    out = SafeOutput(open_output(cfg.output))
+    select_patch(out, cfg)
+    print(f"Sent program change {args.number} on channel {cfg.output.patch_channel}.")
+    return 0
+
+
 def cmd_recorder(args) -> int:
     """Press the recorder switch once: to teach MainStage the button, or to test it."""
     cfg = cfgmod.load(args.config)
@@ -993,6 +1003,9 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("patch", help="send one program change (test MainStage patch switching)")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("number", type=int, help="program number, 0-127")
     sp = sub.add_parser("recorder", help="press the recorder switch once (to map it in "
                                          "MainStage, or to test it)")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -1028,7 +1041,7 @@ def main(argv=None) -> int:
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
                 "listen": cmd_listen, "learn": cmd_learn,
                 "check": cmd_check, "soundcheck": cmd_soundcheck,
-                "recorder": cmd_recorder}[args.cmd](args)
+                "recorder": cmd_recorder, "patch": cmd_patch}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
