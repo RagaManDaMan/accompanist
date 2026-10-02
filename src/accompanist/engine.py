@@ -18,6 +18,7 @@ from .groove import GROUPS, Groove
 from .config import Config, note_name, NOTE_NAMES
 from .harmony import Onset, Voicing, make_model
 from .output import SafeOutput
+from .piano import PianoResponder
 from .responders import DrumResponder, PadResponder, PulseResponder
 from .response import ResponseResponder
 from .tempo import REALIGN_ADVANTAGE, TempoEstimator
@@ -45,6 +46,7 @@ class Engine:
         self.drums = DrumResponder(cfg.drums, out, cfg.harmony.seed)
         self.percussion = DrumResponder(cfg.percussion, out, cfg.harmony.seed + 7)
         self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
+        self.piano = PianoResponder(cfg.piano, out, cfg.harmony.seed)
         self.beat_count = 0                       # beats since the clock started (bar position)
         # A chart is a song: silent until started (count-in), then it plays until panic.
         self.is_chart = hasattr(self.harmony, "restart")
@@ -82,6 +84,7 @@ class Engine:
         self.last_onset_t, self.last_note = t, note
         self.clock.hint(t, self.cfg.pulse.hint_window)
         self.response.hear(t, note, velocity, self.tempo.period)   # stops any answer at once
+        self.piano.hear(t)
         if self.clock.running and not self.is_chart:           # where it fell against the beat
             x = (t - self.clock.next_beat) / self.clock.period
             k = math.floor(x)
@@ -114,8 +117,8 @@ class Engine:
         voicing = self.frozen if self.chord_held else self.proposal
         waiting = self.is_chart and not self.song_playing   # before the chart starts: no band
 
-        if self.response.playing(now):
-            self.dynamics.heard(now)                 # the answer is playing: not quiet
+        if self.response.playing(now) or self.piano.playing(now):
+            self.dynamics.heard(now)                 # an answer is playing: not quiet
         self._shape_pad(now)
         if not self.cfg.pad.enabled or waiting:
             self.pad.release_all()
@@ -129,6 +132,9 @@ class Engine:
             self.response.tick(now, period, None if chord is None else {n % 12 for n in chord.notes},
                                self._scale_pcs(), self.dynamics.follow_gain(),
                                self.clock.next_beat if self.clock.running else None)
+            self.piano.tick(now, self.clock.period, chord, self._scale_pcs(),
+                            self.dynamics.follow_gain(),
+                            self.clock.next_beat if self.clock.running else None, self.response)
 
         # The beat clock runs while bass (pulse) or drums need it, or a chart is counting in.
         if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.cfg.percussion.enabled
@@ -326,6 +332,7 @@ class Engine:
         self.pulse.reset()
         self._reset_drums()
         self.response.reset()
+        self.piano.reset()
         self.clock.stop()
 
     def resume(self) -> None:
@@ -380,6 +387,7 @@ class Engine:
         ring = self.cfg.ending.ring_s
         chord = self._ending_chord(now)
         self.response.cancel()
+        self.piano.final_chord(now, chord, self.clock.period)
         self._reset_drums()
         if chord is not None:
             if self.cfg.pad.enabled:
@@ -403,6 +411,7 @@ class Engine:
     def _ring_out(self, now: float) -> None:
         """While the last chord rings: fade the pad out, then stop everything."""
         start, end = self._ending
+        self.piano.tick(now, self.clock.period, None, None, 1.0, None, self.response)  # its roll
         if now >= end:
             self.panic()
             self.finished = True

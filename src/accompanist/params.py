@@ -356,6 +356,40 @@ PARAMS: list[Param] = [
       "0 = even; higher = follows your loudness more, lifts when you play busily, softer "
       "off-beats.", "Percussion", 0, 1, 0.05),
 
+    # ---- piano (answers you with arpeggios, on the beat) -----------------------
+    P("piano.enabled", bool, False, "Piano on",
+      "After your phrase (and the guitar's answer), the piano plays an arpeggio of the chord, "
+      "strictly on the beat, following your phrase's direction.", "Piano", primary=True),
+    P("piano.feel", float, 0.4, "Piano feel",
+      "Algorithmic (0: answers every pause, straight eighths, even) to humanize (1: not every "
+      "pause, triplets now and then, small timing and velocity variation).", "Piano", 0, 1,
+      0.01, primary=True),
+    P("piano.channel", int, 5, "Piano channel", "MIDI channel (1-16).", "Piano", 1, 16, 1,
+      live=False),
+    P("piano.octave", int, 4, "Piano octave", "Where its arpeggios start (4 = middle C up).",
+      "Piano", 2, 6, 1),
+    P("piano.range_octaves", int, 2, "Piano range", "How many octaves its arpeggios span.",
+      "Piano", 1, 4, 1),
+    P("piano.velocity", int, 70, "Piano velocity", "Its normal velocity (follows your loudness).",
+      "Piano", 1, 127, 1),
+    P("piano.chance", float, 0.7, "Piano: how often",
+      "Share of your pauses the piano answers (after the guitar, if it answers).", "Piano",
+      0, 1, 0.05),
+    P("piano.subdivision", str, "auto", "Piano rhythm",
+      "Notes per beat: eighths, triplets, quarters, or auto (eighths, triplets now and then, "
+      "quarters above piano.fast_bpm).", "Piano",
+      choices=("auto", "eighths", "triplets", "quarters")),
+    P("piano.fast_bpm", float, 170.0, "Piano: fast tempo",
+      "Above this tempo, auto plays quarter notes.", "Piano", 60, 320, 5),
+    P("piano.max_beats", int, 4, "Piano: longest answer", "In beats.", "Piano", 1, 16, 1),
+    P("piano.variety", float, 0.3, "Piano variety",
+      "How often auto plays triplets instead of eighths (0 = never).", "Piano", 0, 1, 0.05),
+    P("piano.timing_ms", float, 0.0, "Piano timing spread",
+      "Each note up to this many ms early or late (humanize; the first stays on the beat).",
+      "Piano", 0, 30, 1),
+    P("piano.velocity_spread", int, 0, "Piano velocity spread",
+      "Each note up to this much softer or louder.", "Piano", 0, 40, 1),
+
     # ---- groove (meter, downbeat, feel) ----------------------------------------
     P("groove.auto", bool, True, "Hear the groove",
       "Hear the meter (in 3 or in 4), where 1 is, and straight vs swing from your playing; "

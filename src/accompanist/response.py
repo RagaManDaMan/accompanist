@@ -178,6 +178,7 @@ class ResponseResponder:
         self._last_used: Optional[int] = None
         self.last_t: Optional[float] = None
         self.answered = False
+        self.phrase_count = 0                                       # phrases heard so far
         self._queue: list[tuple[float, int, int, int, float]] = []   # (t, seq, note, vel, dur)
         self._seq = itertools.count()
         self._sounding: dict[int, float] = {}                       # note -> ends at
@@ -188,6 +189,7 @@ class ResponseResponder:
         self._give_way(self.cfg.yield_to_you)
         if self.answered or (self.last_t is not None and t - self.last_t >= self._gap(period)):
             self.phrase, self.answered = [], False
+            self.phrase_count += 1
         self.phrase.append((t, note, velocity))
         self.last_t = t
 

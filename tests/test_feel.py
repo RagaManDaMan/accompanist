@@ -21,7 +21,7 @@ def test_each_knob_at_its_default_gives_the_detailed_defaults():
 
 def test_a_simple_gui_needs_only_the_primary_controls():
     primary = [p.key for p in registry.PARAMS if p.primary]
-    voices = ("pad", "pulse", "drums", "percussion", "response")
+    voices = ("pad", "pulse", "drums", "percussion", "piano", "response")
     assert set(primary) == {f"{v}.{k}" for v in voices for k in ("feel", "enabled")}
     assert all(p["primary"] in (True, False) for p in registry.schema())
 

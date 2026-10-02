@@ -319,6 +319,17 @@ shaker = "xg xg xg | xg xg | xg xg"
 The cycle restarts when the beat starts (there is no downbeat detection yet).
 
 
+
+## Piano
+
+`[piano] enabled = true` (channel 5): after your phrase, and after the guitar's answer if
+it gives one, the piano plays a textbook arpeggio of the chord sounding (root, third, fifth,
+seventh), strictly on the beat: eighths, triplets now and then, quarters above
+`piano.fast_bpm`. It follows your idea: it starts where your phrase ended and goes the way
+it went (up or down), about as long as your phrase (at most `piano.max_beats`), and lands on
+the root. You playing again stops it at once. On an ending it rolls the last chord. Its
+knob is `piano.feel` (how often it answers, triplets, small timing variation).
+
 ## Before (and during) a gig
 
 `accompanist check` loads your config and every song, and looks for every device: run it at

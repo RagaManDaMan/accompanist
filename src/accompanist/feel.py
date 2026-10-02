@@ -50,6 +50,12 @@ MACROS: dict[str, list[tuple[str, tuple]]] = {
         ("percussion.dynamics", (0.0, 0.5, 0.9)),        # even .. follows you
         ("percussion.spotlight", (0.0, 0.6, 0.9)),       # steady .. steps into the gaps
     ],
+    "piano.feel": [
+        ("piano.chance", (1.0, 0.7, 0.5)),               # every pause .. now and then
+        ("piano.variety", (0.0, 0.3, 0.6)),              # straight eighths .. triplets too
+        ("piano.timing_ms", (0.0, 0.0, 12.0)),
+        ("piano.velocity_spread", (0, 0, 12)),
+    ],
     "response.feel": [
         ("response.chance", (1.0, 0.9, 0.6)),            # every pause .. not every pause
         ("response.curate", (0.0, 1.0, 1.0)),            # echo of your last phrase .. curated

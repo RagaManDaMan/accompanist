@@ -78,6 +78,10 @@ enabled = false
 channel = 11            # its own kit: congas, clave, shaker, cowbell (GM notes)
 pattern = "latin"       # in 4; in 3, 5, 6, 7 it picks latin-waltz, latin-five, bembe, latin-seven
 
+[piano]                 # answers your phrases with arpeggios, on the beat (see README)
+enabled = false
+channel = 5
+
 [response]              # call and response: answers your phrases (see README)
 enabled = false
 channel = 4             # e.g. an electric guitar track

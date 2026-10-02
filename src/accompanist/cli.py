@@ -435,10 +435,11 @@ def voices_summary(cfg) -> str:
              else "drums: off ([drums] enabled = true)")
     perc = (f"percussion ch {cfg.percussion.channel} ({cfg.percussion.pattern})"
             if cfg.percussion.enabled else "")
+    piano = f"piano ch {cfg.piano.channel}" if cfg.piano.enabled else ""
     response = (f"response ch {cfg.response.channel}" if cfg.response.enabled
                 else "response: off")
     lock = "tempo lock: auto" if cfg.lock.auto else "tempo lock: manual (l)"
-    voices = " | ".join(v for v in (pad, bass, drums, perc, response, lock) if v)
+    voices = " | ".join(v for v in (pad, bass, drums, perc, response, piano, lock) if v)
     voices = f"Voices: {voices}"
     s = cfg.song
     if s.title:
