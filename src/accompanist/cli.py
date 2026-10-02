@@ -145,10 +145,64 @@ def cmd_monitor(args) -> int:
             p.close()
         for a in audios:
             a.close()
+        guard.summary()
         if writer is not None:
             writer.close()
             print(f"\nSaved {writer.path}: try `accompanist listen {writer.path}`")
     return 0
+
+
+def cmd_check(args) -> int:
+    """Before a gig: does everything load, is everything plugged in? Problems, and the fix."""
+    from .audio_io import find_input
+    from .midi_io import _mido, find_port
+    from .output import RecordingPort
+
+    problems = 0
+
+    def report(ok: bool, what: str, detail: str = "") -> None:
+        nonlocal problems
+        problems += not ok
+        print(f"  {'ok ' if ok else 'XX '} {what}" + (f": {detail}" if detail else ""))
+
+    print(f"Config {args.config}:")
+    try:
+        cfg = cfgmod.load(args.config)
+        Controller(cfg, SafeOutput(RecordingPort()))       # builds everything: patterns, models
+        report(True, "loads")
+    except cfgmod.ConfigError as e:
+        report(False, "does not load", str(e))
+        return 2
+    songs = args.songs or cfgmod.available_songs()
+    print("Songs:")
+    for name in songs:
+        try:
+            Controller(cfgmod.load(args.config, song=name), SafeOutput(RecordingPort()))
+            report(True, name)
+        except cfgmod.ConfigError as e:
+            report(False, name, str(e))
+    print("Devices:")
+    mido = _mido()
+    try:
+        out = cfg.output.port
+        if out:
+            report(True, "output", find_port(mido.get_output_names(), out, "output"))
+        else:
+            report(True, "output", f"virtual source '{cfg.output.virtual_name}'")
+    except PortError as e:
+        report(False, "output", str(e).splitlines()[0])
+    names = mido.get_input_names()
+    for icfg in cfg.inputs:
+        label = f"{icfg.name or icfg.port or icfg.audio} ({icfg.role})"
+        try:
+            found = (find_input(icfg.audio)[1] if icfg.is_audio
+                     else find_port(names, icfg.port, "input"))
+            report(True, label, found)
+        except (PortError, AudioError) as e:
+            report(False, label, str(e).splitlines()[0] + "  (plug it in, or `run` carries on "
+                                                          "without it)")
+    print("\nAll good." if not problems else f"\n{problems} problem(s) above.")
+    return 0 if not problems else 1
 
 
 def cmd_learn(args) -> int:
@@ -433,11 +487,87 @@ def say(message) -> None:
         sys.stdout.flush()
 
 
+LAST_GOOD = ".last-good"                  # config.toml.last-good: the last config that started
+ERROR_LOG = Path("logs") / "errors.log"
+
+
+def load_for_run(args):
+    """The config for `run`, never stopping a gig over a fixable mistake: a song that doesn't
+    load is skipped (your config.toml alone), and a config.toml that doesn't load falls back to
+    the last copy that started (config.toml.last-good). Each says so, loudly."""
+    overrides = chart_overrides(args)
+    path = Path(args.config)
+    try:
+        cfg = cfgmod.load(args.config, args.preset, overrides, song=args.song)
+    except cfgmod.ConfigError as first:
+        problem = str(first)
+        if args.song:
+            try:
+                cfg = cfgmod.load(args.config, args.preset, overrides)
+                print(f"\n*** The song '{args.song}' has a problem: {problem}\n"
+                      f"*** Playing with your config.toml alone. (`accompanist check` to fix it.)\n")
+                return cfg
+            except cfgmod.ConfigError:
+                pass
+        good = path.with_name(path.name + LAST_GOOD)
+        if not good.exists():
+            raise
+        try:
+            cfg = cfgmod.load(str(good), args.preset, overrides, song=args.song)
+        except cfgmod.ConfigError:
+            try:
+                cfg = cfgmod.load(str(good), args.preset, overrides)
+            except cfgmod.ConfigError:
+                raise first from None
+        when = time.strftime("%d %b %H:%M", time.localtime(good.stat().st_mtime))
+        print(f"\n*** {path} has a problem: {problem}\n"
+              f"*** Using the last copy that worked ({good}, from {when}).\n")
+        return cfg
+    if path.exists():
+        try:
+            path.with_name(path.name + LAST_GOOD).write_text(path.read_text())
+        except OSError:
+            pass
+    return cfg
+
+
+class LiveGuard:
+    """Keeps `run` going through an unexpected error (a bug): the error goes to
+    logs/errors.log with its details, a short line on screen, and the band plays on."""
+
+    def __init__(self, log: Path = ERROR_LOG) -> None:
+        self.log, self.count, self._said = log, 0, float("-inf")
+        self._logged: set[tuple[str, str]] = set()
+
+    def report(self, e: BaseException) -> None:
+        import traceback
+
+        self.count += 1
+        key = (type(e).__name__, str(e))
+        if key in self._logged:
+            return                                       # the same error again: counted only
+        self._logged.add(key)
+        try:
+            self.log.parent.mkdir(parents=True, exist_ok=True)
+            with self.log.open("a") as f:
+                f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')}\n{traceback.format_exc()}\n")
+        except OSError:
+            pass
+        if time.monotonic() - self._said > 10:          # one line now and then, not a flood
+            self._said = time.monotonic()
+            say(f"(internal error: {type(e).__name__}: {e}; logged to {self.log}, carrying on)")
+
+    def summary(self) -> None:
+        if self.count:
+            print(f"\n{self.count} internal error(s) during the run, logged to {self.log}: "
+                  f"please send it over.")
+
+
 def cmd_run(args) -> int:
     from .audio_io import AudioInput, WavWriter
     from .audio_notes import AudioFeed
 
-    cfg = cfgmod.load(args.config, args.preset, chart_overrides(args), song=args.song)
+    cfg = load_for_run(args)
     if args.record_audio and not any(i.is_audio for i in cfg.inputs):
         raise cfgmod.ConfigError("--record-audio needs an audio input in the config ([[inputs]] audio = ...)")
     q: queue.Queue = queue.Queue()
@@ -447,8 +577,6 @@ def cmd_run(args) -> int:
         role = "controls" if icfg.role == "control" else "notes"
         print(f"warning: MIDI input '{icfg.name or icfg.port}' ('{icfg.port}', {role}) is not "
               f"plugged in: carrying on without it (plug it in and restart to use it)")
-    if missing and not in_ports and not any(i.is_audio for i in cfg.inputs):
-        raise PortError(missing[0][1])
     port = open_output(cfg.output)
     out = SafeOutput(port)
     ctl = Controller(cfg, out)
@@ -467,7 +595,12 @@ def cmd_run(args) -> int:
     audios, feeds, wav = [], {}, None
     for icfg in cfg.inputs:
         if icfg.is_audio and icfg.role == "note_source":
-            a = AudioInput(icfg, audio_q)
+            try:
+                a = AudioInput(icfg, audio_q)
+            except AudioError as e:
+                print(f"warning: audio input '{icfg.name or icfg.audio}' isn't available "
+                      f"({str(e).splitlines()[0]}): carrying on without it")
+                continue
             audios.append(a)
             feeds[id(icfg)] = AudioFeed(cfg.audio, a.sample_rate, heard, icfg.name or icfg.audio)
             print(f"Listening to audio '{a.name}' input {icfg.audio_channel} as '{icfg.name or icfg.audio}' "
@@ -477,6 +610,9 @@ def cmd_run(args) -> int:
     for icfg in cfg.inputs:
         if not icfg.is_audio:
             print(f"Listening to MIDI '{icfg.port}' as '{icfg.name or icfg.port}'")
+    if not in_ports and not audios:
+        raise PortError("nothing to listen to: no MIDI input or audio input is available "
+                        "(see the warnings above; `accompanist check` lists what's missing)")
     where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
     print(f"Playing to {where}." + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     print(voices_summary(cfg))
@@ -489,63 +625,67 @@ def cmd_run(args) -> int:
           "\n      [s] = start the song (count in at its tempo; a chart from the top)"
           "   [f] = finish (a last chord on the next 1)   [q] = quit\n")
     last_print = 0.0
+    guard = LiveGuard()
     try:
         while True:
             now = time.monotonic()
-            while True:
-                try:
-                    t, icfg, msg = q.get_nowait()
-                except queue.Empty:
+            try:
+                while True:
+                    try:
+                        t, icfg, msg = q.get_nowait()
+                    except queue.Empty:
+                        break
+                    fired = (None, None)
+                    try:
+                        if msg.type == "note_on" and msg.velocity > 0:
+                            if icfg.role == "note_source":
+                                ctl.on_note(t, msg.note, msg.velocity)
+                                if rec:
+                                    rec.note_on(t, msg.note, msg.velocity, icfg.name or icfg.port)
+                            else:                          # a control input: its notes are commands
+                                fired = ctl.on_midi(t, "note", msg.note, msg.velocity)
+                        elif msg.type == "control_change":
+                            fired = ctl.on_midi(t, "cc", msg.control, msg.value)
+                        elif msg.type == "program_change":
+                            fired = ctl.on_midi(t, "pc", msg.program, 127)
+                    except cfgmod.ConfigError as e:
+                        fired = (None, str(e))
+                    action, message = fired
+                    if message:
+                        say(message)
+                        last_print = 0.0
+                    if action and rec:
+                        rec.action(t, action)
+                while True:
+                    try:
+                        t, icfg, block = audio_q.get_nowait()
+                    except queue.Empty:
+                        break
+                    if wav is not None and icfg is audios[0].icfg:
+                        wav.write(block)
+                    feeds[id(icfg)].process(block, t)
+                key = keys.poll()
+                if key == "q":
                     break
-                fired = (None, None)
-                try:
-                    if msg.type == "note_on" and msg.velocity > 0:
-                        if icfg.role == "note_source":
-                            ctl.on_note(t, msg.note, msg.velocity)
-                            if rec:
-                                rec.note_on(t, msg.note, msg.velocity, icfg.name or icfg.port)
-                        else:                          # a control input: its notes are commands
-                            fired = ctl.on_midi(t, "note", msg.note, msg.velocity)
-                    elif msg.type == "control_change":
-                        fired = ctl.on_midi(t, "cc", msg.control, msg.value)
-                    elif msg.type == "program_change":
-                        fired = ctl.on_midi(t, "pc", msg.program, 127)
-                except cfgmod.ConfigError as e:
-                    fired = (None, str(e))
-                action, message = fired
-                if message:
+                if key in KEYS:
+                    say(ctl.do(KEYS[key], now))
+                    if rec:
+                        rec.action(now, KEYS[key])
+                    last_print = 0.0               # show the new state at once
+                ctl.tick(now)
+                for t_held, held in ctl.take_holds():  # a switch held: its hold action
+                    if rec:
+                        rec.action(t_held, held)
+                for message in ctl.take_events():     # e.g. a count-off completing
                     say(message)
                     last_print = 0.0
-                if action and rec:
-                    rec.action(t, action)
-            while True:
-                try:
-                    t, icfg, block = audio_q.get_nowait()
-                except queue.Empty:
-                    break
-                if wav is not None and icfg is audios[0].icfg:
-                    wav.write(block)
-                feeds[id(icfg)].process(block, t)
-            key = keys.poll()
-            if key == "q":
-                break
-            if key in KEYS:
-                say(ctl.do(KEYS[key], now))
-                if rec:
-                    rec.action(now, KEYS[key])
-                last_print = 0.0               # show the new state at once
-            ctl.tick(now)
-            for t_held, held in ctl.take_holds():  # a switch held: its hold action
-                if rec:
-                    rec.action(t_held, held)
-            for message in ctl.take_events():     # e.g. a count-off completing
-                say(message)
-                last_print = 0.0
-            if now - last_print >= 0.25:
-                width = shutil.get_terminal_size((100, 20)).columns - 1
-                sys.stdout.write("\r\x1b[K" + format_status(ctl.get_state(now))[:width])
-                sys.stdout.flush()
-                last_print = now
+                if now - last_print >= 0.25:
+                    width = shutil.get_terminal_size((100, 20)).columns - 1
+                    sys.stdout.write("\r\x1b[K" + format_status(ctl.get_state(now))[:width])
+                    sys.stdout.flush()
+                    last_print = now
+            except Exception as e:           # a bug must not stop the band mid-set
+                guard.report(e)
             time.sleep(0.005)
     except KeyboardInterrupt:
         pass
@@ -672,6 +812,10 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("check", help="before a gig: does the config and every song load, "
+                                      "is every device plugged in?")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("songs", nargs="*", help="songs to check (default: all of them)")
     sp = sub.add_parser("learn", help="press each pedal/controller switch when asked: writes [controls]")
     sp.add_argument("-c", "--config", default="config.toml")
     sp = sub.add_parser("listen", help="run an audio recording (WAV) through the note detector, offline")
@@ -688,7 +832,8 @@ def main(argv=None) -> int:
     try:
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
-                "listen": cmd_listen, "learn": cmd_learn}[args.cmd](args)
+                "listen": cmd_listen, "learn": cmd_learn,
+                "check": cmd_check}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

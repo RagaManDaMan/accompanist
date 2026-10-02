@@ -312,6 +312,22 @@ shaker = "xg xg xg | xg xg | xg xg"
 
 The cycle restarts when the beat starts (there is no downbeat detection yet).
 
+
+## Before (and during) a gig
+
+`accompanist check` loads your config and every song, and looks for every device: run it at
+soundcheck. It lists each problem with what to do (`accompanist check waltz seven` checks
+just those songs).
+
+`run` doesn't stop a set over a fixable mistake:
+- a pedal, keyboard or audio input that isn't plugged in: a warning, and it carries on
+  without it (it stops only if there is nothing at all to listen to);
+- a song file with a mistake: it plays with your config.toml alone, and says so;
+- a config.toml with a mistake: it uses the last copy that started (`config.toml.last-good`,
+  kept automatically), and says so;
+- a bug while playing: logged to `logs/errors.log`, one line on screen, and the band plays on.
+  Please send that file over.
+
 ## Audio input (sax first)
 
 The accompanist hears notes in audio from an interface (voice and sax are how most gigs

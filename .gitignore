@@ -9,3 +9,5 @@ takes/
 charts/
 datasets/
 grooves/
+config.toml.last-good
+logs/
