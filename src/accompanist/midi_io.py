@@ -64,7 +64,7 @@ def open_inputs(cfg: Config, q: "queue.Queue", missing: Optional[list] = None):
     if not cfg.inputs:
         raise PortError("No [[inputs]] in the config. Run `accompanist devices`, then add one.")
     names = mido.get_input_names()
-    ports = []
+    ports, opened = [], set()
     for inp in cfg.inputs:
         if inp.is_audio:
             continue                  # audio inputs: see audio_io.py
@@ -83,6 +83,9 @@ def open_inputs(cfg: Config, q: "queue.Queue", missing: Optional[list] = None):
                 q.put((time.monotonic(), icfg, msg))
             return cb
 
+        if name in opened:
+            continue                  # the same device listed twice: once is enough
+        opened.add(name)
         ports.append(mido.open_input(name, callback=make_cb(inp)))
     return ports
 

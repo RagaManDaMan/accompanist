@@ -9,6 +9,8 @@ A message here is (port, kind, number, value) with kind 'cc', 'pc' or 'note'
 """
 from __future__ import annotations
 
+import re
+
 from typing import Optional
 
 Msg = tuple[str, str, int, int]          # (port, kind, number, value)
@@ -125,7 +127,8 @@ def update_config(text: str, controls: str, pedal_port: Optional[str] = None) ->
             skipping = False
         if not skipping:
             out.append(line)
-    if pedal_port and not any(f'"{pedal_port}"' in line for line in lines):
+    listed = [m.group(1) for m in (re.match(r'\s*port\s*=\s*"([^"]*)"', line) for line in lines) if m]
+    if pedal_port and not any(p and p.lower() in pedal_port.lower() for p in listed):
         block = ["", "[[inputs]]", 'name = "pedal"', f'port = "{pedal_port}"', 'role = "control"']
         last = max((i for i, line in enumerate(out) if line.strip() == "[[inputs]]"), default=None)
         if last is None:

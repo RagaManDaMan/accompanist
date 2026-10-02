@@ -120,3 +120,10 @@ def test_tap_and_hold_switches_are_written_and_load():
     ctl = cfg.controls[("cc", 80)]
     assert (ctl.target, ctl.hold) == ("tap_tempo", "song_start")
     assert cfg.controls[("cc", 82)].target == "finish"
+
+
+def test_a_pedal_listed_by_part_of_its_name_is_not_added_again():
+    text = OLD.replace('port = "LPK25"', 'port = "MK3"')
+    new = update_config(text, controls_toml({"panic": ("note", 53, False)}, None),
+                        "Keystation Mini 32 MK3 USB Audio Device")
+    assert "Keystation" not in new
