@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import queue
 import re
@@ -190,11 +191,13 @@ def cmd_soundcheck(args) -> int:
     cfg = cfgmod.load(args.config)
     out = SafeOutput(open_output(cfg.output))
     where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
-    print(f"Soundcheck to {where}. Listen for each voice; Ctrl-C to stop.\n")
+    plan = [p for p in soundcheck_plan(cfg) if not args.voice or p[0].startswith(args.voice)]
+    print(f"Soundcheck to {where}. Listen for each voice" +
+          ("; it repeats until Ctrl-C (fix MainStage while it plays)." if args.loop else
+           "; Ctrl-C to stop.") + "\n")
+    rounds = itertools.count() if args.loop else range(1)
     try:
-        for label, channel, notes in soundcheck_plan(cfg):
-            if args.voice and not label.startswith(args.voice):
-                continue
+        for _, (label, channel, notes) in itertools.product(rounds, plan):
             print(f"  channel {channel:2d}: {label}")
             start = time.monotonic()
             for at, note, vel in notes:
@@ -882,6 +885,8 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("voice", nargs="?", default=None,
                     help="just one voice: pad, bass, drums, percussion, piano or guitar")
+    sp.add_argument("--loop", action="store_true",
+                    help="keep repeating until Ctrl-C, while you fix MainStage")
     sp = sub.add_parser("check", help="before a gig: does the config and every song load, "
                                       "is every device plugged in?")
     sp.add_argument("-c", "--config", default="config.toml")
