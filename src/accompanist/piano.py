@@ -1,8 +1,9 @@
 """The piano: answers your phrases with a textbook arpeggio of the chord, on the beat.
 
-It takes its turn after the guitar (the answer, response.py): once your phrase has ended and
-the guitar has had its say (or let the pause go), the piano plays an arpeggio through the
-chord of the moment, starting on the next beat, in steady eighths (triplets now and then,
+It shares the answering with the guitar (response.py): when your phrase ends it takes some
+turns itself (piano.share), and it also fills some of the gaps where the pad would swell,
+once it has been quiet all round for a moment (piano.chance). Either way it plays an arpeggio
+through the chord of the moment, starting on the next beat, in steady eighths (triplets now and then,
 quarters at fast tempi). It follows your idea's shape: up if your phrase went up, down if
 it went down, about as long as your phrase, ending on a held chord tone. You playing again
 stops it at once. The guitar is rubato and yours; the piano is strict and the band's.
@@ -82,6 +83,15 @@ class PianoResponder:
         self._seq = itertools.count()
         self._sounding: dict[int, float] = {}       # note -> ends at
         self._answered_phrase: Optional[int] = None  # id of the phrase it has answered
+        self._claimed: Optional[list] = None        # a phrase it took from the guitar
+
+    def claim(self, phrase: list[tuple[float, int, int]]) -> bool:
+        """Your phrase just ended: take this turn from the guitar (piano.share of them)?
+        If so it is answered at the next tick, starting on the next beat."""
+        if not self.cfg.enabled or not phrase or self.rng.random() >= self.cfg.share:
+            return False
+        self._claimed = list(phrase)
+        return True
 
     def hear(self, t: float) -> None:
         """You played: the piano gives way at once."""
@@ -91,18 +101,26 @@ class PianoResponder:
         return bool(self._queue) or any(end > now for end in self._sounding.values())
 
     def tick(self, now: float, period: float, chord, scale_pcs, gain: float,
-             next_beat: Optional[float], response) -> None:
+             next_beat: Optional[float], response, quiet: float = 0.0) -> None:
         """chord: the Voicing sounding (None: nothing to arpeggiate); response: the guitar,
-        whose phrase tracking says when your phrase has ended and whether it is still
-        answering."""
+        whose phrase tracking says what your last phrase was; quiet: Dynamics.quiet(), above 0
+        once it has been quiet all round long enough for the pad to swell. That moment is the
+        piano's: it takes some of them (piano.chance), and while it plays the pad stays back,
+        so the gaps alternate between a swell and an arpeggio."""
         ch = self.cfg.channel - 1
         while self._queue and self._queue[0][0] <= now:
             t, _, note, vel, dur = heapq.heappop(self._queue)
             self.out.note_on(ch, note, vel)
             self.out.note_off_at(t + dur, ch, note)
             self._sounding[note] = t + dur
-        if (not self.cfg.enabled or chord is None or next_beat is None
-                or not response.answered or not response.phrase):
+        if self._claimed is not None:                   # its turn instead of the guitar's
+            phrase, self._claimed = self._claimed, None
+            if self.cfg.enabled and chord is not None and next_beat is not None:
+                self._answered_phrase = response.phrase_count
+                self._answer(now, period, chord, gain, next_beat, phrase)
+            return
+        if (not self.cfg.enabled or chord is None or next_beat is None or quiet <= 0
+                or not response.phrase):
             return
         phrase_id = response.phrase_count
         if phrase_id == self._answered_phrase or response.playing(now) or self.playing(now):
@@ -170,4 +188,4 @@ class PianoResponder:
 
     def reset(self) -> None:
         self.cancel()
-        self._answered_phrase = None
+        self._answered_phrase, self._claimed = None, None

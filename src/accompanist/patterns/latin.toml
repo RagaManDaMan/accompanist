@@ -1,8 +1,7 @@
-description = "4/4 latin, two bars: son clave 3-2, conga tumbao (slap on 2, open tones on 4 and 4-and), shaker"
+description = "4/4 latin, two bars: conga tumbao (slap on 2, open tones on 4 and 4-and), shaker"
 beats = 8
 steps_per_beat = 2
 [hits]
-claves     = "X. .x .. x. | .. x. x. .."
 conga_mute = "gg Xg gg .. | gg Xg gg .."
 conga_high = ".. .. .. xx | .. .. .. xx"
 shaker     = "xg xg xg xg | xg xg xg xg"

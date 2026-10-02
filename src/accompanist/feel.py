@@ -48,10 +48,12 @@ MACROS: dict[str, list[tuple[str, tuple]]] = {
         ("percussion.timing_ms", (0.0, 0.0, 15.0)),
         ("percussion.velocity_spread", (0, 0, 14)),
         ("percussion.dynamics", (0.0, 0.5, 0.9)),        # even .. follows you
-        ("percussion.spotlight", (0.0, 0.6, 0.9)),       # steady .. steps into the gaps
+        ("percussion.spotlight", (0.0, 0.3, 0.6)),       # steady .. steps into the gaps
+        ("percussion.presence", (0.5, 0.3, 0.2)),        # steady spells .. now and then
     ],
     "piano.feel": [
-        ("piano.chance", (1.0, 0.7, 0.5)),               # every pause .. now and then
+        ("piano.chance", (0.8, 0.5, 0.35)),              # most gaps .. now and then
+        ("piano.share", (0.5, 0.35, 0.25)),              # even turns .. the guitar leads
         ("piano.variety", (0.0, 0.3, 0.6)),              # straight eighths .. triplets too
         ("piano.timing_ms", (0.0, 0.0, 12.0)),
         ("piano.velocity_spread", (0, 0, 12)),

@@ -179,6 +179,7 @@ class ResponseResponder:
         self.last_t: Optional[float] = None
         self.answered = False
         self.phrase_count = 0                                       # phrases heard so far
+        self.partner = None            # another answerer (the piano) that may take a turn
         self._queue: list[tuple[float, int, int, int, float]] = []   # (t, seq, note, vel, dur)
         self._seq = itertools.count()
         self._sounding: dict[int, float] = {}                       # note -> ends at
@@ -238,6 +239,9 @@ class ResponseResponder:
             return
         self.answered = True                                # your phrase is over
         current = clean_phrase(self.phrase) or list(self.phrase)
+        if self.partner is not None and self.partner.claim(current):
+            self._remember(current)
+            return                                          # the piano takes this one
         if not self.cfg.enabled or self.rng.random() >= self.cfg.chance:
             self._remember(current)
             return                                          # let this pause breathe

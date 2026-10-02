@@ -296,39 +296,23 @@ off-steps.
 ## Percussion
 
 A second player, `[percussion] enabled = true`: latin hand percussion on its own channel
-(`percussion.channel`, 11), so it can have its own kit (a percussion or conga kit, GM notes:
-claves, congas, shaker, cowbell). It plays on the same beat as the drums and follows the
-meter: `latin` in 4 (son clave 3-2, a conga tumbao, shaker), `latin-waltz` in 3,
-`latin-five`, `bembe` in 6/8 (the 12-pulse bell) and `latin-seven` (3+2+2). It follows your
-loudness (`percussion.dynamics`) but plays no fills, and steps forward in the gaps, when
-you and the answer both rest (`percussion.spotlight`, 0.6), like the pad's swells. Its knob
-is `percussion.feel`.
-
-A pattern is a small text file, so new grooves need no code. Put your own in
-`./patterns/NAME.toml`:
-
-```toml
-description = "7 beats grouped 3+2+2"
-beats = 7                 # the cycle: any length
-steps_per_beat = 2        # subdivisions of each beat
-[hits]                    # one step per character: X accent, x hit, g ghost, . rest
-kick   = "X. .. .. | x. .. | x. .."
-shaker = "xg xg xg | xg xg | xg xg"
-```
-
-The cycle restarts when the beat starts (there is no downbeat detection yet).
-
-
+(`percussion.channel`, 11), so it can have its own kit (GM notes: congas, shaker, cowbell).
+It is a seasoning, not a groove: it plays in occasional spells of `percussion.spell_bars`
+bars (4), `percussion.presence` of them (0.3), likelier when you and the answers rest, and
+softly (`percussion.velocity`, 55). It follows the meter: `latin` in 4 (a conga tumbao and
+shaker), `latin-waltz` in 3, `latin-five`, `bembe` in 6/8 (the 12-pulse bell) and
+`latin-seven` (3+2+2). No fills; its knob is `percussion.feel`.
 
 ## Piano
 
-`[piano] enabled = true` (channel 5): after your phrase, and after the guitar's answer if
-it gives one, the piano plays a textbook arpeggio of the chord sounding (root, third, fifth,
-seventh), strictly on the beat: eighths, triplets now and then, quarters above
-`piano.fast_bpm`. It follows your idea: it starts where your phrase ended and goes the way
-it went (up or down), about as long as your phrase (at most `piano.max_beats`), and lands on
-the root. You playing again stops it at once. On an ending it rolls the last chord. Its
-knob is `piano.feel` (how often it answers, triplets, small timing variation).
+`[piano] enabled = true` (channel 5) answers you too, taking turns with the guitar: when your
+phrase ends it takes some of the turns itself (`piano.share`, 0.35), and it fills some of
+the gaps where the pad would otherwise swell (`piano.chance`, 0.5), so the gaps alternate
+between a swell and an arpeggio. It plays a textbook arpeggio of the chord sounding (root,
+third, fifth, seventh), strictly on the beat: eighths, triplets now and then, quarters above
+`piano.fast_bpm`. It starts where your phrase ended and goes the way it went, about as long
+as your phrase (at most `piano.max_beats`), and lands on the root. You playing again stops it
+at once; on an ending it rolls the last chord. Its knob is `piano.feel`.
 
 ## Before (and during) a gig
 

@@ -112,13 +112,14 @@ def test_the_percussionist_plays_latin_on_its_own_channel_in_the_counted_meter()
                           (7, "latin-seven")):
         actions = [(1.0 + i * 0.5, "tap_tempo") for i in range(taps)]
         cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
-                           "percussion": {"enabled": True}, "harmony": {"root": "D"}})
+                           "percussion": {"enabled": True, "presence": 1.0},
+                           "harmony": {"root": "D"}})
         res = simulate.run(cfg, onsets=[], actions=actions, total=12.0)
         assert res.engine.percussion.pattern_name in (None, pattern)
         assert (res.engine.percussion.pattern_name or cfg.percussion.pattern) == pattern
         perc = [m.note for _, m in res.timeline if m.type == "note_on" and m.channel == 10]
         assert perc and set(perc) <= {GM_DRUMS[n] for n in
-                                      ("claves", "conga_mute", "conga_high", "shaker", "cowbell")}
+                                      ("conga_mute", "conga_high", "shaker", "cowbell")}
         drums = [m.note for _, m in res.timeline if m.type == "note_on" and m.channel == 9]
         assert drums                                              # the drummer plays too
 
@@ -129,7 +130,7 @@ def test_the_percussion_steps_forward_in_the_gaps():
         taps = [(1.0 + i * 0.5, "tap_tempo") for i in range(4)]
         cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
                            "percussion": {"enabled": True, "spotlight": spotlight,
-                                          "dynamics": 0.0},
+                                          "dynamics": 0.0, "presence": 1.0},
                            "harmony": {"root": "D"}})
         res = simulate.run(cfg, onsets=notes, actions=taps, total=26.0)
         v = [(t, m.velocity) for t, m in res.timeline if m.type == "note_on" and m.channel == 10]
@@ -141,3 +142,18 @@ def test_the_percussion_steps_forward_in_the_gaps():
     assert gap > playing * 1.4
     playing, gap = perc_levels(0.0)
     assert gap == pytest.approx(playing, rel=0.1)
+
+
+def test_the_percussion_plays_only_in_occasional_spells():
+    notes = [(0.2 + i * 0.25, 62 + i % 5, 80) for i in range(400)]        # 100 s of playing
+    taps = [(1.0 + i * 0.5, "tap_tempo") for i in range(4)]
+    cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                       "percussion": {"enabled": True, "presence": 0.3, "spell_bars": 4},
+                       "harmony": {"root": "D"}})
+    res = simulate.run(cfg, onsets=notes, actions=taps, total=100.0)
+    perc = [t for t, m in res.timeline if m.type == "note_on" and m.channel == 10]
+    bars = {int((t - 3.0) // 2.0) for t in perc}                           # 2 s bars at 120
+    share = len(bars) / 48
+    assert 0.1 < share < 0.65                                              # now and then
+    runs = [b for b in bars if b - 1 not in bars]                          # each spell's start
+    assert len(runs) < len(bars) / 3                                       # in spells of bars

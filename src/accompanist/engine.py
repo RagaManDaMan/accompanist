@@ -10,6 +10,7 @@ comes in through controller.Controller, never directly from the CLI.
 from __future__ import annotations
 
 import math
+import random
 from typing import Optional
 
 from .beatclock import BeatClock
@@ -45,8 +46,11 @@ class Engine:
         self.pulse = PulseResponder(cfg.pulse, out, cfg.harmony.seed)
         self.drums = DrumResponder(cfg.drums, out, cfg.harmony.seed)
         self.percussion = DrumResponder(cfg.percussion, out, cfg.harmony.seed + 7)
+        self._percussion_on = False               # in a spell when the percussion plays
+        self._spell_rng = random.Random(cfg.harmony.seed + 31)
         self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
         self.piano = PianoResponder(cfg.piano, out, cfg.harmony.seed)
+        self.response.partner = self.piano          # they take turns answering you
         self.beat_count = 0                       # beats since the clock started (bar position)
         # A chart is a song: silent until started (count-in), then it plays until panic.
         self.is_chart = hasattr(self.harmony, "restart")
@@ -134,7 +138,8 @@ class Engine:
                                self.clock.next_beat if self.clock.running else None)
             self.piano.tick(now, self.clock.period, chord, self._scale_pcs(),
                             self.dynamics.follow_gain(),
-                            self.clock.next_beat if self.clock.running else None, self.response)
+                            self.clock.next_beat if self.clock.running else None, self.response,
+                            self.dynamics.quiet(now))
 
         # The beat clock runs while bass (pulse) or drums need it, or a chart is counting in.
         if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.cfg.percussion.enabled
@@ -218,7 +223,9 @@ class Engine:
                         self._choose_drums()
                     self.drums.on_beat(beat_t, self.clock.period, gain, form_beat, swing, boost,
                                        bpb, self.dynamics.busyness(now))
-                if self.cfg.percussion.enabled:
+                if self.cfg.percussion.enabled and bar_pos == 0:
+                    self._percussion_spell(form_beat // max(1, bpb), now)
+                if self.cfg.percussion.enabled and self._percussion_on:
                     swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
                              and self.groove.meter and not self.is_chart else None)
                     if self.percussion.pattern_name is None and self.groove.pinned:
@@ -243,6 +250,15 @@ class Engine:
             return g.meter, form % g.meter, form, sure
         bpb = max(1, self.cfg.pulse.beats_per_bar)
         return bpb, beat % bpb, beat, False
+
+    def _percussion_spell(self, bar: int, now: float) -> None:
+        """At the start of each spell: does the percussion play the next spell_bars bars?
+        percussion.presence of them, likelier when it's quiet all round."""
+        p = self.cfg.percussion
+        if bar % max(1, p.spell_bars) != 0:
+            return
+        chance = p.presence + (1 - p.presence) * p.spotlight * self.dynamics.quiet(now)
+        self._percussion_on = self._spell_rng.random() < chance
 
     def _reset_drums(self) -> None:
         self.drums.reset()

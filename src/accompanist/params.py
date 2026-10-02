@@ -333,7 +333,7 @@ PARAMS: list[Param] = [
       "Its pattern in 4 (in 3, 5, 6 and 7 it plays latin-waltz, latin-five, bembe and "
       "latin-seven).", "Percussion",
       choices=("latin", "latin-waltz", "latin-five", "bembe", "latin-seven"), check=_check_pattern),
-    P("percussion.velocity", int, 75, "Percussion velocity", "Velocity of a normal hit (x).",
+    P("percussion.velocity", int, 55, "Percussion velocity", "Velocity of a normal hit (x).",
       "Percussion", 1, 127, 1),
     P("percussion.accent", int, 20, "Percussion accent", "Extra velocity for an accent (X).",
       "Percussion", 0, 127, 1),
@@ -348,7 +348,12 @@ PARAMS: list[Param] = [
       "Each hit up to this many ms early or late (humanize).", "Percussion", 0, 40, 1),
     P("percussion.velocity_spread", int, 0, "Percussion velocity spread",
       "Each hit up to this much softer or louder.", "Percussion", 0, 40, 1),
-    P("percussion.spotlight", float, 0.6, "Percussion in the gaps",
+    P("percussion.presence", float, 0.3, "Percussion: how often",
+      "The percussion plays in spells of percussion.spell_bars bars: this share of them "
+      "(more likely when it's quiet all round). 1 = all the time.", "Percussion", 0, 1, 0.05),
+    P("percussion.spell_bars", int, 4, "Percussion spell", "Bars per spell (on or off).",
+      "Percussion", 1, 32, 1),
+    P("percussion.spotlight", float, 0.3, "Percussion in the gaps",
       "How far the percussion steps forward when it's quiet all round (you and the answer "
       "resting), like the pad's swells: 0 = never; 1 = up to 80% louder.", "Percussion",
       0, 1, 0.05),
@@ -372,9 +377,12 @@ PARAMS: list[Param] = [
       "Piano", 1, 4, 1),
     P("piano.velocity", int, 70, "Piano velocity", "Its normal velocity (follows your loudness).",
       "Piano", 1, 127, 1),
-    P("piano.chance", float, 0.7, "Piano: how often",
-      "Share of your pauses the piano answers (after the guitar, if it answers).", "Piano",
+    P("piano.share", float, 0.35, "Piano: turns from the guitar",
+      "Share of your phrase endings the piano answers instead of the guitar.", "Piano",
       0, 1, 0.05),
+    P("piano.chance", float, 0.5, "Piano: how often in the gaps",
+      "Share of the gaps (quiet all round, after the guitar) the piano fills with an "
+      "arpeggio; in the others the pad swells.", "Piano", 0, 1, 0.05),
     P("piano.subdivision", str, "auto", "Piano rhythm",
       "Notes per beat: eighths, triplets, quarters, or auto (eighths, triplets now and then, "
       "quarters above piano.fast_bpm).", "Piano",
