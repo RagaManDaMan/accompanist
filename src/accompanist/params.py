@@ -84,6 +84,13 @@ PARAMS: list[Param] = [
     P("output.port", str, None, "Output port",
       "Send to an existing port instead, matched by part of its name (e.g. 'IAC Driver Bus 1').",
       "Output", nullable=True, live=False),
+    P("output.recorder_cc", int, None, "Recorder switch CC",
+      "Press a 'record' button in MainStage (or your DAW) over MIDI when `run` starts and again "
+      "when it ends: this CC, value 127 then 0, on output.recorder_channel. Map it to Record "
+      "there once. Unset = off.", "Output", 0, 127, 1, nullable=True, live=False),
+    P("output.recorder_channel", int, 16, "Recorder switch channel",
+      "MIDI channel (1-16) for the recorder switch: one no voice uses.", "Output", 1, 16, 1,
+      live=False),
     P("output.record", bool, False, "Record every run",
       "Save every `run` as a take in takes/ (your notes and key presses: small data files, "
       "not audio), as if --record were given; --no-record skips it once.", "Output", live=False),

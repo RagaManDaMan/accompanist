@@ -337,6 +337,12 @@ soundcheck. `accompanist soundcheck` then plays a few notes on each voice's chan
 in MainStage or Logic answers; `accompanist soundcheck percussion` plays just one. It lists each problem with what to do (`accompanist check waltz seven` checks
 just those songs).
 
+**Recording in MainStage without remembering to:** set `[output] recorder_cc = 119` and map
+that CC (channel 16, `output.recorder_channel`) to MainStage's Record action once; `run`
+then presses it when it starts and again when it ends. `accompanist recorder` presses it
+once, to teach MainStage the button or to test it. (A testing convenience; may go before
+a public release.)
+
 `run` doesn't stop a set over a fixable mistake:
 - a pedal, keyboard or audio input that isn't plugged in: a warning, and it carries on
   without it (it stops only if there is nothing at all to listen to);

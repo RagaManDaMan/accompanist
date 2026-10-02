@@ -222,6 +222,30 @@ def cmd_soundcheck(args) -> int:
     return 0
 
 
+def press_recorder(out: SafeOutput, cfg) -> bool:
+    """Press the DAW's record button over MIDI (output.recorder_cc): 127, then 0."""
+    cc = cfg.output.recorder_cc
+    if cc is None:
+        return False
+    ch = cfg.output.recorder_channel - 1
+    out.control_change(ch, cc, 127)
+    time.sleep(0.05)
+    out.control_change(ch, cc, 0)
+    return True
+
+
+def cmd_recorder(args) -> int:
+    """Press the recorder switch once: to teach MainStage the button, or to test it."""
+    cfg = cfgmod.load(args.config)
+    if cfg.output.recorder_cc is None:
+        cfg.output.recorder_cc = args.cc
+    out = SafeOutput(open_output(cfg.output))
+    press_recorder(out, cfg)
+    print(f"Sent cc {cfg.output.recorder_cc} (127, then 0) on channel "
+          f"{cfg.output.recorder_channel}.")
+    return 0
+
+
 def cmd_check(args) -> int:
     """Before a gig: does everything load, is everything plugged in? Problems, and the fix."""
     from .audio_io import find_input
@@ -696,6 +720,9 @@ def cmd_run(args) -> int:
           "\n      [s] = start the song (count in at its tempo; a chart from the top)"
           "   [f] = finish (a last chord on the next 1)\n"
           "      [b] = break (the band stops for a bar or two; you alone)   [q] = quit\n")
+    if press_recorder(out, cfg):
+        print(f"Pressed the recorder (cc {cfg.output.recorder_cc}, channel "
+              f"{cfg.output.recorder_channel}): MainStage should be recording now.")
     last_print = 0.0
     guard = LiveGuard()
     try:
@@ -763,6 +790,8 @@ def cmd_run(args) -> int:
         pass
     finally:
         out.panic()  # never leave notes hanging, however we exit
+        if press_recorder(out, cfg):
+            print("\nPressed the recorder again: MainStage should have stopped recording.")
         if rec:
             rec.close()
         keys.close()
@@ -884,6 +913,11 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("recorder", help="press the recorder switch once (to map it in "
+                                         "MainStage, or to test it)")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("--cc", type=int, default=119,
+                    help="the CC to send if [output] recorder_cc isn't set yet (default 119)")
     sp = sub.add_parser("soundcheck", help="play a few notes on each voice's channel: is every "
                                            "instrument in MainStage/Logic making sound?")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -912,7 +946,8 @@ def main(argv=None) -> int:
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
                 "listen": cmd_listen, "learn": cmd_learn,
-                "check": cmd_check, "soundcheck": cmd_soundcheck}[args.cmd](args)
+                "check": cmd_check, "soundcheck": cmd_soundcheck,
+                "recorder": cmd_recorder}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

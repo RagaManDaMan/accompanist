@@ -68,3 +68,13 @@ def test_soundcheck_plays_every_voice_that_is_on_on_its_channel():
     assert channels == {"pad": 3, "bass": 2, "drums": 10, "percussion": 11, "piano": 5,
                         "guitar": 4}
     assert all(notes for _, _, notes in plan)
+
+
+def test_the_recorder_switch_presses_and_releases_its_cc():
+    from accompanist.output import RecordingPort, SafeOutput
+
+    port = RecordingPort()
+    cfg = c.from_dict({"output": {"recorder_cc": 119}})
+    assert cli.press_recorder(SafeOutput(port), cfg)
+    assert [(m.channel, m.control, m.value) for m in port.sent] == [(15, 119, 127), (15, 119, 0)]
+    assert not cli.press_recorder(SafeOutput(RecordingPort()), c.from_dict({}))
