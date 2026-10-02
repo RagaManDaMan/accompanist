@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import queue
 import re
@@ -195,10 +194,14 @@ def cmd_soundcheck(args) -> int:
     print(f"Soundcheck to {where}. Listen for each voice" +
           ("; it repeats until Ctrl-C (fix MainStage while it plays)." if args.loop else
            "; Ctrl-C to stop.") + "\n")
-    rounds = itertools.count() if args.loop else range(1)
+    def rounds():
+        yield from plan
+        while args.loop:                         # (product() would build an endless list first)
+            yield from plan
+
     try:
-        for _, (label, channel, notes) in itertools.product(rounds, plan):
-            print(f"  channel {channel:2d}: {label}")
+        for label, channel, notes in rounds():
+            print(f"  channel {channel:2d}: {label}", flush=True)
             start = time.monotonic()
             for at, note, vel in notes:
                 while time.monotonic() - start < at:
