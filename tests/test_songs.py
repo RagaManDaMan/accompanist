@@ -140,3 +140,13 @@ def test_run_moves_through_a_set_with_the_bracket_keys(tmp_path, monkeypatch, ca
     out = capsys.readouterr().out
     assert "Song 2/2: Example in seven" in out
     assert "last song of the set" in out
+
+
+def test_a_song_selects_its_mainstage_patch_by_program_change():
+    from accompanist import cli
+
+    port = RecordingPort()
+    cfg = c.from_dict({"song": {"patch": 3}})
+    assert cli.select_patch(SafeOutput(port), cfg)
+    assert [(m.type, m.channel, m.program) for m in port.sent] == [("program_change", 15, 3)]
+    assert not cli.select_patch(SafeOutput(RecordingPort()), c.from_dict({}))

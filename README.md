@@ -176,7 +176,9 @@ songs = ["waltz", "seven", "tamil-standard"]
 `accompanist run --set NAME` loads and checks every song before the first note (as does
 `accompanist check --set NAME` at soundcheck), starts on song 1, and **]** or the right arrow
 moves to the next song, **[** or the left arrow back (or a pedal: `song_next`, `song_prev`).
-Each song brings its own setup; then **s** counts it in. One run plays the whole set, and each
+Each song brings its own setup (and, with `[song] patch = N`, sends program change N on
+channel 16, `output.patch_channel`, so MainStage switches to the song's patch); then **s**
+counts it in. One run plays the whole set, and each
 song gets its own take file. While the band is playing, **q**, **[** and **]** need a second
 press within 2 s, so a slip of the finger can't end the set or change the song mid-song.
 

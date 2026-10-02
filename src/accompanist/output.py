@@ -57,6 +57,10 @@ class SafeOutput:
         self._send(mido.Message("control_change", channel=channel, control=control,
                                 value=min(max(int(value), 0), 127)))
 
+    def program_change(self, channel: int, program: int) -> None:
+        self._send(mido.Message("program_change", channel=channel,
+                                program=min(max(int(program), 0), 127)))
+
     def note_off_at(self, t: float, channel: int, note: int) -> None:
         gen = self._gen.get((channel, note), 0)
         heapq.heappush(self._sched, (t, next(self._counter), channel, note, gen))

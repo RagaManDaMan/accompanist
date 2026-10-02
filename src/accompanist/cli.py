@@ -246,6 +246,14 @@ def press_recorder(out: SafeOutput, cfg) -> bool:
     return True
 
 
+def select_patch(out: SafeOutput, cfg) -> bool:
+    """The song's MainStage patch (song.patch), as a program change on output.patch_channel."""
+    if cfg.song.patch is None:
+        return False
+    out.program_change(cfg.output.patch_channel - 1, cfg.song.patch)
+    return True
+
+
 def cmd_recorder(args) -> int:
     """Press the recorder switch once: to teach MainStage the button, or to test it."""
     cfg = cfgmod.load(args.config)
@@ -757,6 +765,8 @@ def cmd_run(args) -> int:
           "      [b] = break (the band stops for a bar or two; you alone)   [q] = quit"
           + ("\n      [ / ] or left / right = previous / next song in the set" if set_songs else "")
           + "\n")
+    if select_patch(out, cfg):
+        print(f"MainStage patch: program {cfg.song.patch} (channel {cfg.output.patch_channel})")
     if press_recorder(out, cfg):
         print(f"Pressed the recorder (cc {cfg.output.recorder_cc}, channel "
               f"{cfg.output.recorder_channel}): MainStage should be recording now.")
@@ -832,6 +842,7 @@ def cmd_run(args) -> int:
                         args.song = set_songs[song_index]
                         cfg = load_for_run(args)
                         ctl = Controller(cfg, out)
+                        select_patch(out, cfg)
                         if rec:
                             rec.close()
                             rec = Recorder(auto_path(name=args.song))

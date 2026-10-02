@@ -91,6 +91,8 @@ PARAMS: list[Param] = [
     P("output.recorder_channel", int, 16, "Recorder switch channel",
       "MIDI channel (1-16) for the recorder switch: one no voice uses.", "Output", 1, 16, 1,
       live=False),
+    P("output.patch_channel", int, 16, "Patch change channel",
+      "MIDI channel (1-16) for song.patch program changes.", "Output", 1, 16, 1, live=False),
     P("output.record", bool, False, "Record every run",
       "Save every `run` as a take in takes/ (your notes and key presses: small data files, "
       "not audio), as if --record were given; --no-record skips it once.", "Output", live=False),
@@ -611,6 +613,10 @@ PARAMS: list[Param] = [
     P("song.tempo", float, None, "Song tempo",
       "Starting the song (s, or a pedal) counts the band in at this tempo.", "Song", 20, 300, 1,
       nullable=True),
+    P("song.patch", int, None, "MainStage patch",
+      "Program change sent when this song is loaded (in a set, or with --song), so MainStage "
+      "(or your DAW) switches to the song's sounds: the patch's Program Change number, 0-127.",
+      "Song", 0, 127, 1, nullable=True),
     P("song.count", int, None, "Song meter",
       "Beats per bar for the count-in and the band: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 = 3+2+2.",
       "Song", 3, 7, 1, nullable=True),
