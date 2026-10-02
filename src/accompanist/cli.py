@@ -152,6 +152,70 @@ def cmd_monitor(args) -> int:
     return 0
 
 
+def soundcheck_plan(cfg) -> list[tuple[str, int, list[tuple[float, int, int]]]]:
+    """(label, channel 1-16, [(seconds in, note, velocity)]) for each voice that is on: what
+    `soundcheck` plays, so you can hear that each instrument in your DAW answers."""
+    from .patterns import GM_DRUMS
+
+    plan = []
+    if cfg.pad.enabled:
+        base = 12 * (cfg.pad.octave + 1)
+        plan.append(("pad (a C major chord)", cfg.pad.channel,
+                     [(0.0, base, 80), (0.0, base + 4, 80), (0.0, base + 7, 80)]))
+    if cfg.pulse.enabled:
+        base = 12 * (cfg.pulse.octave + 1)
+        plan.append(("bass (C, G, C)", cfg.pulse.channel,
+                     [(0.0, base, 100), (0.4, base + 7, 100), (0.8, base + 12, 100)]))
+    if cfg.drums.enabled:
+        plan.append(("drums (kick, snare, hat, crash)", cfg.drums.channel,
+                     [(i * 0.3, GM_DRUMS[n], 100) for i, n in
+                      enumerate(("kick", "snare", "hat", "crash"))]))
+    if cfg.percussion.enabled:
+        names = ("conga_mute", "conga_high", "conga_low", "claves", "shaker", "cowbell")
+        plan.append(("percussion (" + ", ".join(names) + ")", cfg.percussion.channel,
+                     [(i * 0.3, GM_DRUMS[n], 100) for i, n in enumerate(names)]))
+    if cfg.piano.enabled:
+        base = 12 * (cfg.piano.octave + 1)
+        plan.append(("piano (C E G C)", cfg.piano.channel,
+                     [(i * 0.25, base + d, 90) for i, d in enumerate((0, 4, 7, 12))]))
+    if cfg.response.enabled:
+        plan.append(("guitar / answer (E G A)", cfg.response.channel,
+                     [(i * 0.3, 64 + d, 90) for i, d in enumerate((0, 3, 5))]))
+    return plan
+
+
+def cmd_soundcheck(args) -> int:
+    """Play a few notes on each voice's channel in turn: is every instrument in MainStage or
+    Logic set up and making sound?"""
+    cfg = cfgmod.load(args.config)
+    out = SafeOutput(open_output(cfg.output))
+    where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
+    print(f"Soundcheck to {where}. Listen for each voice; Ctrl-C to stop.\n")
+    try:
+        for label, channel, notes in soundcheck_plan(cfg):
+            if args.voice and not label.startswith(args.voice):
+                continue
+            print(f"  channel {channel:2d}: {label}")
+            start = time.monotonic()
+            for at, note, vel in notes:
+                while time.monotonic() - start < at:
+                    time.sleep(0.005)
+                out.note_on(channel - 1, note, vel)
+            end = start + max(at for at, _, _ in notes) + 0.8
+            while time.monotonic() < end:
+                time.sleep(0.01)
+            out.panic()
+            time.sleep(0.4)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        out.panic()
+    print("\nA voice you didn't hear: in MainStage, check that a keyboard listens to "
+          "IAC Driver Bus 1 on that channel, that a strip uses that keyboard, and that its "
+          "sound has something on those notes.")
+    return 0
+
+
 def cmd_check(args) -> int:
     """Before a gig: does everything load, is everything plugged in? Problems, and the fix."""
     from .audio_io import find_input
@@ -813,6 +877,11 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("soundcheck", help="play a few notes on each voice's channel: is every "
+                                           "instrument in MainStage/Logic making sound?")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("voice", nargs="?", default=None,
+                    help="just one voice: pad, bass, drums, percussion, piano or guitar")
     sp = sub.add_parser("check", help="before a gig: does the config and every song load, "
                                       "is every device plugged in?")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -834,7 +903,7 @@ def main(argv=None) -> int:
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
                 "listen": cmd_listen, "learn": cmd_learn,
-                "check": cmd_check}[args.cmd](args)
+                "check": cmd_check, "soundcheck": cmd_soundcheck}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

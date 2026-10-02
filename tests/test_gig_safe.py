@@ -57,3 +57,14 @@ def test_an_internal_error_is_logged_once_and_counted(tmp_path, capsys):
     log = (tmp_path / "logs" / "errors.log").read_text()
     assert log.count("ValueError: boom") == 1 and guard.count == 50
     assert capsys.readouterr().out.count("internal error") == 1
+
+
+def test_soundcheck_plays_every_voice_that_is_on_on_its_channel():
+    cfg = c.from_dict({"drums": {"enabled": True}, "percussion": {"enabled": True},
+                       "piano": {"enabled": True}, "response": {"enabled": True},
+                       "pad": {"channel": 3}})
+    plan = cli.soundcheck_plan(cfg)
+    channels = {label.split(" ")[0]: ch for label, ch, _ in plan}
+    assert channels == {"pad": 3, "bass": 2, "drums": 10, "percussion": 11, "piano": 5,
+                        "guitar": 4}
+    assert all(notes for _, _, notes in plan)

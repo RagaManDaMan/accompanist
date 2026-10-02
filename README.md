@@ -333,7 +333,9 @@ knob is `piano.feel` (how often it answers, triplets, small timing variation).
 ## Before (and during) a gig
 
 `accompanist check` loads your config and every song, and looks for every device: run it at
-soundcheck. It lists each problem with what to do (`accompanist check waltz seven` checks
+soundcheck. `accompanist soundcheck` then plays a few notes on each voice's channel in turn
+(pad, bass, drums, percussion, piano, guitar), naming each, so you hear that every instrument
+in MainStage or Logic answers; `accompanist soundcheck percussion` plays just one. It lists each problem with what to do (`accompanist check waltz seven` checks
 just those songs).
 
 `run` doesn't stop a set over a fixable mistake:
