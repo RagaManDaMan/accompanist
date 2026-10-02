@@ -445,6 +445,20 @@ class DrumResponder:
             self._fill(beat_t, period, spb, self.cfg.velocity * energy + self.cfg.accent)
         self.beat_count += 1
 
+    def triplet_figure(self, beat_t: float, period: float, beats: int, notes_per_beat: float,
+                       gain: float) -> None:
+        """A triplet figure across `beats` beats (3 per 2 beats, or 6 when doubled), high to
+        low and rising in force, into the next 1."""
+        from .patterns import GM_DRUMS
+
+        count = round(beats * notes_per_beat)
+        voices = ("conga_high", "conga_mute", "conga_low")
+        top = self.cfg.velocity * gain + self.cfg.accent
+        for i in range(count):
+            vel = top * (FILL_FROM + (1 - FILL_FROM) * i / max(1, count - 1))
+            name = voices[min(i * len(voices) // count, len(voices) - 1)]
+            self._push(beat_t + i * beats * period / count, GM_DRUMS[name], vel)
+
     def _fill(self, beat_t: float, period: float, spb: int, top: float) -> None:
         """A short fill across the beat, rising to `top`: snare, or down the toms."""
         from .patterns import GM_DRUMS

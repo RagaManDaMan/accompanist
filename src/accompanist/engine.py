@@ -29,6 +29,11 @@ GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing", 5: "five", 6: 
                    7: "seven-322"}
 # How much louder the percussion gets in the quiet at percussion.spotlight = 1.
 SPOTLIGHT_LIFT = 0.8
+# Percussion triplet figures: notes per beat (3 over 2 beats; 6 over 2 when doubled), and the
+# share of percussion.triplet_build_s of soloing past which they double.
+TRIPLET_SINGLE = 1.5
+TRIPLET_DOUBLE = 3.0
+TRIPLET_DOUBLE_AT = 0.7
 PERCUSSION_PATTERNS = {3: "latin-waltz", 4: "latin", 5: "latin-five", 6: "bembe", 7: "latin-seven"}
 
 # Pad expression: resend when it moves this many steps (of 127), at most this often.
@@ -73,6 +78,9 @@ class Engine:
         self._break_left = 0                      # beats of the break still to come
         self._break_return = False                # the band comes back in on this 1
         self._interlude_bar0: Optional[int] = None  # the bar an interlude began (you resting)
+        self._solo_since: Optional[float] = None  # when you started playing after a rest
+        self._figure_until = 0                    # beat_count when a triplet figure is over
+        self._figure_rng = random.Random(cfg.harmony.seed + 41)
         self._ending: Optional[tuple[float, float]] = None   # (start, end) of the last chord
         self.last_onset_t: Optional[float] = None
         self.last_note: Optional[int] = None
@@ -89,6 +97,9 @@ class Engine:
         self.tempo.on_onset(t)
         self.harmony.observe(Onset(t, note, velocity))
         self.dynamics.observe(t, velocity)
+        rest = self.cfg.interlude.after_beats * self.tempo.period
+        if self.last_onset_t is None or t - self.last_onset_t > rest:
+            self._solo_since = t                      # soloing again after a rest
         self.last_onset_t, self.last_note = t, note
         self.clock.hint(t, self.cfg.pulse.hint_window)
         self.response.hear(t, note, velocity, self.tempo.period)   # stops any answer at once
@@ -236,7 +247,10 @@ class Engine:
                                        bpb, self.dynamics.busyness(now))
                 if self.cfg.percussion.enabled and bar_pos == 0:
                     self._percussion_spell(form_beat // max(1, bpb), now)
-                if self.cfg.percussion.enabled and self._percussion_on:
+                if self.cfg.percussion.enabled:
+                    self._triplet_figure(beat_t, now, form_beat, bar_pos, bpb, gain)
+                if (self.cfg.percussion.enabled and self._percussion_on
+                        and self.beat_count >= self._figure_until):
                     swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
                              and self.groove.meter and not self.is_chart else None)
                     if self.percussion.pattern_name is None and self.groove.pinned:
@@ -355,6 +369,32 @@ class Engine:
             for name in ("kick", "crash"):
                 self.out.note_on(d.channel - 1, GM_DRUMS[name], min(127, d.velocity + d.accent))
                 self.out.note_off_at(now + d.note_length_s, d.channel - 1, GM_DRUMS[name])
+
+    def soloing_s(self, now: float) -> float:
+        """How long you've been playing without a rest (0 if you're resting)."""
+        rest = self.cfg.interlude.after_beats * self.clock.period
+        if self._solo_since is None or self.last_onset_t is None or now - self.last_onset_t > rest:
+            return 0.0
+        return now - self._solo_since
+
+    def _triplet_figure(self, beat_t: float, now: float, form_beat: int, bar_pos: int,
+                        bpb: int, gain: float) -> None:
+        """At the last two beats of a phrase, maybe a percussion triplet figure into the next
+        1: likelier the longer you've soloed, doubled up past 70% of triplet_build_s."""
+        p = self.cfg.percussion
+        if self.beat_count < self._figure_until:
+            return
+        bar = form_beat // max(1, bpb)
+        every = max(1, p.triplet_every_bars)
+        if (bpb < 2 or bar_pos != bpb - 2 or (bar + 1) % every != 0 or p.triplets <= 0
+                or self.in_break or self.in_interlude):
+            return
+        build = min(self.soloing_s(now) / p.triplet_build_s, 1.0)
+        if build <= 0 or self._figure_rng.random() >= p.triplets * build:
+            return
+        per_beat = TRIPLET_DOUBLE if build >= TRIPLET_DOUBLE_AT else TRIPLET_SINGLE
+        self.percussion.triplet_figure(beat_t, self.clock.period, 2, per_beat, gain)
+        self._figure_until = self.beat_count + 2          # this beat and the next: the figure
 
     def _percussion_spell(self, bar: int, now: float) -> None:
         """At the start of each spell: does the percussion play the next spell_bars bars?

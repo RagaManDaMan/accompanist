@@ -306,7 +306,11 @@ It is a seasoning, not a groove: it plays in occasional spells of `percussion.sp
 bars (4), `percussion.presence` of them (0.3), likelier when you and the answers rest, and
 softly (`percussion.velocity`, 55). It follows the meter: `latin` in 4 (a conga tumbao and
 shaker), `latin-waltz` in 3, `latin-five`, `bembe` in 6/8 (the 12-pulse bell) and
-`latin-seven` (3+2+2). No fills; its knob is `percussion.feel`.
+`latin-seven` (3+2+2). No fills, but now and then a **triplet figure** into the next
+phrase (the last two beats of every 4 bars): the longer you've been soloing without a rest,
+the likelier (`percussion.triplets`, reaching full after `percussion.triplet_build_s`, 30 s),
+and past 70% of that it doubles up into eighth-note triplets. Its knob is
+`percussion.feel`.
 
 ## Piano
 

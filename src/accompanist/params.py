@@ -360,6 +360,15 @@ PARAMS: list[Param] = [
       "(more likely when it's quiet all round). 1 = all the time.", "Percussion", 0, 1, 0.05),
     P("percussion.spell_bars", int, 4, "Percussion spell", "Bars per spell (on or off).",
       "Percussion", 1, 32, 1),
+    P("percussion.triplets", float, 0.5, "Percussion triplets",
+      "Now and then the percussion plays a triplet figure into the next phrase (the last two "
+      "beats of every percussion.triplet_every_bars bars): likelier the longer you've been "
+      "soloing, up to this chance (0 = never).", "Percussion", 0, 1, 0.05),
+    P("percussion.triplet_build_s", float, 30.0, "Triplets build over",
+      "Seconds of your soloing (without a rest) to reach the full triplet chance; past 70% of "
+      "it the figures double up (eighth-note triplets).", "Percussion", 5, 300, 5),
+    P("percussion.triplet_every_bars", int, 4, "Triplet phrase", "Bars per phrase for the "
+      "triplet figures.", "Percussion", 1, 16, 1),
     P("percussion.spotlight", float, 0.3, "Percussion in the gaps",
       "How far the percussion steps forward when it's quiet all round (you and the answer "
       "resting), like the pad's swells: 0 = never; 1 = up to 80% louder.", "Percussion",

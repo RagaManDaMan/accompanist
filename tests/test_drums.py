@@ -157,3 +157,24 @@ def test_the_percussion_plays_only_in_occasional_spells():
     assert 0.1 < share < 0.65                                              # now and then
     runs = [b for b in bars if b - 1 not in bars]                          # each spell's start
     assert len(runs) < len(bars) / 3                                       # in spells of bars
+
+
+def _triplet_run(seconds, triplets=1.0):
+    notes = [(0.2 + i * 0.25, 62 + i % 5, 80) for i in range(int(seconds * 4))]   # soloing
+    taps = [(1.0 + i * 0.5, "tap_tempo") for i in range(4)]
+    cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                       "percussion": {"enabled": True, "presence": 0.0, "triplets": triplets,
+                                      "triplet_build_s": 20.0},
+                       "harmony": {"root": "D"}})
+    res = simulate.run(cfg, onsets=notes, actions=taps, total=seconds)
+    return [t for t, m in res.timeline if m.type == "note_on" and m.channel == 10]
+
+
+def test_percussion_triplets_build_with_soloing():
+    perc = _triplet_run(60.0)
+    assert not [t for t in perc if t < 8.0]                           # not straight away
+    late = sorted(t for t in perc if t > 30.0)
+    assert late                                                       # but later on, yes...
+    gaps = {round(b - a, 2) for a, b in zip(late, late[1:]) if b - a < 0.4}
+    assert any(abs(g - 1 / 3) < 0.02 or abs(g - 1 / 6) < 0.02 for g in gaps)  # ...in triplets
+    assert not _triplet_run(60.0, triplets=0.0)
