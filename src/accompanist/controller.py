@@ -360,7 +360,8 @@ def format_status(s: dict) -> str:
     State flags come first, so they stay visible when a narrow window cuts the line."""
     heard = "--" if s["heard"] is None else f"{s['heard']} ({s['heard_ago_s']:0.1f}s ago)"
     flags = (("FINISHED " if s.get("finished") else "MUTED " if s["muted"] else "")
-             + ("ENDING " if s.get("ending") else "") + ("BREAK " if s.get("break") else "") + ("LOCKED " if s.get("locked") else "")
+             + ("ENDING " if s.get("ending") else "") + ("BREAK " if s.get("break") else "")
+             + ("INTERLUDE " if s.get("interlude") else "") + ("LOCKED " if s.get("locked") else "")
              + ("CHORD HELD " if s.get("chord_held") else ""))
     if s.get("groove"):
         flags += s["groove"] + ("  " if s.get("groove_confidence", 0) >= 0.5 else "?  ")

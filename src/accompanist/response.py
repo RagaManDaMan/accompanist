@@ -255,20 +255,39 @@ class ResponseResponder:
             else:                                           # ...or an echo of the last one
                 phrase, used = current[: self.cfg.max_notes], None
             self._last_used = used
-            pitches = [n for _, n, _ in phrase]
-            if self.cfg.octave is not None:                 # a fixed register, contour kept
-                centre = 12 * (self.cfg.octave + 1) + 4
-                shift = round((centre - sum(pitches) / len(pitches)) / 12) * 12
-                pitches = [p + shift for p in pitches]
-            iois = [b[0] - a[0] for a, b in zip(phrase, phrase[1:])]
-            notes = render(pitches, iois, [v for _, _, v in phrase], self.cfg, period, gain, grid)
+            notes = self._phrase_notes(phrase, period, gain, grid)
         self._remember(current)
+        self._schedule(notes, now, period, next_beat)
+
+    def _phrase_notes(self, phrase, period: float, gain: float, grid: bool):
+        pitches = [n for _, n, _ in phrase]
+        if self.cfg.octave is not None:                     # a fixed register, contour kept
+            centre = 12 * (self.cfg.octave + 1) + 4
+            shift = round((centre - sum(pitches) / len(pitches)) / 12) * 12
+            pitches = [p + shift for p in pitches]
+        iois = [b[0] - a[0] for a, b in zip(phrase, phrase[1:])]
+        return render(pitches, iois, [v for _, _, v in phrase], self.cfg, period, gain, grid)
+
+    def _schedule(self, notes, now: float, period: float, next_beat: Optional[float]) -> None:
         self.cancel()                                       # a new answer replaces an old one
         start = now
-        if grid:                                            # come in on the next beat
+        if next_beat is not None:                           # come in on the next beat
             start = next_beat - period * int((next_beat - now) / period)
         for off, note, vel, dur in notes:
             heapq.heappush(self._queue, (start + off, next(self._seq), note, vel, dur))
+
+    def play_from_memory(self, now: float, period: float, chord_pcs, scale_pcs, gain: float,
+                         next_beat: Optional[float]) -> bool:
+        """In an interlude (you resting): one of your remembered phrases that fits the harmony,
+        on the beat. False if nothing is remembered yet."""
+        if not self.cfg.enabled or not self.memory:
+            return False
+        phrase, used = choose_phrase(self.memory[-1], self.memory, chord_pcs, scale_pcs,
+                                     self.rng, self.cfg, self._last_used)
+        self._last_used = used
+        self._schedule(self._phrase_notes(phrase, period, gain, next_beat is not None), now,
+                       period, next_beat)
+        return True
 
     def playing(self, now: float) -> bool:
         """An answer is sounding or still to come."""

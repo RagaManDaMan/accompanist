@@ -32,6 +32,33 @@ MIN_NOTES = 4
 SEMITONES_PER_TONE = 3.5   # an arpeggio climbs about this much per note
 
 
+# Comping (an interlude, you resting): chord hits per meter as (beat in the bar, length in
+# beats); two patterns each, alternating bar by bar. A meter not listed: every beat but the 1.
+COMP_PATTERNS = {
+    3: (((1, 0.9), (2, 0.9)), ((0, 0.9), (1.5, 1.3))),
+    4: (((0, 1.4), (1.5, 0.4), (3, 0.9)), ((1, 0.9), (2.5, 1.4))),
+    5: (((1, 0.9), (2, 0.9), (4, 0.9)), ((0, 1.4), (3, 1.4))),
+    6: (((0, 1.4), (3, 1.4)), ((2, 0.9), (5, 0.9))),
+    7: (((1, 0.9), (2, 0.9), (4, 0.9), (6, 0.9)), ((0, 1.4), (3, 0.9), (5, 0.9))),
+}
+COMP_SOFTER = 0.8          # comping velocity, as a share of piano.velocity
+COMP_VOICES = 4            # notes in a comping chord
+
+
+def comp_voicing(pcs: set[int], low: int, high: int, prev: Optional[tuple[int, ...]]
+                 ) -> tuple[int, ...]:
+    """A close chord of up to COMP_VOICES tones in [low, high], moving as little as possible
+    from the previous one."""
+    tones = chord_tones(pcs, low, high)
+    options = [tuple(tones[i:i + COMP_VOICES]) for i in range(len(tones))
+               if len({n % 12 for n in tones[i:i + COMP_VOICES]}) == min(len(pcs), COMP_VOICES)]
+    if not options:
+        return tuple(tones[:COMP_VOICES])
+    if prev is None:
+        return options[len(options) // 2]
+    return min(options, key=lambda o: sum(abs(a - b) for a, b in zip(o, prev)))
+
+
 def textbook(pcs: set[int], root_pc: int) -> set[int]:
     """The chord's root, third, fifth and seventh: what an arpeggio outlines (colour tones
     like an added 9th make it sound like a scale)."""
@@ -84,6 +111,7 @@ class PianoResponder:
         self._sounding: dict[int, float] = {}       # note -> ends at
         self._answered_phrase: Optional[int] = None  # id of the phrase it has answered
         self._claimed: Optional[list] = None        # a phrase it took from the guitar
+        self._comp_prev: Optional[tuple[int, ...]] = None   # the last comping chord
 
     def claim(self, phrase: list[tuple[float, int, int]]) -> bool:
         """Your phrase just ended: take this turn from the guitar (piano.share of them)?
@@ -166,6 +194,25 @@ class PianoResponder:
             vel = c.velocity * gain * (BEAT_ACCENT if k % per_beat == 0 else 1.0)
             vel = humanize_velocity(min(max(round(vel), 1), 127), c.velocity_spread, self.rng)
             heapq.heappush(self._queue, (t, next(self._seq), note, vel, dur))
+
+    def comp_beat(self, now: float, period: float, bar: int, bar_pos: int, bpb: int, chord,
+                  gain: float) -> None:
+        """An interlude beat: the comping chord hits that fall in this beat."""
+        if not self.cfg.enabled or chord is None:
+            return
+        pattern = COMP_PATTERNS.get(bpb, (tuple((b, 0.9) for b in range(1, bpb)),) * 2)[bar % 2]
+        c = self.cfg
+        low = 12 * (c.octave + 1) - 5
+        voicing = comp_voicing({n % 12 for n in chord.notes}, low, low + 19, self._comp_prev)
+        self._comp_prev = voicing
+        for beat, length in pattern:
+            if int(beat) != bar_pos:
+                continue
+            t = now + (beat - bar_pos) * period
+            vel = humanize_velocity(min(max(round(c.velocity * COMP_SOFTER * gain), 1), 127),
+                                    c.velocity_spread, self.rng)
+            for note in voicing:
+                heapq.heappush(self._queue, (t, next(self._seq), note, vel, length * period))
 
     def final_chord(self, now: float, chord, period: float) -> None:
         """The ending: the last chord, rolled up quickly from the root."""

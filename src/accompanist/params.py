@@ -552,6 +552,19 @@ PARAMS: list[Param] = [
       "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
       "Groove lock", 0, 1, 0.05),
 
+    # ---- interludes (you resting: piano and guitar carry the music) ---------------
+    P("interlude.enabled", bool, True, "Interludes",
+      "When you rest for a while, the piano comps (chords on the beat) and the guitar plays "
+      "your phrases, taking turns, until you come back in.", "Interlude"),
+    P("interlude.after_beats", float, 6.0, "Interlude after",
+      "Beats of your silence (after the answers) before the band carries the music.",
+      "Interlude", 2, 32, 1),
+    P("interlude.turn_bars", int, 4, "Interlude turns",
+      "Bars each of piano and guitar leads before handing over.", "Interlude", 1, 16, 1),
+    P("interlude.guitar_every_bars", int, 2, "Guitar phrase every",
+      "In its turn, the guitar plays one of your phrases every this many bars.", "Interlude",
+      1, 8, 1),
+
     # ---- breaks (b, or a pedal: the band stops, you play alone) ------------------
     P("breaks.bars", int, 2, "Break length",
       "A break: from the next 1 the rhythm section stops for this many bars (the pad stays, "

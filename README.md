@@ -319,6 +319,16 @@ third, fifth, seventh), strictly on the beat: eighths, triplets now and then, qu
 as your phrase (at most `piano.max_beats`), and lands on the root. You playing again stops it
 at once; on an ending it rolls the last chord. Its knob is `piano.feel`.
 
+
+## Interludes
+
+When you rest for a while (`interlude.after_beats`, 6 beats after the answers), the band
+carries the music so you can take a proper break: the piano comps (chords on the beat, a
+pattern for each meter, voice-led) and the guitar plays your own remembered phrases, taking
+turns every `interlude.turn_bars` bars (4). The pad stays back while they play. Play again
+and they stop at once. The status line shows INTERLUDE. `[interlude] enabled = false` turns it
+off.
+
 ## Before (and during) a gig
 
 `accompanist check` loads your config and every song, and looks for every device: run it at

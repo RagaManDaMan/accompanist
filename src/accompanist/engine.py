@@ -72,6 +72,7 @@ class Engine:
         self._break_requested = False             # a break starts on the next 1
         self._break_left = 0                      # beats of the break still to come
         self._break_return = False                # the band comes back in on this 1
+        self._interlude_bar0: Optional[int] = None  # the bar an interlude began (you resting)
         self._ending: Optional[tuple[float, float]] = None   # (start, end) of the last chord
         self.last_onset_t: Optional[float] = None
         self.last_note: Optional[int] = None
@@ -142,7 +143,7 @@ class Engine:
             self.piano.tick(now, self.clock.period, chord, self._scale_pcs(),
                             self.dynamics.follow_gain(),
                             self.clock.next_beat if self.clock.running else None, self.response,
-                            self.dynamics.quiet(now))
+                            0.0 if self.in_interlude else self.dynamics.quiet(now))
             if self.in_break:                         # a break: you alone, no answers
                 self.response.cancel()
                 self.piano.cancel()
@@ -243,6 +244,7 @@ class Engine:
                     lift = 1 + SPOTLIGHT_LIFT * self.cfg.percussion.spotlight * self.dynamics.quiet(now)
                     self.percussion.on_beat(beat_t, self.clock.period, gain * lift, form_beat,
                                             swing, boost, bpb, self.dynamics.busyness(now))
+                self._interlude_beat(now, form_beat, bar_pos, bpb)
                 self.beat_count += 1
             self.drums.tick(now)
             self.percussion.tick(now)
@@ -260,6 +262,43 @@ class Engine:
             return g.meter, form % g.meter, form, sure
         bpb = max(1, self.cfg.pulse.beats_per_bar)
         return bpb, beat % bpb, beat, False
+
+    # ---- interludes ---------------------------------------------------------
+    @property
+    def in_interlude(self) -> bool:
+        return self._interlude_bar0 is not None
+
+    def _interlude_beat(self, now: float, form_beat: int, bar_pos: int, bpb: int) -> None:
+        """You have rested a while: the piano comps and the guitar plays your phrases, taking
+        turns every interlude.turn_bars bars, until you come back in (on_note ends it)."""
+        il = self.cfg.interlude
+        resting = (il.enabled and self.last_onset_t is not None and not self.in_break
+                   and not self._finish_requested
+                   and now - self.last_onset_t >= il.after_beats * self.clock.period)
+        if not resting:
+            self._interlude_bar0 = None
+            return
+        bar = form_beat // max(1, bpb)
+        if self._interlude_bar0 is None:
+            if bar_pos != 0:
+                return                                # it starts on a 1
+            self._interlude_bar0 = bar
+        chord = self.pad.current or self.proposal
+        players = [v for v, on in (("piano", self.cfg.piano.enabled),
+                                   ("guitar", self.cfg.response.enabled and self.response.memory))
+                   if on]
+        if not players or chord is None:
+            return
+        turn = (bar - self._interlude_bar0) // max(1, il.turn_bars)
+        who = players[turn % len(players)]
+        gain = self.dynamics.follow_gain()
+        if who == "piano":
+            self.piano.comp_beat(now, self.clock.period, bar, bar_pos, bpb, chord, gain)
+        elif bar_pos == 0 and (bar - self._interlude_bar0) % max(1, il.guitar_every_bars) == 0 \
+                and not self.response.playing(now):
+            self.response.play_from_memory(now, self.clock.period,
+                                           {n % 12 for n in chord.notes}, self._scale_pcs(),
+                                           gain, now)
 
     # ---- breaks -------------------------------------------------------------
     @property
@@ -409,6 +448,7 @@ class Engine:
         self.song_playing, self._count_in_left = False, 0
         self._finish_requested, self._ending, self.finished = False, None, False
         self._break_requested, self._break_left, self._break_return = False, 0, False
+        self._interlude_bar0 = None
         self.unlock()
         self.release_chord()
         self.muted = True
@@ -631,6 +671,7 @@ class Engine:
         return {
             "finished": self.finished,
             "break": self.in_break or self._break_requested,
+            "interlude": self.in_interlude,
             "ending": self._finish_requested or self._ending is not None,
             "time": now,
             "bpm": self.tempo.bpm,
