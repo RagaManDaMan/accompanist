@@ -7,6 +7,11 @@ name = "accompanist"
 version = "0.0.1"
 description = "Listens to a live performer and plays an adaptive accompaniment into Logic Pro (or any DAW) over MIDI."
 readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Topic :: Multimedia :: Sound/Audio :: MIDI",
+]
 requires-python = ">=3.10"
 dependencies = [
     "mido>=1.3",

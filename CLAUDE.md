@@ -47,7 +47,12 @@ recorded WAVs (`monitor --record-audio`, then `listen`), as with MIDI takes.
 ## Not yet built (do not start without being asked)
 Voice and lap steel
 (glides, gamakas: `pitch_contour`); call-and-response; raga-aware responder;
-environmental-texture layer; licence choice (undecided).
+environmental-texture layer.
+
+## Licence
+GPL-3.0-or-later (LICENSE). All code stays open source. Datasets (Weimar Jazz DB, ODbL;
+Nottingham, GPL-3.0) are downloaded locally and gitignored, never committed; credit anything
+learnt from them where it is used.
 
 ## Known unknowns (unverified on real hardware)
 Virtual MIDI port visibility in Logic; per-channel routing of pad vs pulse to separate tracks;

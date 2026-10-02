@@ -452,4 +452,13 @@ one into `tests/fixtures/` to keep it as a regression test.
 
 ## Licence
 
-Not chosen yet.
+Copyright (C) 2026 Ragavan Manian.
+
+accompanist is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either version 3
+of the License, or (at your option) any later version. It is distributed in the hope that it
+will be useful, but WITHOUT ANY WARRANTY; see [LICENSE](LICENSE) for the full terms.
+
+Data used for learning is not part of this repository and keeps its own licence: the Weimar
+Jazz Database (Jazzomat Research Project, ODbL 1.0) and the Nottingham Music Database
+(GPL-3.0). Anything learnt from them that ships here is credited where it is used.
