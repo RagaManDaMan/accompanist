@@ -1,0 +1,27 @@
+# Lady Sings The Blues (Herbie Nichols / Billie Holiday): a jazz ballad from the chart,
+# AABA in F minor / F major. The band follows the chart's changes exactly.
+# MainStage patch 2.
+
+[song]
+title = "Lady Sings The Blues"
+tempo = 66               # a ballad; change to taste (s counts in at this)
+count = 4
+patch = 2
+
+[harmony]
+model = "chart"
+chart = "../charts/Lady Sings The Blues.musicxml"
+
+[drums]
+enabled = true
+pattern = "swing"
+swing = 0.33
+
+[percussion]
+enabled = false          # a jazz ballad: no latin percussion
+
+[piano]
+enabled = true
+
+[response]
+enabled = true

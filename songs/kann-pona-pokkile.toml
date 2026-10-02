@@ -1,0 +1,28 @@
+# Kann Pona Pokkile: a Tamil film standard (1960s), arranged as a fusion jazz waltz.
+# Moves between F lydian and D minor, with an A minor bridge in the B section.
+# MainStage patch 1.
+
+[song]
+title = "Kann Pona Pokkile"
+tempo = 138              # s counts in at this; you push it to ~150 by the end
+count = 3                # 3/4
+patch = 1
+
+[harmony]
+model = "modal"
+root = "auto"            # until key palettes arrive: F lydian / D minor / A minor
+mode = "auto"
+max_hold_s = 12
+
+[drums]
+enabled = true
+pattern = "waltz"
+
+[percussion]
+enabled = true           # latin-waltz, in occasional spells, triplets as you build
+
+[piano]
+enabled = true
+
+[response]
+enabled = true
