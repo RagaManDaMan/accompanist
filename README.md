@@ -277,7 +277,11 @@ changes. Between, with `pulse.movement` above 0 (0.8), it plays shapes: fifths, 
 octaves, scale steps walking up or down, a step into the next bar, and now and then two
 eighth notes stepping into the next beat, all in the key. Each shape repeats for
 `pulse.shape_bars` bars (2) so it sounds like a line, not a dice roll, and the next one is
-always a different shape, so a long chord doesn't loop one riff. `pulse.movement = 0` is the old root on
+always a different shape, so a long chord doesn't loop one riff. Its rhythm changes with each shape
+too (`pulse.rhythm`, 0.5): mostly a note on every beat, some stretches in half time (only the
+strong beats, longer notes), some in double time (the octave on the "and"), and now and then a
+triplet run into the next bar. Above `pulse.fast_bpm` (170) it leans to half time and plays no
+double time or triplets. `pulse.movement = 0` is the old root on
 every beat. Both follow the bass and drums feel knobs.
 
 ## Drums
@@ -296,7 +300,9 @@ A second player, `[percussion] enabled = true`: latin hand percussion on its own
 claves, congas, shaker, cowbell). It plays on the same beat as the drums and follows the
 meter: `latin` in 4 (son clave 3-2, a conga tumbao, shaker), `latin-waltz` in 3,
 `latin-five`, `bembe` in 6/8 (the 12-pulse bell) and `latin-seven` (3+2+2). It follows your
-loudness (`percussion.dynamics`) but plays no fills. Its knob is `percussion.feel`.
+loudness (`percussion.dynamics`) but plays no fills, and steps forward in the gaps, when
+you and the answer both rest (`percussion.spotlight`, 0.6), like the pad's swells. Its knob
+is `percussion.feel`.
 
 A pattern is a small text file, so new grooves need no code. Put your own in
 `./patterns/NAME.toml`:

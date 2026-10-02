@@ -58,6 +58,14 @@ class Dynamics:
         g = 1.0 + self.cfg.follow * (v / self.cfg.reference_velocity - 1.0)
         return min(max(g, MIN_GAIN), MAX_GAIN)
 
+    def quiet(self, now: float) -> float:
+        """0 while anyone plays (you or the answer) .. 1 once it has been quiet all round for
+        swell_after_s + swell_s: the room the band has to step forward."""
+        c = self.cfg
+        if self._sound_t is None:
+            return 1.0
+        return min(max((now - self._sound_t - c.swell_after_s) / c.swell_s, 0.0), 1.0)
+
     def pad_level(self, now: float) -> float:
         """The pad's level, 0-1 of full expression: follows you, steps back when busy, sits
         back further while anyone plays and swells when it's quiet all round (pad_space)."""
@@ -68,9 +76,7 @@ class Dynamics:
             return level
         low = c.pad_floor + (level - c.pad_floor) * (1.0 - c.pad_space)
         high = level + (1.0 - level) * c.pad_space
-        quiet = float("inf") if self._sound_t is None else now - self._sound_t
-        swell = min(max((quiet - c.swell_after_s) / c.swell_s, 0.0), 1.0)
-        target = low + (high - low) * swell
+        target = low + (high - low) * self.quiet(now)
         if self._level is not None and target < self._level:    # recede quickly, not at once
             target = max(target, self._level - (now - self._level_t) / c.recede_s)
         self._level, self._level_t = target, now

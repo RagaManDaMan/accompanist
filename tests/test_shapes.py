@@ -9,8 +9,9 @@ D_MINOR_SCALE = {2, 4, 5, 7, 9, 10, 1}           # with the raised 7th
 
 
 def bass_line(movement, bars=16, bpb=4, eighths=False):
-    """The bass notes on the beats (and, with eighths, all notes in order)."""
-    cfg = c.from_dict({"pulse": {"movement": movement}})
+    """The bass notes on the beats (and, with eighths, all notes in order): a note on every
+    beat (no rhythm variety)."""
+    cfg = c.from_dict({"pulse": {"movement": movement, "rhythm": 0.0}})
     port = RecordingPort()
     out = SafeOutput(port)
     bass = PulseResponder(cfg.pulse, out)
@@ -92,3 +93,37 @@ def test_dynamics_follow_you_harder_and_lift_when_busy():
     loud_even, loud_dyn = mean_kick(dynamics=0.0, gain=1.3), mean_kick(dynamics=1.0, gain=1.3)
     assert loud_dyn - soft_dyn > loud_even - soft_even               # a wider range
     assert mean_kick(dynamics=1.0, busy=1.0) > mean_kick(dynamics=1.0, busy=0.0)
+
+
+def bass_rhythms(bpm, rhythm=1.0, bars=64, bpb=4):
+    """{rhythm: notes per beat} over many bars at this tempo."""
+    period = 60 / bpm
+    cfg = c.from_dict({"pulse": {"movement": 0.9, "rhythm": rhythm}})
+    port = RecordingPort()
+    out = SafeOutput(port)
+    bass = PulseResponder(cfg.pulse, out)
+    counts = {}
+    for beat in range(bars * bpb):
+        now = beat * period
+        bass.on_beat(now, 2, bar_position=beat % bpb, chord=D_MINOR, beats_per_bar=bpb,
+                     scale=D_MINOR_SCALE, period=period)
+        out.flush(now + period * 0.99)
+        counts.setdefault(bass.rhythm, []).append(now)
+    ons = [m for m in port.sent if m.type == "note_on"]
+    return counts, len(ons) / (bars * bpb)
+
+
+def test_bass_rhythms_vary_between_half_beat_double_and_triplets():
+    counts, per_beat = bass_rhythms(100)
+    assert {"half", "beat", "double", "triplet"} <= set(counts)
+
+
+def test_at_a_fast_tempo_the_bass_leans_to_half_time_never_double():
+    counts, per_beat = bass_rhythms(230)
+    assert "double" not in counts and "triplet" not in counts and "half" in counts
+    assert per_beat < 1.0                                          # sparser than every beat
+
+
+def test_no_rhythm_variety_is_a_note_every_beat():
+    counts, per_beat = bass_rhythms(230, rhythm=0.0)
+    assert set(counts) == {"beat"}

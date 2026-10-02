@@ -112,8 +112,8 @@ def test_unlocking_a_playing_chart_never_stops_the_band():
                        total=40.0)
     assert not res.engine.locked                                      # unlocked at 6 s...
     bass = [t for t, m in res.timeline if m.type == "note_on" and m.channel == 1]
-    assert max(b - a for a, b in zip(bass, bass[1:])) < 0.7           # ...and never a gap
-    assert bass[-1] > 39.0
+    assert max(b - a for a, b in zip(bass, bass[1:])) < 1.25          # ...never a gap (half time ok)
+    assert bass[-1] > 38.5                                            # still playing at the end
 
 
 def test_panic_stops_the_song():

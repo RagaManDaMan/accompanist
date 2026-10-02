@@ -159,6 +159,13 @@ BASS_SHAPES = {
 }
 # A plain shape (the root on every beat) comes up with chance (1 - movement) ** this.
 PLAIN_POWER = 2
+# Bass rhythms, chosen with each new shape: how likely each is at pulse.rhythm = 1 (a note
+# on every beat takes the rest), how much likelier half time is above pulse.fast_bpm, and
+# note lengths (shares of a beat) for half time and triplets.
+RHYTHM_WEIGHTS = {"half": 0.35, "double": 0.2, "triplet": 0.15}
+FAST_HALF_FACTOR = 3.0
+HALF_LENGTH = 1.6
+TRIPLET_LENGTH = 0.3
 # Eighth notes in a shape: their length (share of an eighth, at most note_length_s) and the
 # second one's velocity (share of the first).
 EIGHTH_LENGTH = 0.9
@@ -182,6 +189,8 @@ class PulseResponder:
         self._shape_left = 0
         self._last_root: Optional[int] = None
         self._last_interval = 0
+        self.rhythm = "beat"                         # half, beat, double or triplet
+        self._period: Optional[float] = None
 
     def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
                 bar_position: Optional[int] = None, boost: int = 0, group_start: bool = False,
@@ -192,16 +201,27 @@ class PulseResponder:
         period: the beat's length, for shapes with eighth notes."""
         bpb = max(1, beats_per_bar or self.cfg.beats_per_bar)
         pos = self.beat_count % bpb if bar_position is None else bar_position
+        self._period = period
         accent = self.cfg.accent if pos == 0 else self.cfg.accent // 2 if group_start else 0
         vel = round(self.cfg.velocity * gain) + accent + boost
         vel = humanize_velocity(min(max(vel, 1), 127), self.cfg.velocity_spread, self.rng)
         root = 12 * (self.cfg.octave + 1) + root_pc
         note = self._shape_note(root, root_pc, pos, bpb, chord, scale)
         ch = self.cfg.channel - 1
-        eighths = period is not None and pos < len(self._shape) and self._shape[pos] == "e" \
-            and note != root
+        rhythm = self.rhythm if period is not None else "beat"
+        strong = pos == 0 or group_start or (bpb % 2 == 0 and bpb >= 4 and pos == bpb // 2)
+        if rhythm == "half" and not strong:
+            self.beat_count += 1                     # half time: the strong beats only
+            return
+        eighths = period is not None and rhythm != "half" and pos < len(self._shape) \
+            and self._shape[pos] == "e" and note != root
         length = min(self.cfg.note_length_s, EIGHTH_LENGTH * period / 2) if eighths \
-            else self.cfg.note_length_s
+            or rhythm == "double" else self.cfg.note_length_s
+        if rhythm == "half":
+            length = max(length, HALF_LENGTH * period)
+        triplet = rhythm == "triplet" and pos == bpb - 1 and bpb > 1
+        if triplet:
+            length = min(length, TRIPLET_LENGTH * period)
         lay_back = self.rng.uniform(0, self.cfg.timing_ms) / 1000 if self.cfg.timing_ms > 0 else 0.0
         if lay_back > 0:                             # humanize: laid back, a little each time
             self.out.note_on_at(now + lay_back, ch, note, vel, off_at=now + lay_back + length)
@@ -215,7 +235,32 @@ class PulseResponder:
             t = now + period / 2 + lay_back
             self.out.note_on_at(t, ch, passing, max(1, round(vel * EIGHTH_SOFTER)),
                                 off_at=t + length)
+        elif rhythm == "double":                     # double time: the octave on the "and"
+            other = note + 12 if note + 12 <= root + 19 else note - 12
+            t = now + period / 2 + lay_back
+            self.out.note_on_at(t, ch, other, max(1, round(vel * EIGHTH_SOFTER)), off_at=t + length)
+        elif triplet:                                # a triplet run into the next bar's root
+            near = self._step_to(root, note, scale)
+            far = near + (near - root)
+            soft = max(1, round(vel * EIGHTH_SOFTER))
+            for k, n in ((1, far), (2, near)):
+                t = now + k * period / 3 + lay_back
+                self.out.note_on_at(t, ch, n, soft, off_at=t + length)
         self.beat_count += 1
+
+    def _pick_rhythm(self) -> str:
+        r = self.cfg.rhythm
+        if r <= 0 or self._period is None:
+            return "beat"
+        fast = 60.0 / self._period > self.cfg.fast_bpm
+        weights = {k: r * w for k, w in RHYTHM_WEIGHTS.items()}
+        if fast:
+            weights["half"] *= FAST_HALF_FACTOR
+            weights["double"] = weights["triplet"] = 0.0
+        weights["beat"] = max(0.0, 1.0 - sum(weights.values()))
+        names = [k for k in weights if weights[k] > 0]
+        others = [x for x in names if x != self.rhythm] if r >= 1 else names
+        return self.shape_rng.choices(others or names, [weights[k] for k in (others or names)])[0]
 
     def _step_to(self, target: int, current: int, scale: Optional[set[int]]) -> int:
         """A note a step from target, on the side `current` comes from (in the scale if known)."""
@@ -235,6 +280,7 @@ class PulseResponder:
         if len(self._shape) != bpb or (pos == 0 and self._shape_left <= 0):
             self._shape = self._pick_shape(bpb)
             self._shape_left = self.cfg.shape_bars
+            self.rhythm = self._pick_rhythm()
         if pos == 0:
             self._shape_left -= 1
         if changed or pos >= len(self._shape):
@@ -288,6 +334,7 @@ class PulseResponder:
     def reset(self) -> None:
         self.beat_count = 0
         self._shape, self._shape_left, self._last_root = "", 0, None
+        self.rhythm = "beat"
 
 
 def _generic_shape(bpb: int, rng: random.Random) -> str:

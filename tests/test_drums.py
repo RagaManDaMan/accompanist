@@ -121,3 +121,23 @@ def test_the_percussionist_plays_latin_on_its_own_channel_in_the_counted_meter()
                                       ("claves", "conga_mute", "conga_high", "shaker", "cowbell")}
         drums = [m.note for _, m in res.timeline if m.type == "note_on" and m.channel == 9]
         assert drums                                              # the drummer plays too
+
+
+def test_the_percussion_steps_forward_in_the_gaps():
+    def perc_levels(spotlight):
+        notes = [(0.2 + i * 0.25, 62 + i % 5, 80) for i in range(48)]          # 12 s of playing
+        taps = [(1.0 + i * 0.5, "tap_tempo") for i in range(4)]
+        cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                           "percussion": {"enabled": True, "spotlight": spotlight,
+                                          "dynamics": 0.0},
+                           "harmony": {"root": "D"}})
+        res = simulate.run(cfg, onsets=notes, actions=taps, total=26.0)
+        v = [(t, m.velocity) for t, m in res.timeline if m.type == "note_on" and m.channel == 10]
+        playing = [x for t, x in v if 4 < t < 12]
+        gap = [x for t, x in v if 20 < t < 26]                             # quiet all round
+        return sum(playing) / len(playing), sum(gap) / len(gap)
+
+    playing, gap = perc_levels(1.0)
+    assert gap > playing * 1.4
+    playing, gap = perc_levels(0.0)
+    assert gap == pytest.approx(playing, rel=0.1)

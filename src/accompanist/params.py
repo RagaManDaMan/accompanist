@@ -270,6 +270,13 @@ PARAMS: list[Param] = [
     P("pulse.movement", float, 0.8, "Bass movement",
       "0 = the root on every beat; higher = bass shapes more often: fifths, thirds, octaves "
       "and a step into the next bar.", "Pulse", 0, 1, 0.05),
+    P("pulse.rhythm", float, 0.5, "Bass rhythm variety",
+      "0 = a note on every beat; higher = some stretches in half time (the strong beats only), "
+      "some in double time (eighths) and now and then a triplet into the next bar. Each "
+      "lasts as long as a bass shape.", "Pulse", 0, 1, 0.05),
+    P("pulse.fast_bpm", float, 170.0, "Fast tempo",
+      "Above this tempo the bass leans to half time and plays no double time or triplets.",
+      "Pulse", 60, 320, 5),
     P("pulse.shape_bars", int, 2, "Bass shape length",
       "Repeat each bass shape for this many bars before choosing another.", "Pulse", 1, 16, 1),
     P("pulse.hint_window", float, 0.15, "On-beat window",
@@ -341,6 +348,10 @@ PARAMS: list[Param] = [
       "Each hit up to this many ms early or late (humanize).", "Percussion", 0, 40, 1),
     P("percussion.velocity_spread", int, 0, "Percussion velocity spread",
       "Each hit up to this much softer or louder.", "Percussion", 0, 40, 1),
+    P("percussion.spotlight", float, 0.6, "Percussion in the gaps",
+      "How far the percussion steps forward when it's quiet all round (you and the answer "
+      "resting), like the pad's swells: 0 = never; 1 = up to 80% louder.", "Percussion",
+      0, 1, 0.05),
     P("percussion.dynamics", float, 0.5, "Percussion dynamics",
       "0 = even; higher = follows your loudness more, lifts when you play busily, softer "
       "off-beats.", "Percussion", 0, 1, 0.05),

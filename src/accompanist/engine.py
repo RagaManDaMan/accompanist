@@ -25,6 +25,8 @@ from .tempo import REALIGN_ADVANTAGE, TempoEstimator
 # Drum patterns for a meter heard, when yours does not fit it: (meter, feel) or meter.
 GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing", 5: "five", 6: "six-eight",
                    7: "seven-322"}
+# How much louder the percussion gets in the quiet at percussion.spotlight = 1.
+SPOTLIGHT_LIFT = 0.8
 PERCUSSION_PATTERNS = {3: "latin-waltz", 4: "latin", 5: "latin-five", 6: "bembe", 7: "latin-seven"}
 
 # Pad expression: resend when it moves this many steps (of 127), at most this often.
@@ -215,8 +217,9 @@ class Engine:
                              and self.groove.meter and not self.is_chart else None)
                     if self.percussion.pattern_name is None and self.groove.pinned:
                         self._choose_drums()
-                    self.percussion.on_beat(beat_t, self.clock.period, gain, form_beat, swing,
-                                            boost, bpb, self.dynamics.busyness(now))
+                    lift = 1 + SPOTLIGHT_LIFT * self.cfg.percussion.spotlight * self.dynamics.quiet(now)
+                    self.percussion.on_beat(beat_t, self.clock.period, gain * lift, form_beat,
+                                            swing, boost, bpb, self.dynamics.busyness(now))
                 self.beat_count += 1
             self.drums.tick(now)
             self.percussion.tick(now)
