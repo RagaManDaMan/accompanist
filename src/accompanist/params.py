@@ -189,6 +189,9 @@ PARAMS: list[Param] = [
     P("harmony.chord_stickiness", float, 0.05, "Chord stickiness",
       "modal model: the current chord wins ties by this much (higher = changes less).",
       "Harmony", 0, 0.5, 0.01),
+    P("harmony.max_hold_s", float, 12.0, "Longest chord",
+      "modal model: after this many seconds on one chord, move to the next best one (0 = "
+      "hold as long as it fits).", "Harmony", 0, 120, 1),
     P("harmony.wander", float, 0.3, "Wander",
       "modal model: how often it prefers a close runner-up chord that also fits, for variety "
       "(0 = always the best fit).", "Harmony", 0, 1, 0.05),

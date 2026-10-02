@@ -58,6 +58,7 @@ ROOT_BONUS = 0.3       # extra credit when the chord's root is what you played
 UNHEARD_COST = 0.03    # per chord tone you haven't played (scaled down by color)
 TONIC_BONUS = 0.03     # a slight pull home, toward chords on the tonic
 WANDER_SCALE = 0.2     # score noise at wander = 1 (roughly the gap between near-equal fits)
+STALE_PENALTY = 1.0    # past harmony.max_hold_s the current chord drops out of the running
 MIN_KEY_EVIDENCE = 1.0  # weight of notes needed before auto key detection trusts itself
 
 
@@ -99,6 +100,8 @@ class ModalModel:
         self.chord_memory = PitchClassTracker(h.chord_memory_s)
         self.key: Optional[tuple[int, str]] = None        # (tonic, 'major'|'minor'|'chromatic')
         self.current: Optional[tuple[int, str]] = None    # (root, suffix) last proposed
+        self._current_since: Optional[float] = None        # when it became the chord
+        self._resting: Optional[tuple[int, float]] = None  # (root, until): held too long
         self.rng = random.Random(h.seed)
         self._noise: dict[tuple[int, str], float] = {}
         self._noise_until: Optional[float] = None
@@ -160,6 +163,9 @@ class ModalModel:
         if self._noise_until is None or now >= self._noise_until:   # a new wandering choice
             self._noise = {}
             self._noise_until = now + h.wander_every_s
+        stale = (h.max_hold_s > 0 and self._current_since is not None
+                 and now - self._current_since >= h.max_hold_s)
+        resting = self._resting[0] if self._resting and now < self._resting[1] else None
         best, best_score = None, float("-inf")
         for root in range(12):
             if root not in scale:
@@ -175,6 +181,8 @@ class ModalModel:
                     score += TONIC_BONUS
                 if (root, suffix) == self.current:
                     score += h.chord_stickiness
+                if (stale and self.current and root == self.current[0]) or root == resting:
+                    score -= STALE_PENALTY                      # long enough: another root
                 if h.wander > 0:
                     if (root, suffix) not in self._noise:
                         self._noise[(root, suffix)] = self.rng.random()
@@ -182,6 +190,10 @@ class ModalModel:
                 if score > best_score:
                     best, best_score = (root, suffix, ivs), score
         root, suffix, ivs = best
+        if stale and self.current and root != self.current[0]:
+            self._resting = (self.current[0], now + h.max_hold_s / 2)   # let that root rest
+        if (root, suffix) != self.current:
+            self._current_since = now
         self.current = (root, suffix)
         third = 4 if 4 in ivs else 3 if 3 in ivs else None
         from .config import NOTE_NAMES

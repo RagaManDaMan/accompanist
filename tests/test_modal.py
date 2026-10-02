@@ -89,3 +89,21 @@ def test_pad_follows_a_progression():
             if root and (not seen or seen[-1] != root):
                 seen.append(root)
     assert seen == ["C", "A", "F", "G"]         # chord colour (Am7, Fmaj7...) depends on color
+
+
+def test_a_chord_is_not_held_forever():
+    """Regression (take 2026-10-02 10:31): the pad sat on one chord for 20-40 s."""
+    from accompanist.harmony import Onset
+    from accompanist.modal import ModalModel
+
+    cfg = c.from_dict({"harmony": {"model": "modal", "root": "C", "mode": "major",
+                                   "wander": 0.0, "max_hold_s": 12.0}})
+    m = ModalModel(cfg)
+    chords = []
+    for i in range(160):                                   # 40 s of the same few notes
+        t = i * 0.25
+        m.observe(Onset(t, (60, 64, 67, 72)[i % 4], 80))
+        chords.append((t, m.propose(t).label()))
+    changes = [b for (a, x), (b, y) in zip(chords, chords[1:]) if x != y]
+    edges = [0.0] + changes + [40.0]
+    assert max(b - a for a, b in zip(edges, edges[1:])) <= 13.0
