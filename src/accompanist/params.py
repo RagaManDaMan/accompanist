@@ -587,6 +587,47 @@ PARAMS: list[Param] = [
       "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
       "Groove lock", 0, 1, 0.05),
 
+    # ---- mix (each voice's level, set over MIDI; `accompanist levels` measures it) ---
+    P("mix.pad_db", float, 0.0, "Pad level",
+      "Trim for this voice in dB, sent as MIDI volume (CC7) when the song loads; written by "
+      "`accompanist levels`.", "Mix", -40, 4, 0.5),
+    P("mix.target_pad_db", float, -12.0, "Pad under the sax",
+      "`accompanist levels` aims for this voice this many dB relative to your instrument.",
+      "Mix", -40, 6, 0.5),
+    P("mix.bass_db", float, 0.0, "Bass level",
+      "Trim for this voice in dB, sent as MIDI volume (CC7) when the song loads; written by "
+      "`accompanist levels`.", "Mix", -40, 4, 0.5),
+    P("mix.target_bass_db", float, -6.0, "Bass under the sax",
+      "`accompanist levels` aims for this voice this many dB relative to your instrument.",
+      "Mix", -40, 6, 0.5),
+    P("mix.drums_db", float, 0.0, "Drums level",
+      "Trim for this voice in dB, sent as MIDI volume (CC7) when the song loads; written by "
+      "`accompanist levels`.", "Mix", -40, 4, 0.5),
+    P("mix.target_drums_db", float, -6.0, "Drums under the sax",
+      "`accompanist levels` aims for this voice this many dB relative to your instrument.",
+      "Mix", -40, 6, 0.5),
+    P("mix.percussion_db", float, 0.0, "Percussion level",
+      "Trim for this voice in dB, sent as MIDI volume (CC7) when the song loads; written by "
+      "`accompanist levels`.", "Mix", -40, 4, 0.5),
+    P("mix.target_percussion_db", float, -12.0, "Percussion under the sax",
+      "`accompanist levels` aims for this voice this many dB relative to your instrument.",
+      "Mix", -40, 6, 0.5),
+    P("mix.piano_db", float, 0.0, "Piano level",
+      "Trim for this voice in dB, sent as MIDI volume (CC7) when the song loads; written by "
+      "`accompanist levels`.", "Mix", -40, 4, 0.5),
+    P("mix.target_piano_db", float, -9.0, "Piano under the sax",
+      "`accompanist levels` aims for this voice this many dB relative to your instrument.",
+      "Mix", -40, 6, 0.5),
+    P("mix.guitar_db", float, 0.0, "Guitar (answers) level",
+      "Trim for this voice in dB, sent as MIDI volume (CC7) when the song loads; written by "
+      "`accompanist levels`.", "Mix", -40, 4, 0.5),
+    P("mix.target_guitar_db", float, -6.0, "Guitar (answers) under the sax",
+      "`accompanist levels` aims for this voice this many dB relative to your instrument.",
+      "Mix", -40, 6, 0.5),
+    P("mix.recordings", str, "~/Music/MainStage", "Recordings folder",
+      "Where your DAW saves its recordings: `accompanist levels` measures the newest one.",
+      "Mix", live=False),
+
     # ---- interludes (you resting: piano and guitar carry the music) ---------------
     P("interlude.enabled", bool, True, "Interludes",
       "When you rest for a while, the piano comps (chords on the beat) and the guitar plays "

@@ -87,12 +87,13 @@ SongCfg = _section_class("song")
 EndingCfg = _section_class("ending")
 BreaksCfg = _section_class("breaks")
 InterludeCfg = _section_class("interlude")
+MixCfg = _section_class("mix")
 PanicCfg = _section_class("panic")
 PedalCfg = _section_class("pedal")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
                    "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
                    "drums": DrumsCfg, "percussion": PercussionCfg, "piano": PianoCfg, "audio": AudioCfg, "response": ResponseCfg,
-                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "pedal": PedalCfg, "panic": PanicCfg}
+                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "mix": MixCfg, "pedal": PedalCfg, "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
@@ -130,6 +131,7 @@ class Config:
     ending: Any = field(default_factory=EndingCfg)
     breaks: Any = field(default_factory=BreaksCfg)
     interlude: Any = field(default_factory=InterludeCfg)
+    mix: Any = field(default_factory=MixCfg)
     pedal: Any = field(default_factory=PedalCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict = field(default_factory=dict)   # (kind, number) -> ControlCfg
@@ -301,6 +303,15 @@ def available_songs() -> list[str]:
     return sorted(names)
 
 
+def song_path(name: str) -> Path:
+    """The song's file (./songs/NAME.toml first, else the built-in example)."""
+    for d in (USER_SONGS, BUILTIN_SONGS):
+        p = d / f"{name}.toml"
+        if p.is_file():
+            return p
+    raise ConfigError(f"unknown song '{name}'; available: {', '.join(available_songs())}")
+
+
 def load_song(name: str) -> dict:
     """A song file (./songs/NAME.toml, else a built-in example): a partial config like a preset,
     plus [song] title/tempo/count. A chart path in it may be relative to the song file."""
@@ -404,6 +415,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         ending=_section("ending", d.get("ending")),
         breaks=_section("breaks", d.get("breaks")),
         interlude=_section("interlude", d.get("interlude")),
+        mix=_section("mix", d.get("mix")),
         pedal=_section("pedal", d.get("pedal")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls"))[0],

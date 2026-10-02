@@ -369,6 +369,16 @@ soundcheck. `accompanist soundcheck` then plays a few notes on each voice's chan
 in MainStage or Logic answers; `accompanist soundcheck percussion` plays just one. It lists each problem with what to do (`accompanist check waltz seven` checks
 just those songs).
 
+**Levels, like a line check:** `accompanist levels --song NAME` selects the song's patch,
+starts the recorder, plays each voice alone for 3 seconds at its normal level, then asks
+you to play for 6 seconds. It measures each part of the recording and works out a trim per
+voice so it sits where you want it under your instrument (`[mix] target_pad_db = -12`,
+`target_bass_db = -6`, ...), and writes the trims into the song file (`[mix] pad_db = ...`).
+From then on the song sets its levels itself when it loads, as MIDI volume (CC7) on each
+voice's channel, so no faders to chase. Re-run it after changing a patch's sounds. A voice
+that made no sound is reported (check its strip); one whose instrument ignores CC7 won't
+move, so set that one by hand. `--file` measures an earlier recording without playing.
+
 **Recording in MainStage without remembering to:** set `[output] recorder_cc = 119` and map
 that CC (channel 16, `output.recorder_channel`) to MainStage's Record action once; `run`
 then presses it when it starts and again when it ends. `accompanist recorder` presses it

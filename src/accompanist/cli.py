@@ -252,6 +252,92 @@ def band_channels(cfg) -> list[int]:
     return sorted({v.channel for v in voices if v.enabled})
 
 
+def apply_mix(out: SafeOutput, cfg) -> None:
+    """Each voice's level trim (mix.*_db) as MIDI volume (CC7) on its channel."""
+    from .levels import VOICES, cc7_value, voice_cfg
+
+    for voice in VOICES:
+        vc = voice_cfg(cfg, voice)
+        if vc.enabled:
+            out.control_change(vc.channel - 1, 7, cc7_value(getattr(cfg.mix, f"{voice}_db")))
+
+
+def cmd_levels(args) -> int:
+    """Line check: each voice alone, then you; measured from the DAW's recording; trims
+    written into the song file so its levels are set over MIDI from then on."""
+    from . import levels as lv
+    from .audio_io import read_wav
+
+    cfg = cfgmod.load(args.config, song=args.song)
+    parts = lv.plan(cfg)
+    if args.file:
+        wav = Path(args.file).expanduser()
+    else:
+        out = SafeOutput(open_output(cfg.output))
+        select_patch(out, cfg)
+        apply_mix(out, cfg)
+        for ch in band_channels(cfg):
+            out.control_change(ch - 1, FADE_CC, 127)
+        out.control_change(cfg.pad.channel - 1, cfg.pad.expression_cc or FADE_CC,
+                           round(127 * LEVELS_PAD_EXPRESSION))
+        began = time.time()
+        if not press_recorder(out, cfg):
+            print("Set [output] recorder_cc so this can start your recorder, or start "
+                  "recording by hand now and press Enter.")
+            input()
+        print("Line check: each voice alone, then you. Keep the room quiet...")
+        time.sleep(lv.LEAD_IN_S)
+        t0 = time.monotonic()
+        for p in parts:
+            while time.monotonic() - t0 < p.start:
+                time.sleep(0.005)
+            if p.voice == "you":
+                print(f"  YOUR TURN: play at your normal level for {lv.YOU_S:g} seconds... now!")
+                time.sleep(lv.YOU_S)
+                break
+            print(f"  {p.voice} (channel {p.channel})")
+            events = sorted([(at, "on", n, v) for at, n, v, _ in p.notes]
+                            + [(at + length, "off", n, 0) for at, n, _, length in p.notes])
+            for at, kind, n, v in events:
+                while time.monotonic() - t0 < p.start + at:
+                    time.sleep(0.002)
+                if kind == "on":
+                    out.note_on(p.channel - 1, n, v)
+                else:
+                    out.note_off(p.channel - 1, n)
+            out.panic()
+        time.sleep(1.0)
+        press_recorder(out, cfg)
+        print("Done. Finding the recording...")
+        time.sleep(LEVELS_WAIT_S)
+        folder = Path(cfg.mix.recordings).expanduser()
+        wavs = sorted((p for p in folder.glob("*.wav") if p.stat().st_mtime >= began - 2),
+                      key=lambda p: p.stat().st_mtime)
+        if not wavs:
+            raise cfgmod.ConfigError(f"no new recording in {folder}: check [mix] recordings, "
+                                     f"or measure a file with --file")
+        wav = wavs[-1]
+    samples, rate = read_wav(wav)
+    measured = lv.measure(samples, rate, parts)
+    new = lv.trims(measured, cfg)
+    print(f"\nLevels in {wav.name}:")
+    for line in lv.describe(measured, new, cfg):
+        print(line)
+    found = {v: db for v, db in new.items() if db is not None}
+    if not found:
+        return 1
+    if not args.song:
+        print("\n(Give --song NAME to save these trims into that song.)")
+        return 0
+    path = cfgmod.song_path(args.song)
+    if args.write or (sys.stdin.isatty() and input(f"\nWrite these trims into {path}? [y/n] ")
+                      .strip().lower() == "y"):
+        text = path.read_text()
+        path.write_text(lv.update_song(text, found))
+        print(f"Written. The song now sets its levels when it loads (CC7 per voice).")
+    return 0
+
+
 def select_patch(out: SafeOutput, cfg) -> bool:
     """The song's MainStage patch (song.patch, numbered 1-128 as MainStage shows it), as a
     program change (0-127 on the wire) on output.patch_channel."""
@@ -627,6 +713,10 @@ KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_
 SWITCH_FADE_S = 1.0
 EXPRESSION_STEP_S = 0.05
 FADE_CC = 11
+# accompanist levels: the pad's expression while it is measured (its normal level), and how
+# long to wait for the DAW to finish writing its recording.
+LEVELS_PAD_EXPRESSION = 0.8
+LEVELS_WAIT_S = 3.0
 # Keys that need a second press within this long while the band is playing (a slip of the
 # finger mustn't end the set or change the song mid-song).
 CONFIRM_S = 2.0
@@ -790,6 +880,7 @@ def cmd_run(args) -> int:
           + "\n")
     if select_patch(out, cfg):
         print(f"MainStage patch {cfg.song.patch} (channel {cfg.output.patch_channel})")
+    apply_mix(out, cfg)
     if press_recorder(out, cfg):
         print(f"Pressed the recorder (cc {cfg.output.recorder_cc}, channel "
               f"{cfg.output.recorder_channel}): MainStage should be recording now.")
@@ -884,6 +975,7 @@ def cmd_run(args) -> int:
                     for ch in band_channels(cfg):  # back to full for the new song
                         out.control_change(ch - 1, FADE_CC, 127)
                     select_patch(out, cfg)
+                    apply_mix(out, cfg)
                     if rec:
                         rec.close()
                         rec = Recorder(auto_path(name=args.song))
@@ -1034,6 +1126,13 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("levels", help="line check: each voice alone, then you; sets each "
+                                       "voice's level under you (written into the song)")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("--song", default=None, metavar="NAME", help="the song (its patch and sounds)")
+    sp.add_argument("--file", default=None, metavar="WAV",
+                    help="measure this recording of an earlier line check instead of playing")
+    sp.add_argument("--write", action="store_true", help="write the trims without asking")
     sp = sub.add_parser("patch", help="send one program change (test MainStage patch switching)")
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("number", type=int, help="the patch's Program Change number as MainStage "
@@ -1073,7 +1172,8 @@ def main(argv=None) -> int:
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
                 "listen": cmd_listen, "learn": cmd_learn,
                 "check": cmd_check, "soundcheck": cmd_soundcheck,
-                "recorder": cmd_recorder, "patch": cmd_patch}[args.cmd](args)
+                "recorder": cmd_recorder, "patch": cmd_patch,
+                "levels": cmd_levels}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
