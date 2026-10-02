@@ -359,6 +359,11 @@ PARAMS: list[Param] = [
       "Its pattern in 4 (in 3, 5, 6 and 7 it plays latin-waltz, latin-five, bembe and "
       "latin-seven).", "Percussion",
       choices=("latin", "latin-waltz", "latin-five", "bembe", "latin-seven"), check=_check_pattern),
+    P("percussion.tuned", bool, False, "Tuned percussion",
+      "The percussion sound is pitched (bells, blocks, marimba): play the pattern's rhythm on "
+      "the chord's notes around percussion.octave instead of fixed drum notes.", "Percussion"),
+    P("percussion.octave", int, 5, "Tuned percussion octave",
+      "Where tuned percussion plays (5 = an octave above middle C).", "Percussion", 2, 7, 1),
     P("percussion.velocity", int, 55, "Percussion velocity", "Velocity of a normal hit (x).",
       "Percussion", 1, 127, 1),
     P("percussion.accent", int, 20, "Percussion accent", "Extra velocity for an accent (X).",

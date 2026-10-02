@@ -384,6 +384,7 @@ class DrumResponder:
         self._pattern = None
         self._crash_next = False
         self.fill_requested = False                 # a fill on the next last beat of a bar
+        self.pitches: list[int] = []                # tuned percussion: the chord's notes to use
         self.pattern_name: Optional[str] = None     # chosen by the groove, over drums.pattern
 
     def pattern(self):
@@ -472,6 +473,8 @@ class DrumResponder:
 
     def _push(self, t: float, note: int, vel: float) -> None:
         vel = humanize_velocity(min(max(round(vel), 1), 127), self.cfg.velocity_spread, self.rng)
+        if self.pitches:                            # tuned percussion: a chord tone instead
+            note = self.pitches[note % len(self.pitches)]
         heapq.heappush(self._queue, (t, next(self._seq), note, vel))
 
     def tick(self, now: float) -> None:

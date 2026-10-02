@@ -178,3 +178,18 @@ def test_percussion_triplets_build_with_soloing():
     gaps = {round(b - a, 2) for a, b in zip(late, late[1:]) if b - a < 0.4}
     assert any(abs(g - 1 / 3) < 0.02 or abs(g - 1 / 6) < 0.02 for g in gaps)  # ...in triplets
     assert not _triplet_run(60.0, triplets=0.0)
+
+
+def test_tuned_percussion_plays_the_chords_notes():
+    notes = [(0.2 + i * 0.25, (62, 65, 69)[i % 3], 80) for i in range(80)]
+    taps = [(1.0 + i * 0.5, "tap_tempo") for i in range(4)]
+    cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                       "percussion": {"enabled": True, "presence": 1.0, "tuned": True,
+                                      "octave": 5},
+                       "harmony": {"model": "modal", "root": "D", "mode": "minor"}})
+    res = simulate.run(cfg, onsets=notes, actions=taps, total=20.0)
+    hits = [(t, m.note) for t, m in res.timeline if m.type == "note_on" and m.channel == 10]
+    assert hits and all(72 <= n < 96 for _, n in hits)
+    pad = res.engine.pad.current
+    late = {n % 12 for t, n in hits if t > 15.0}
+    assert late <= {n % 12 for n in pad.notes}

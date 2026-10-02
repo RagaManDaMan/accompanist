@@ -18,7 +18,8 @@ pattern = "swing"
 swing = 0.33
 
 [percussion]
-enabled = true           # MainStage patch 2: "Blocks & Bells"
+enabled = true           # MainStage patch 2: "Blocks & Bells", a tuned (pitched) sound...
+tuned = true             # ...so it plays the chart's chord tones, not fixed drum notes
 
 [piano]
 enabled = true

@@ -248,6 +248,7 @@ class Engine:
                 if self.cfg.percussion.enabled and bar_pos == 0:
                     self._percussion_spell(form_beat // max(1, bpb), now)
                 if self.cfg.percussion.enabled:
+                    self.percussion.pitches = self._tuned_pitches()
                     self._triplet_figure(beat_t, now, form_beat, bar_pos, bpb, gain)
                 if (self.cfg.percussion.enabled and self._percussion_on
                         and self.beat_count >= self._figure_until):
@@ -369,6 +370,17 @@ class Engine:
             for name in ("kick", "crash"):
                 self.out.note_on(d.channel - 1, GM_DRUMS[name], min(127, d.velocity + d.accent))
                 self.out.note_off_at(now + d.note_length_s, d.channel - 1, GM_DRUMS[name])
+
+    def _tuned_pitches(self) -> list[int]:
+        """Tuned percussion: the sounding chord's notes, two octaves from percussion.octave
+        (empty: drum notes as written)."""
+        p = self.cfg.percussion
+        chord = self.pad.current or self.proposal
+        if not p.tuned or chord is None:
+            return []
+        low = 12 * (p.octave + 1)
+        pcs = {n % 12 for n in chord.notes}
+        return [n for n in range(low, low + 24) if n % 12 in pcs]
 
     def soloing_s(self, now: float) -> float:
         """How long you've been playing without a rest (0 if you're resting)."""
