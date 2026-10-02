@@ -739,6 +739,7 @@ KEYS = {" ": "panic", "p": "panic", "r": "resume", "t": "tap_tempo", "l": "lock_
 SWITCH_FADE_S = 1.0
 EXPRESSION_STEP_S = 0.05
 FADE_CC = 11
+PATCH_SETTLE_S = 0.15      # after a patch change, before the new song's levels go out
 # accompanist levels: the pad's expression while it is measured (its normal level), and how
 # long to wait for the DAW to finish writing its recording.
 LEVELS_PAD_EXPRESSION = 0.8
@@ -999,9 +1000,10 @@ def cmd_run(args) -> int:
                     args.song = set_songs[song_index]
                     cfg = load_for_run(args)
                     ctl = Controller(cfg, out)
-                    for ch in band_channels(cfg):  # back to full for the new song
-                        out.control_change(ch - 1, FADE_CC, 127)
-                    select_patch(out, cfg)
+                    if select_patch(out, cfg):     # the new song's sounds first...
+                        time.sleep(PATCH_SETTLE_S)
+                    for ch in band_channels(cfg):  # ...then back to full, for them only: the
+                        out.control_change(ch - 1, FADE_CC, 127)   # old patch's tails stay down
                     apply_mix(out, cfg)
                     if rec:
                         rec.close()
