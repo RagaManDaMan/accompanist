@@ -1,0 +1,96 @@
+# Tālas: beats (aksharas / mātrās) and their groupings, for grooves and count-offs.
+#
+# Hindustani: vibhāgs, the sam (always beat 1) and the khālī (open) beats, with the theka
+# (the tabla's defining bols). Carnatic: the 35 sūlādi tālas are computed from tāla + jāti
+# (indian.suladi); the cāpu tālas and the common names are listed here. Beats count from 1.
+# Facts of the tradition, written for this project; please correct anything.
+
+[talas.tintal]
+tradition = "hindustani"
+aliases = ["teentaal", "trital"]
+groups = [4, 4, 4, 4]
+khali = [9]
+theka = "Dha Dhin Dhin Dha | Dha Dhin Dhin Dha | Dha Tin Tin Ta | Ta Dhin Dhin Dha"
+
+[talas.ektal]
+tradition = "hindustani"
+groups = [2, 2, 2, 2, 2, 2]
+khali = [3, 7]
+theka = "Dhin Dhin | DhaGe TiRaKiTa | Tu Na | Kat Ta | DhaGe TiRaKiTa | Dhi Na"
+
+[talas.jhaptal]
+tradition = "hindustani"
+groups = [2, 3, 2, 3]
+khali = [6]
+theka = "Dhi Na | Dhi Dhi Na | Ti Na | Dhi Dhi Na"
+
+[talas.rupak]
+tradition = "hindustani"
+note = "the sam is itself khali"
+groups = [3, 2, 2]
+khali = [1]
+theka = "Tin Tin Na | Dhi Na | Dhi Na"
+
+[talas.keherwa]
+tradition = "hindustani"
+groups = [4, 4]
+khali = [5]
+theka = "Dha Ge Na Ti | Na Ka Dhi Na"
+
+[talas.dadra]
+tradition = "hindustani"
+groups = [3, 3]
+khali = [4]
+theka = "Dha Dhi Na | Dha Ti Na"
+
+[talas.deepchandi]
+tradition = "hindustani"
+groups = [3, 4, 3, 4]
+khali = [8]
+
+[talas.jhoomra]
+tradition = "hindustani"
+groups = [3, 4, 3, 4]
+khali = [8]
+
+[talas.dhamar]
+tradition = "hindustani"
+groups = [5, 2, 3, 4]
+khali = [8]
+
+[talas.chautal]
+tradition = "hindustani"
+groups = [2, 2, 2, 2, 2, 2]
+khali = [5, 9]
+
+[talas.teevra]
+tradition = "hindustani"
+groups = [3, 2, 2]
+
+# ---- Carnatic ---------------------------------------------------------------------
+
+[talas.adi]
+tradition = "carnatic"
+note = "chatusra jāti triputa: laghu (4) + drutam (2) + drutam (2)"
+groups = [4, 2, 2]
+
+[talas.rupakam]
+tradition = "carnatic"
+note = "chatusra jāti rupaka: drutam (2) + laghu (4); often felt in 3"
+groups = [2, 4]
+
+[talas.misra-chapu]
+tradition = "carnatic"
+groups = [3, 2, 2]
+
+[talas.khanda-chapu]
+tradition = "carnatic"
+groups = [2, 3]
+
+[talas.tisra-chapu]
+tradition = "carnatic"
+groups = [1, 2]
+
+[talas.sankeerna-chapu]
+tradition = "carnatic"
+groups = [4, 5]

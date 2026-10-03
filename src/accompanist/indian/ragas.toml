@@ -1,0 +1,111 @@
+# Rāgas as scales, for the accompanist's rāga colour (a guide, not a cage).
+#
+# Swaras are written S R1 R2 R3 G1 G2 G3 M1 M2 P D1 D2 D3 N1 N2 N3, S' (upper Sa). The 72
+# melakartas are not listed: they are computed from their number (indian.melakarta). These
+# are janya rāgas and Hindustani rāgas/thāts given as ārohaṇa / avarohaṇa. Vakra (zigzag)
+# phrasing and anya swaras are noted, not modelled. Facts of the tradition, written for this
+# project (no dataset copied); please correct anything an expert would object to.
+
+[ragas.mohanam]
+tradition = "carnatic"
+aliases = ["bhupali", "bhoop"]
+arohana = "S R2 G3 P D2 S'"
+avarohana = "S' D2 P G3 R2 S"
+
+[ragas.hamsadhwani]
+tradition = "carnatic"
+arohana = "S R2 G3 P N3 S'"
+avarohana = "S' N3 P G3 R2 S"
+
+[ragas.hindolam]
+tradition = "carnatic"
+aliases = ["malkauns"]
+arohana = "S G2 M1 D1 N2 S'"
+avarohana = "S' N2 D1 M1 G2 S"
+
+[ragas.abhogi]
+tradition = "carnatic"
+arohana = "S R2 G2 M1 D2 S'"
+avarohana = "S' D2 M1 G2 R2 S"
+
+[ragas.shuddha-dhanyasi]
+tradition = "carnatic"
+arohana = "S G2 M1 P N2 S'"
+avarohana = "S' N2 P M1 G2 S"
+
+[ragas.madhyamavati]
+tradition = "carnatic"
+arohana = "S R2 M1 P N2 S'"
+avarohana = "S' N2 P M1 R2 S"
+
+[ragas.sriranjani]
+tradition = "carnatic"
+arohana = "S R2 G2 M1 D2 N2 S'"
+avarohana = "S' N2 D2 M1 G2 R2 S"
+
+[ragas.revati]
+tradition = "carnatic"
+arohana = "S R1 M1 P N2 S'"
+avarohana = "S' N2 P M1 R1 S"
+
+[ragas.amritavarshini]
+tradition = "carnatic"
+arohana = "S G3 M2 P N3 S'"
+avarohana = "S' N3 P M2 G3 S"
+
+[ragas.bhairavi]
+tradition = "carnatic"
+note = "D2 ascending, D1 descending"
+arohana = "S R2 G2 M1 P D2 N2 S'"
+avarohana = "S' N2 D1 P M1 G2 R2 S"
+
+[ragas.kambhoji]
+tradition = "carnatic"
+note = "N3 appears as an anya swara in phrases like S N3 P D2 S"
+arohana = "S R2 G3 M1 P D2 S'"
+avarohana = "S' N2 D2 P M1 G3 R2 S"
+
+# ---- Hindustani (thāts are melakartas: see THAATS in indian.py) ----------------------
+
+[ragas.yaman]
+tradition = "hindustani"
+note = "often begins from N below: N R G"
+arohana = "S R2 G3 M2 P D2 N3 S'"
+avarohana = "S' N3 D2 P M2 G3 R2 S"
+
+[ragas.bhimpalasi]
+tradition = "hindustani"
+arohana = "S G2 M1 P N2 S'"
+avarohana = "S' N2 D2 P M1 G2 R2 S"
+
+[ragas.bageshree]
+tradition = "hindustani"
+note = "P only in descent, vakra: D M P D M G"
+arohana = "S G2 M1 D2 N2 S'"
+avarohana = "S' N2 D2 M1 P D2 M1 G2 R2 S"
+
+[ragas.desh]
+tradition = "hindustani"
+arohana = "S R2 M1 P N3 S'"
+avarohana = "S' N2 D2 P M1 G3 R2 S"
+
+[ragas.durga]
+tradition = "hindustani"
+arohana = "S R2 M1 P D2 S'"
+avarohana = "S' D2 P M1 R2 S"
+
+[ragas.darbari-kanada]
+tradition = "hindustani"
+note = "vakra, with the slow andolan on G2 and D1"
+arohana = "S R2 G2 M1 P D1 N2 S'"
+avarohana = "S' D1 N2 P M1 P G2 M1 R2 S"
+
+[ragas.marwa]
+tradition = "hindustani"
+arohana = "S R1 G3 M2 D2 N3 S'"
+avarohana = "S' N3 D2 M2 G3 R1 S"
+
+[ragas.puriya-dhanashree]
+tradition = "hindustani"
+arohana = "S R1 G3 M2 P D1 N3 S'"
+avarohana = "S' N3 D1 P M2 G3 R1 S"
