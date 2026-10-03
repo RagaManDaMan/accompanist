@@ -26,3 +26,6 @@ enabled = true
 
 [response]
 enabled = true
+
+[ending]
+shape = "ritardando"     # a ballad slows into its last chord

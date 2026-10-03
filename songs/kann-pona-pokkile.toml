@@ -25,3 +25,6 @@ enabled = true
 
 [response]
 enabled = true
+
+[ending]
+shape = "tag"            # 4 more bars, a fill, then the last chord (try: random)
