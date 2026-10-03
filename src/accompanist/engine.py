@@ -27,6 +27,12 @@ from .tempo import REALIGN_ADVANTAGE, TempoEstimator
 # Drum patterns for a meter heard, when yours does not fit it: (meter, feel) or meter.
 GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing", 5: "five", 6: "six-eight",
                    7: "seven-322"}
+# Ending shapes; a piano tag's notes (beats of the bar) and softness; a ritardando's last
+# chord rings this much longer (a fermata).
+ENDING_SHAPES = ("chord", "button", "tag", "ritardando", "piano-tag")
+PIANO_TAG_BEATS = {3: (0, 1), 4: (0, 2), 6: (0, 3)}
+PIANO_TAG_SOFT = 0.6
+FERMATA = 1.5
 # How much louder the percussion gets in the quiet at percussion.spotlight = 1.
 SPOTLIGHT_LIFT = 0.8
 # Percussion triplet figures: notes per beat (3 over 2 beats; 6 over 2 when doubled), and the
@@ -82,6 +88,10 @@ class Engine:
         self._figure_until = 0                    # beat_count when a triplet figure is over
         self._figure_rng = random.Random(cfg.harmony.seed + 41)
         self._ending: Optional[tuple[float, float]] = None   # (start, end) of the last chord
+        self._ending_shape = "chord"              # how this ending goes (ending.shape)
+        self._final_bars: Optional[int] = None    # bars still to play before the last chord
+        self._rit_step = 1.0                      # a ritardando: period growth per beat
+        self._ending_rng = random.Random(cfg.harmony.seed + 51)
         self.last_onset_t: Optional[float] = None
         self.last_note: Optional[int] = None
         self.proposal: Optional[Voicing] = None   # what the harmony model last suggested
@@ -117,7 +127,7 @@ class Engine:
         # realigned wholesale. Phase hints (small nudges toward your on-beat notes) continue,
         # scaled by lock.phase_rate, so the pulse stays with you without chasing every note.
         rate = self.cfg.lock.tempo_rate if self.locked else 1.0
-        if self.tempo.update(now, rate=rate, locked=self.locked):
+        if self.tempo.update(now, rate=rate, locked=self.locked) and self._rit_step == 1.0:
             self.clock.set_period(self.tempo.period)
             if self.clock.running:
                 self._realign(now)
@@ -211,9 +221,15 @@ class Engine:
                         if self._count_meter:                 # a song's meter, like a count-off
                             self.groove.pin(self._count_meter)
                     continue
-                if self._finish_requested and bar_pos == 0:   # the end: one last chord
-                    self._play_ending(beat_t, now)
+                if self._finish_requested and bar_pos == 0 and self._ending_bar(bpb, now):
+                    self._play_ending(beat_t, now)            # the end: one last chord
                     break
+                if self._rit_step != 1.0:                     # a ritardando: each beat longer
+                    self.clock.period = self.clock.target_period = self.clock.period * self._rit_step
+                if self._ending_shape == "piano-tag" and self._final_bars is not None:
+                    self._piano_tag_beat(now, bar_pos, bpb)
+                    self.beat_count += 1
+                    continue
                 resting = self._break_beat(bar_pos, bpb, now, pulse_root)
                 if hasattr(self.harmony, "on_beat"):          # a chart: its chord for this beat
 
@@ -500,6 +516,7 @@ class Engine:
         stops a chart (start it again with a count-in)."""
         self.song_playing, self._count_in_left = False, 0
         self._finish_requested, self._ending, self.finished = False, None, False
+        self._final_bars, self._rit_step = None, 1.0
         self._break_requested, self._break_left, self._break_return = False, 0, False
         self._interlude_bar0 = None
         self.unlock()
@@ -526,9 +543,49 @@ class Engine:
         if self.muted or not self.clock.running or self._count_in_left > 0:
             return False
         self._finish_requested = True
-        if self.cfg.ending.fill:
+        shape = self.cfg.ending.shape
+        if shape == "random":
+            shape = self._ending_rng.choice(ENDING_SHAPES)
+        self._ending_shape = shape
+        if self.cfg.ending.fill and shape in ("chord", "button"):
             self.drums.fill_requested = True
         return True
+
+    def _ending_bar(self, bpb: int, now: float) -> bool:
+        """At a 1 after f: is this the last chord's 1? A tag, a ritardando or a piano tag
+        first plays its bars (and the drums fill into the last chord)."""
+        e = self.cfg.ending
+        if self._ending_shape in ("chord", "button"):
+            return True
+        if self._final_bars is None:                  # the shape's bars start now
+            self._final_bars = {"tag": e.tag_bars, "ritardando": e.rit_bars,
+                                "piano-tag": 1}.get(self._ending_shape, 0)
+            if self._ending_shape == "ritardando":
+                self._rit_step = (1 / e.rit_to) ** (1 / max(1, e.rit_bars * bpb))
+        elif self._final_bars > 0:
+            self._final_bars -= 1
+        if self._final_bars == 1 and self._ending_shape == "tag" and e.fill:
+            self.drums.fill_requested = True          # the tag's last bar: a fill into the 1
+        return self._final_bars <= 0
+
+    def _piano_tag_beat(self, now: float, bar_pos: int, bpb: int) -> None:
+        """A piano tag's bar: the band drops out; soft piano notes on the tonic chord ("plink,
+        plink..."), then the full band on the next 1 ("...PLUNK")."""
+        if bar_pos == 0:
+            self.response.cancel()
+            self._reset_drums()
+            if self.cfg.pad.enabled:
+                self._send_expression(now, round(127 * self.cfg.breaks.pad_level), force=True)
+        chord = self._ending_chord(now)
+        if chord is None or not self.cfg.piano.enabled or bar_pos not in PIANO_TAG_BEATS.get(
+                bpb, (0, bpb // 2)):
+            return
+        c = self.cfg.piano
+        low = 12 * (c.octave + 2)                     # an octave above the piano's usual place
+        tones = sorted(n for n in range(low, low + 12) if n % 12 in {x % 12 for x in chord.notes})
+        note = tones[-1] if bar_pos == 0 else tones[len(tones) // 2]
+        self.out.note_on(c.channel - 1, note, max(1, round(c.velocity * PIANO_TAG_SOFT)))
+        self.out.note_off_at(now + self.clock.period, c.channel - 1, note)
 
     def _ending_chord(self, now: float) -> Optional[Voicing]:
         """The tonic of the key you're playing in: the key the harmony has been following (or,
@@ -572,6 +629,10 @@ class Engine:
         from .patterns import GM_DRUMS
 
         ring = self.cfg.ending.ring_s
+        if self._ending_shape == "button":
+            ring = self.cfg.ending.button_beats * self.clock.period
+        elif self._ending_shape == "ritardando":
+            ring *= FERMATA                            # held: a fermata
         chord = self._ending_chord(now)
         self.response.cancel()
         self.piano.final_chord(now, chord, self.clock.period)
@@ -593,6 +654,7 @@ class Engine:
                     self.out.note_off_at(now + cfg.note_length_s, cfg.channel - 1, GM_DRUMS[name])
         self.clock.stop()
         self._finish_requested = False
+        self._final_bars, self._rit_step = None, 1.0
         self._ending = (now, now + ring)
 
     def _ring_out(self, now: float) -> None:

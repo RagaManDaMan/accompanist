@@ -198,6 +198,16 @@ plays one last chord, the key's tonic (else the chord of the moment): the pad, t
 root, a kick and a crash. It rings for `ending.ring_s` (4 s), fading out, and then everything
 stops (FINISHED). **s** or a count-off starts again straight away; no resume needed.
 
+How it ends is the song's choice, `[ending] shape`:
+- `chord` (the default): as above, the last chord rings and fades;
+- `button`: one short, tight hit on the last 1 (`ending.button_beats`);
+- `tag`: the band plays `ending.tag_bars` (4) more bars, fills, then the last chord;
+- `ritardando`: it slows over `ending.rit_bars` (2) bars to `ending.rit_to` (60%) of the
+  tempo, into a held last chord;
+- `piano-tag`: the band drops out for a bar of soft piano notes on the tonic chord ("plink,
+  plink...") and comes back for the last chord ("...PLUNK");
+- `random`: one of these each time.
+
 ## Counting off
 
 Count the band in on **t**, like a bandleader: the taps set the tempo, and how many you tap

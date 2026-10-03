@@ -661,6 +661,20 @@ PARAMS: list[Param] = [
       "Breaks", 0, 1, 0.05),
 
     # ---- ending (f, or a pedal: finish the song) --------------------------------
+    P("ending.shape", str, "chord", "Ending shape",
+      "How f ends the song: chord (the last chord rings and fades), button (one short, tight "
+      "hit), tag (the band plays ending.tag_bars more bars, then the last chord), ritardando "
+      "(slows over ending.rit_bars bars into a held last chord), piano-tag (the band drops "
+      "out for a bar of soft piano, then the last chord), or random.", "Ending",
+      choices=("chord", "button", "tag", "ritardando", "piano-tag", "random")),
+    P("ending.tag_bars", int, 4, "Tag length", "Bars the band plays on before a tag ending's "
+      "last chord.", "Ending", 1, 16, 1),
+    P("ending.rit_bars", int, 2, "Ritardando length", "Bars over which a ritardando slows.",
+      "Ending", 1, 8, 1),
+    P("ending.rit_to", float, 0.6, "Ritardando to",
+      "A ritardando slows to this share of the tempo (0.6 = 60%).", "Ending", 0.3, 0.95, 0.05),
+    P("ending.button_beats", float, 0.5, "Button length", "How long a button ending's hit "
+      "sounds (beats).", "Ending", 0.1, 2, 0.05),
     P("ending.ring_s", float, 4.0, "Last chord rings",
       "The last chord (on the 1 after you ask to finish) rings this long, fading out (seconds).",
       "Ending", 0.5, 30, 0.5),
