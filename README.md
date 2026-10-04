@@ -336,6 +336,15 @@ patterns (`accompanist params` lists them): `basic`, `halftime`, `soft`, `sparse
 start when it starts, follow your loudness, and stop on panic. `drums.swing` swings the
 off-steps.
 
+**Real drummers' grooves:** `accompanist library drums datasets/groove` builds a groove
+library from the [Groove MIDI Dataset](https://magenta.withgoogle.com/datasets/groove)
+(Google Magenta, CC BY 4.0: 13.6 hours of professional drummers; download and unzip
+`groove-v1.0.0-midionly.zip`). A song with `[drums] style = "jazz"` (or `jazz/swing`,
+`latin`, `latin/samba`, `funk`, `soul`, `rock`, `afrocuban`, `neworleans`, `reggae`,
+`hiphop`...) then plays real grooves of that style near its tempo, bar after bar in the
+drummer's own timing and dynamics, with a real fill at phrase ends and now and then
+another groove. 4/4 only (the dataset is); other meters keep the patterns.
+
 ## Percussion
 
 A second player, `[percussion] enabled = true`: latin hand percussion on its own channel
