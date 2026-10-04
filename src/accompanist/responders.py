@@ -360,6 +360,10 @@ PHRASE_CRESCENDO = 0.2
 FILL_FROM = 0.55
 FILL_CHANCE = 1.2
 FILL_NOTES = {"low": "tom_low", "mid": "tom_mid", "snare": "snare"}
+# Library grooves: the chance of moving to another groove of the style at a phrase start, and
+# the velocity the drummers' own dynamics are taken relative to (drums.velocity scales them).
+GROOVE_CHANGE = 0.3
+GROOVE_REFERENCE_VELOCITY = 70
 
 
 class DrumResponder:
@@ -385,6 +389,10 @@ class DrumResponder:
         self._crash_next = False
         self.fill_requested = False                 # a fill on the next last beat of a bar
         self.pitches: list[int] = []                # tuned percussion: the chord's notes to use
+        self.book = None                            # real drummers' grooves (drumbook), if any
+        self._groove = None
+        self._groove_bar = 0
+        self._bar_hits = None
         self.pattern_name: Optional[str] = None     # chosen by the groove, over drums.pattern
 
     def pattern(self):
@@ -403,9 +411,14 @@ class DrumResponder:
         beats_per_bar, busy (0-1, how busily you play): for the dynamics."""
         from .patterns import GM_DRUMS
 
+        where = self.beat_count if form_beat is None else form_beat
+        if (self.book is not None and getattr(self.cfg, "style", None) and self.pattern_name is None
+                and (beats_per_bar or 4) == 4 and not self.fill_requested):
+            if self._groove_beat(beat_t, period, gain, where, boost, busy):
+                self.beat_count += 1
+                return
         pat = self.pattern()
         spb = pat.steps_per_beat
-        where = self.beat_count if form_beat is None else form_beat
         first = (where % pat.beats) * spb
         swing = self.cfg.swing if swing is None else swing
         d = self.cfg.dynamics
@@ -445,6 +458,44 @@ class DrumResponder:
         if fill:
             self._fill(beat_t, period, spb, self.cfg.velocity * energy + self.cfg.accent)
         self.beat_count += 1
+
+    def _groove_beat(self, beat_t: float, period: float, gain: float, where: int, boost: int,
+                     busy: float) -> bool:
+        """A real drummer's groove (drumbook): this beat of the current bar, in the drummer's
+        own timing and dynamics; a fill bar from the same style at phrase ends. False if the
+        library has nothing for the style."""
+        from .patterns import GM_DRUMS
+
+        bar, pos = divmod(where, 4)
+        d, phrase = self.cfg.dynamics, getattr(self.cfg, "phrase_bars", 0)
+        bpm = 60.0 / period
+        if pos == 0 or self._groove is None:
+            if self._groove is None or (phrase and bar % phrase == 0
+                                        and self.fill_rng.random() < GROOVE_CHANGE):
+                self._groove = self.book.choose(self.cfg.style, bpm, "beat", self.fill_rng,
+                                                self._groove)
+                self._groove_bar = 0
+            if self._groove is None:
+                return False
+            last = phrase > 1 and bar % phrase == phrase - 1
+            self._bar_hits = None
+            if last and self.fill_rng.random() < FILL_CHANCE * d:
+                fill = self.book.choose(self.cfg.style, bpm, "fill", self.fill_rng)
+                if fill is not None:
+                    self._bar_hits = fill.bars[0]
+                    self._crash_next = True
+            if self._bar_hits is None:
+                self._bar_hits = self._groove.bars[self._groove_bar % len(self._groove.bars)]
+                self._groove_bar += 1
+            if self._crash_next and not last:
+                self._crash_next = False
+                self._push(beat_t, GM_DRUMS["crash"], self.cfg.velocity + self.cfg.accent + boost)
+        energy = gain ** (1 + FOLLOW_BOOST * d) * (1 + BUSY_LIFT * d * (busy - 0.5)) if d > 0 else gain
+        scale = energy * self.cfg.velocity / GROOVE_REFERENCE_VELOCITY
+        for b, note, vel in self._bar_hits or ():
+            if pos <= b < pos + 1:
+                self._push(beat_t + (b - pos) * period, note, vel * scale + (boost if b == pos else 0))
+        return True
 
     def triplet_figure(self, beat_t: float, period: float, beats: int, notes_per_beat: float,
                        gain: float) -> None:
@@ -487,4 +538,5 @@ class DrumResponder:
     def reset(self) -> None:
         self.beat_count = 0
         self._crash_next = self.fill_requested = False
+        self._groove, self._groove_bar, self._bar_hits = None, 0, None
         self._queue.clear()

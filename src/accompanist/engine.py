@@ -62,6 +62,10 @@ class Engine:
         self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
         self.piano = PianoResponder(cfg.piano, out, cfg.harmony.seed)
         self.response.partner = self.piano          # they take turns answering you
+        if cfg.drums.style:                           # real drummers' grooves
+            from .drumbook import DrumBook
+
+            self.drums.book = DrumBook.open(cfg.library.path)
         if cfg.library.enabled:                       # your phrases, from every run
             from .phrasebook import Phrasebook
 

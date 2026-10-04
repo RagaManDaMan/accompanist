@@ -14,7 +14,8 @@ chart = "../charts/Lady Sings The Blues.musicxml"
 
 [drums]
 enabled = true
-pattern = "swing"
+style = "jazz"           # real jazz drummers' grooves (the groove library); else:
+pattern = "swing"        # the swing pattern
 swing = 0.33
 
 [percussion]

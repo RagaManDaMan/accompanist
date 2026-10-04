@@ -322,6 +322,11 @@ PARAMS: list[Param] = [
       "Drums", choices=("basic", "halftime", "soft", "sparse", "swing", "march", "waltz",
                         "five", "six-eight", "seven-322"),
       check=_check_pattern),
+    P("drums.style", str, None, "Drum style",
+      "Play real drummers' grooves and fills from the groove library (`accompanist library "
+      "drums`) in this style, e.g. jazz, jazz/swing, latin, latin/samba, funk, soul, rock, "
+      "afrocuban, neworleans, reggae (4/4 songs; other meters keep the patterns). Unset: the "
+      "pattern.", "Drums", nullable=True),
     P("drums.velocity", int, 70, "Drums velocity", "Velocity of a normal hit (x).", "Drums", 1, 127, 1),
     P("drums.accent", int, 25, "Drums accent", "Extra velocity for an accent (X).", "Drums", 0, 127, 1),
     P("drums.ghost", float, 0.45, "Ghost level", "A ghost note (g) at this share of a hit.",

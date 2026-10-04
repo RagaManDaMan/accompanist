@@ -202,6 +202,18 @@ def cmd_library(args) -> int:
 
     cfg = cfgmod.load(args.config) if Path(args.config).exists() else cfgmod.from_dict({})
     book = pb.Phrasebook.open(cfg.library.path)
+    if args.action == "drums":
+        from .drumbook import CREDIT, build
+
+        if len(args.paths) != 1:
+            print("accompanist library drums DATASET_FOLDER  (the Groove MIDI Dataset, unzipped:"
+                  " the folder with info.csv)")
+            return 1
+        out = Path(cfg.library.path).expanduser() / "drums.json"
+        n = build(Path(args.paths[0]).expanduser(), out)
+        print(f"Built {n} grooves and fills into {out}\n  from the {CREDIT}.\n"
+              f"Set [drums] style = \"jazz\" (or latin, funk, soul, rock...) in a song to use them.")
+        return 0
     if args.action == "stats":
         tags: dict[str, int] = {}
         keys: dict[str, int] = {}
@@ -1284,8 +1296,9 @@ def main(argv=None) -> int:
     add_chart_args(sp)
     sp = sub.add_parser("library", help="your phrase library: add takes and recordings, or stats")
     sp.add_argument("-c", "--config", default="config.toml")
-    sp.add_argument("action", choices=("add", "stats"))
-    sp.add_argument("paths", nargs="*", help="takes (.jsonl), recordings (.wav), or folders")
+    sp.add_argument("action", choices=("add", "stats", "drums"))
+    sp.add_argument("paths", nargs="*", help="add: takes (.jsonl), recordings (.wav), or folders;"
+                                             " drums: the Groove MIDI Dataset folder")
     sp.add_argument("--tag", action="append", default=[],
                     help="label these phrases (e.g. --tag class --tag alap); repeatable")
     sp = sub.add_parser("practice", help="listen while you practise: your phrases go into the "
