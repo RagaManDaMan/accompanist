@@ -31,7 +31,6 @@ GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing", 5: "five", 6: 
 # sinks between beats (time constant) and the share of the swell it keeps.
 HEART_HOLD_S = 3.0
 HEART_DECAY_S = 0.4
-HEART_REST = 0.35
 # The filler between songs: scale degrees (0 = the home chord) its chords sit on, in turn.
 FILLER_DEGREES = (0, 5, 3, 4, 0, 3, 5, 1)
 # Ending shapes; a piano tag's notes (beats of the bar) and softness; a ritardando's last
@@ -345,7 +344,8 @@ class Engine:
             if self.pad.current is None or {n % 12 for n in self.pad.current.notes} != {
                     n % 12 for n in chord.notes}:
                 self.pad.update(now, chord, self.tempo.period)
-            self._send_expression(now, round(127 * b.heart_pad_level), force=True)
+            self._heart_t = now
+            self._send_expression(now, round(127 * self._heart_level(now)), force=True)
         self._heart_t = now
         return True
 
@@ -383,10 +383,15 @@ class Engine:
                 and now - self._heart_t < HEART_HOLD_S)
 
     def _heart_decay(self, now: float) -> None:
-        """Between heartbeats the pad sinks back toward a breath of its swell."""
-        level = self.cfg.body.heart_pad_level * max(HEART_REST, math.exp(-(now - self._heart_t)
-                                                                          / HEART_DECAY_S))
-        self._send_expression(now, round(127 * level))
+        self._send_expression(now, round(127 * self._heart_level(now)))
+
+    def _heart_level(self, now: float) -> float:
+        """The pad's level with your heartbeat: a bed at body.pad_level that ebbs and flows
+        slowly (body.ebb_s, body.ebb_depth), plus a swell on each beat that sinks away."""
+        b = self.cfg.body
+        ebb = 1 - b.ebb_depth * (0.5 + 0.5 * math.cos(2 * math.pi * now / max(1.0, b.ebb_s)))
+        beat = math.exp(-(now - self._heart_t) / HEART_DECAY_S) if self._heart_t is not None else 0.0
+        return min(1.0, b.pad_level * ebb + b.heart_pad_level * beat)
 
     def _home_chord(self) -> Optional[Voicing]:
         """The song's home key (its key palette's first, or the key set or heard), open."""

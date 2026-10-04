@@ -210,3 +210,18 @@ def test_a_run_with_a_headband_in_the_config_but_none_worn_plays_on(tmp_path, mo
     assert cli.main(["run", "--no-record"]) == 0
     out = capsys.readouterr().out
     assert "Traceback" not in out and "Stopped" in out
+
+
+def test_the_pad_between_songs_ebbs_and_flows_around_a_fuller_level():
+    cfg = c.from_dict({"harmony": {"keys": "D minor"}, "lock": {"auto": False},
+                       "body": {"pad_level": 0.55, "ebb_s": 12.0, "ebb_depth": 0.4}})
+    port = RecordingPort()
+    ctl = Controller(cfg, SafeOutput(port))
+    for k in range(2400):                                       # 24 s of heartbeat at 75
+        t = k / 100
+        if k % 80 == 0:
+            ctl.on_body(t, "beat", 75.0)
+        ctl.tick(t)
+    cc = [(m.value) for m in port.sent if m.type == "control_change" and m.control == 11]
+    assert max(cc) >= 75 and min(cc) <= 50                      # ebb and flow
+    assert sum(cc) / len(cc) > 45                               # fuller than the old 0.25 bed

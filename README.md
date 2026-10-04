@@ -433,6 +433,9 @@ tilt_right = "finish"       # ...right twice: finish
 heart = true                # before a song, between songs and after the set: a soft kick
 filler = true               # and the pad breathe with you, the pad moving slowly through
 filler_beats = 8            # the home key's chords (8 heartbeats each) while you talk
+pad_level = 0.55            # the pad's level then, ebbing and flowing slowly
+ebb_s = 12                  # (one swell and fall every 12 s, falling 40% at its low point:
+ebb_depth = 0.4             #  ebb_depth), with a swell on each heartbeat on top
 ```
 
 `accompanist muse` shows what it hears, live. Gestures are recognised by how fast and how

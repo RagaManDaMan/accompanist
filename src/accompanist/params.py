@@ -626,8 +626,17 @@ PARAMS: list[Param] = [
       "Body", 2, 64, 1),
     P("body.heart_kick_velocity", int, 30, "Heartbeat kick", "Its loudness (MIDI velocity).",
       "Body", 1, 127, 1),
-    P("body.heart_pad_level", float, 0.25, "Heartbeat pad",
-      "How far the pad swells on each heartbeat (share of full expression).", "Body", 0, 1, 0.05),
+    P("body.pad_level", float, 0.55, "Pad between songs",
+      "The pad's level under your heartbeat before, between and after songs (share of full "
+      "expression), around which it ebbs and flows.", "Body", 0, 1, 0.05),
+    P("body.ebb_s", float, 12.0, "Ebb and flow",
+      "Seconds for one slow swell and fall of the pad between songs.", "Body", 2, 60, 1),
+    P("body.ebb_depth", float, 0.4, "Ebb depth",
+      "How far the pad falls at the low point of each ebb (share of its level; 0 = steady).",
+      "Body", 0, 1, 0.05),
+    P("body.heart_pad_level", float, 0.25, "Heartbeat swell",
+      "How much the pad swells on each heartbeat, on top of that (share of full expression).",
+      "Body", 0, 1, 0.05),
 
     # ---- library (your phrases, remembered across runs) ------------------------
     P("library.enabled", bool, True, "Phrase library",
