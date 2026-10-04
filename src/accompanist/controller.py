@@ -72,6 +72,20 @@ class Controller:
         self.set_param(ctl.target, cc_to_value(p, value))
         return None, f"{ctl.target} = {self.get_param(ctl.target)}"
 
+    def on_body(self, t: float, kind: str, value: Any) -> tuple[Optional[str], Optional[str]]:
+        """A headband event: ('gesture', 'nod' | 'tilt_left' | 'tilt_right') does the action
+        set for it in [body]; ('beat', bpm) is a heartbeat. Returns (action, message)."""
+        self._started(t)
+        if kind == "beat":
+            self.engine.heartbeat(t, value)
+            return None, None
+        if kind == "gesture":
+            action = getattr(self.cfg.body, value, "")
+            if not action:
+                return None, f"({value}: nothing set)"
+            return action, f"({value}) {self.do(action, t)}"
+        return None, None
+
     def on_cc(self, t: float, control: int, value: int) -> Optional[str]:
         """A CC from any input. Returns the action performed, or a message, or None."""
         action, message = self.on_midi(t, "cc", control, value)

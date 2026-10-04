@@ -23,6 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+muse = ["bleak>=0.21", "OpenMuse @ https://github.com/DominiqueMakowski/OpenMuse/zipball/main"]
 
 [project.scripts]
 accompanist = "accompanist.cli:main"

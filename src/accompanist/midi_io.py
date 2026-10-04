@@ -66,8 +66,8 @@ def open_inputs(cfg: Config, q: "queue.Queue", missing: Optional[list] = None):
     names = mido.get_input_names()
     ports, opened = [], set()
     for inp in cfg.inputs:
-        if inp.is_audio:
-            continue                  # audio inputs: see audio_io.py
+        if inp.is_audio or inp.is_body:
+            continue                  # audio inputs: see audio_io.py; a headband: muse_io.py
         try:
             name = find_port(names, inp.port, "input")
         except PortError as e:

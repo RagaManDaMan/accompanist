@@ -157,6 +157,8 @@ def cmd_monitor(args) -> int:
             p.close()
         for a in audios:
             a.close()
+        for b in bodies:
+            b.close()
         guard.summary()
         if writer is not None:
             writer.close()
@@ -309,6 +311,34 @@ def cmd_practice(args) -> int:
         for a in audios:
             a.close()
     print(f"\nLearnt {total} phrases. The library now has {len(book.phrases)}.")
+    return 0
+
+
+def cmd_muse(args) -> int:
+    """Connect to the headband and show what it gives: heartbeats and gestures, live."""
+    from .muse_io import MuseInput
+
+    cfg = cfgmod.load(args.config) if Path(args.config).exists() else cfgmod.from_dict({})
+    address = args.address or next((i.muse for i in cfg.inputs if i.is_body), None)
+    if not address:
+        raise cfgmod.ConfigError("give the headband's address (OpenMuse find shows it), or add "
+                                 "[[inputs]] muse = \"...\" to config.toml")
+    q: queue.Queue = queue.Queue()
+    MuseInput(address, q)
+    print(f"Connecting to {address}... nod, tilt left twice, tilt right twice. Ctrl-C to stop.")
+    try:
+        while True:
+            try:
+                kind, t, value = q.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if kind == "beat":
+                sys.stdout.write(f"\r\x1b[K♥ {value:5.1f} bpm" if value else "\r\x1b[K♥ ...")
+                sys.stdout.flush()
+            else:
+                say(f"{kind}: {value}")
+    except KeyboardInterrupt:
+        print()
     return 0
 
 
@@ -580,7 +610,13 @@ def cmd_check(args) -> int:
         report(False, "output", str(e).splitlines()[0])
     names = mido.get_input_names()
     for icfg in cfg.inputs:
-        label = f"{icfg.name or icfg.port or icfg.audio} ({icfg.role})"
+        label = f"{icfg.name or icfg.port or icfg.audio or icfg.muse} ({icfg.role})"
+        if icfg.is_body:
+            from .muse_io import available
+            problem = available()
+            report(problem is None, label, problem or f"headband {icfg.muse} (switch it on; "
+                                                     f"`accompanist muse` to test)")
+            continue
         try:
             found = (find_input(icfg.audio)[1] if icfg.is_audio
                      else find_port(names, icfg.port, "input"))
@@ -1022,6 +1058,18 @@ def cmd_run(args) -> int:
     for icfg in cfg.inputs:
         if not icfg.is_audio:
             print(f"Listening to MIDI '{icfg.port}' as '{icfg.name or icfg.port}'")
+    body_q: queue.Queue = queue.Queue()
+    bodies = []
+    for icfg in cfg.inputs:
+        if icfg.is_body:
+            from .muse_io import MuseError, MuseInput
+            try:
+                bodies.append(MuseInput(icfg.muse, body_q, icfg.name or "muse"))
+                print(f"Listening to the headband '{icfg.name or icfg.muse}' (heartbeat, "
+                      f"gestures: nod = {cfg.body.nod or '-'}, tilt left twice = "
+                      f"{cfg.body.tilt_left or '-'}, tilt right twice = {cfg.body.tilt_right or '-'})")
+            except MuseError as e:
+                print(f"warning: headband '{icfg.name or icfg.muse}': {e}: carrying on without it")
     if not in_ports and not audios:
         raise PortError("nothing to listen to: no MIDI input or audio input is available "
                         "(see the warnings above; `accompanist check` lists what's missing)")
@@ -1091,6 +1139,20 @@ def cmd_run(args) -> int:
                     if wav is not None and icfg is audios[0].icfg:
                         wav.write(block)
                     feeds[id(icfg)].process(block, t)
+                while True:                        # the headband: heartbeats, gestures
+                    try:
+                        kind, t_body, value = body_q.get_nowait()
+                    except queue.Empty:
+                        break
+                    if kind == "status":
+                        say(value)
+                        continue
+                    action, message = ctl.on_body(t_body, kind, value)
+                    if message:
+                        say(message)
+                        last_print = 0.0
+                    if action and rec:
+                        rec.action(t_body, action)
                 key = keys.poll()
                 playing = ctl.engine.clock.running and not ctl.engine.muted
                 if key == "q" or (key in KEYS and KEYS[key] in ("song_next", "song_prev")):
@@ -1305,6 +1367,11 @@ def main(argv=None) -> int:
                                          "library (notes only; speech left out)")
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("--tag", action="append", default=[], help="label them (e.g. --tag class)")
+    sp = sub.add_parser("muse", help="connect to a Muse headband and show heartbeats and "
+                                     "gestures live")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("address", nargs="?", default=None,
+                    help="its address (from `OpenMuse find`; default: the one in config.toml)")
     sp = sub.add_parser("kitmap", help="play a voice's notes one by one, named, to find "
                                        "where a kit keeps its sounds")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -1360,7 +1427,7 @@ def main(argv=None) -> int:
                 "check": cmd_check, "soundcheck": cmd_soundcheck,
                 "recorder": cmd_recorder, "patch": cmd_patch,
                 "levels": cmd_levels, "kitmap": cmd_kitmap, "library": cmd_library,
-                "practice": cmd_practice}[args.cmd](args)
+                "practice": cmd_practice, "muse": cmd_muse}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

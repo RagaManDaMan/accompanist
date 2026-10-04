@@ -28,7 +28,8 @@ _FLATS = {"DB": 1, "EB": 3, "GB": 6, "AB": 8, "BB": 10}
 
 # Roles an input channel can play. Only note_source exists in V0; the audio
 # roles are declared so config files written today stay valid later.
-VALID_ROLES = ("note_source", "control")    # control: a pedal/controller: commands only
+VALID_ROLES = ("note_source", "control", "body")   # control: a pedal: commands only;
+                                                   # body: a headband: heartbeat, gestures
 PLANNED_ROLES = ("pitch_contour", "voice")
 
 # Things a MIDI controller (or a key, or a UI) can trigger. See Controller.
@@ -89,12 +90,13 @@ BreaksCfg = _section_class("breaks")
 InterludeCfg = _section_class("interlude")
 MixCfg = _section_class("mix")
 LibraryCfg = _section_class("library")
+BodyCfg = _section_class("body")
 PanicCfg = _section_class("panic")
 PedalCfg = _section_class("pedal")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
                    "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
                    "drums": DrumsCfg, "percussion": PercussionCfg, "piano": PianoCfg, "audio": AudioCfg, "response": ResponseCfg,
-                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "mix": MixCfg, "library": LibraryCfg, "pedal": PedalCfg, "panic": PanicCfg}
+                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "mix": MixCfg, "library": LibraryCfg, "body": BodyCfg, "pedal": PedalCfg, "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
@@ -106,10 +108,15 @@ class InputCfg:
     channel: Optional[int] = None   # MIDI: 1-16, or omit for all channels
     audio: Optional[str] = None     # ...substring of an audio input device's name
     audio_channel: int = 1          # audio: which input of the interface (1-based)
+    muse: Optional[str] = None      # ...or a Muse headband's Bluetooth address (body signals)
 
     @property
     def is_audio(self) -> bool:
         return self.audio is not None
+
+    @property
+    def is_body(self) -> bool:
+        return self.muse is not None
 
 
 @dataclass
@@ -134,6 +141,7 @@ class Config:
     interlude: Any = field(default_factory=InterludeCfg)
     mix: Any = field(default_factory=MixCfg)
     library: Any = field(default_factory=LibraryCfg)
+    body: Any = field(default_factory=BodyCfg)
     pedal: Any = field(default_factory=PedalCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict = field(default_factory=dict)   # (kind, number) -> ControlCfg
@@ -378,13 +386,16 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
     for i, item in enumerate(d.get("inputs") or []):
         if not isinstance(item, dict):
             raise ConfigError(f"inputs[{i}] must be a table ([[inputs]])")
-        allowed_in = {"port", "role", "name", "channel", "audio", "audio_channel"}
+        allowed_in = {"port", "role", "name", "channel", "audio", "audio_channel", "muse"}
         if set(item) - allowed_in:
             raise ConfigError(f"inputs[{i}] unknown key(s) {sorted(set(item) - allowed_in)}; "
                               f"allowed: {sorted(allowed_in)}")
-        if ("port" in item) == ("audio" in item):
-            raise ConfigError(f"inputs[{i}] needs either port = \"...\" (a MIDI input) or "
-                              f"audio = \"...\" (an audio interface), by part of its name")
+        if sum(k in item for k in ("port", "audio", "muse")) != 1:
+            raise ConfigError(f"inputs[{i}] needs one of port = \"...\" (a MIDI input), "
+                              f"audio = \"...\" (an audio interface) by part of its name, or "
+                              f"muse = \"...\" (a Muse headband's address)")
+        if "muse" in item:
+            item = {**item, "role": item.get("role", "body")}
         inp = InputCfg(**item)
         if not isinstance(inp.audio_channel, int) or isinstance(inp.audio_channel, bool) or inp.audio_channel < 1:
             raise ConfigError(f"inputs[{i}]: audio_channel must be 1 or more (the input number)")
@@ -419,6 +430,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         interlude=_section("interlude", d.get("interlude")),
         mix=_section("mix", d.get("mix")),
         library=_section("library", d.get("library")),
+        body=_section("body", d.get("body")),
         pedal=_section("pedal", d.get("pedal")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls"))[0],

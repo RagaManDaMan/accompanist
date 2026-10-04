@@ -414,6 +414,31 @@ The guitar varies the rhythm of the phrases it plays back (`response.rhythm_vari
 0.4): mostly as you played them, now and then in double time (not above 150 bpm), half time
 (not below 70) or triplets. Answers are up to `response.max_notes` (8) long.
 
+## Your body: a Muse headband
+
+A Muse S Athena headband can be an input: your **heartbeat**, and **head gestures** as a
+hands-free pedal. Install its Bluetooth support (`pip install bleak
+https://github.com/DominiqueMakowski/OpenMuse/zipball/main`, or `pip install -e .[muse]`),
+find its address (`OpenMuse find`), and add it:
+
+```toml
+[[inputs]]
+name = "head"
+muse = "76CFE59F-ED05-742B-D487-6896233955A0"
+
+[body]                      # the defaults:
+nod = "break"
+tilt_left = "song_start"    # tilt your head left twice: count in
+tilt_right = "finish"       # ...right twice: finish
+heart = true                # until the music starts: a soft kick and the pad breathe with you
+```
+
+`accompanist muse` shows what it hears, live. Gestures are recognised by how fast and how
+far the head moves, and were tuned so that playing the sax never triggers one (lifting it
+neither): a nod is one down-up; a tilt counts when you tilt twice to the same side. The
+heart rate comes from the forehead's red light sensors and stays reliable while you play.
+Brainwaves (EEG) aren't used yet: in tests they were swamped by mains hum and playing.
+
 ## Before (and during) a gig
 
 `accompanist check` loads your config and every song, and looks for every device: run it at

@@ -66,6 +66,13 @@ def _multiple_of(v: Any, n: int) -> None:
         raise ValueError(f"must be a multiple of {n}, got {v}")
 
 
+def _check_action(v: Any) -> None:
+    from .config import ACTIONS
+
+    if v and v not in ACTIONS:
+        raise ValueError(f"'{v}' is not an action ({', '.join(ACTIONS)}), or leave it empty")
+
+
 def _check_keys(v: Any) -> None:
     from .modal import parse_keys
 
@@ -599,6 +606,23 @@ PARAMS: list[Param] = [
     P("lock.phase_rate", float, 0.3, "Phase follow while locked",
       "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
       "Groove lock", 0, 1, 0.05),
+
+    # ---- body (a Muse headband: heartbeat and head gestures) -------------------
+    P("body.nod", str, "break", "Nod",
+      "What a nod does (an action, e.g. break; empty: nothing).", "Body", check=_check_action),
+    P("body.tilt_left", str, "song_start", "Tilt left (twice)",
+      "What tilting your head to the left twice does (e.g. song_start: count in).", "Body",
+      check=_check_action),
+    P("body.tilt_right", str, "finish", "Tilt right (twice)",
+      "What tilting your head to the right twice does (e.g. finish).", "Body",
+      check=_check_action),
+    P("body.heart", bool, True, "Heartbeat before the music",
+      "Until the band starts, a soft kick and the pad's home chord breathe with your heartbeat.",
+      "Body"),
+    P("body.heart_kick_velocity", int, 30, "Heartbeat kick", "Its loudness (MIDI velocity).",
+      "Body", 1, 127, 1),
+    P("body.heart_pad_level", float, 0.25, "Heartbeat pad",
+      "How far the pad swells on each heartbeat (share of full expression).", "Body", 0, 1, 0.05),
 
     # ---- library (your phrases, remembered across runs) ------------------------
     P("library.enabled", bool, True, "Phrase library",

@@ -100,9 +100,9 @@ def test_wav_round_trip_and_listen_command(tmp_path, capsys):
 def test_audio_inputs_in_config():
     cfg = c.from_dict({"inputs": [{"name": "sax", "audio": "Scarlett Solo", "audio_channel": 1}]})
     assert cfg.inputs[0].is_audio and cfg.inputs[0].port is None
-    with pytest.raises(c.ConfigError, match="either port"):
+    with pytest.raises(c.ConfigError, match="needs one of port"):
         c.from_dict({"inputs": [{"name": "x"}]})
-    with pytest.raises(c.ConfigError, match="either port"):
+    with pytest.raises(c.ConfigError, match="needs one of port"):
         c.from_dict({"inputs": [{"port": "LPK", "audio": "Scarlett"}]})
     with pytest.raises(c.ConfigError, match="audio_channel"):
         c.from_dict({"inputs": [{"audio": "Scarlett", "audio_channel": 0}]})
