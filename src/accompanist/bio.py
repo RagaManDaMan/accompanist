@@ -27,6 +27,7 @@ BEAT_PROMINENCE = 0.5      # a beat rises at least this many standard deviations
 BEAT_HEIGHT_SHARE = 0.3    # at least this share as high as the recent beats,
 BEAT_GAP_SHARE = 0.5      # and no sooner than this share of the recent beat interval
 RATE_BEATS = 8             # heart rate: from the last this many beats
+LOST_S = 2.0               # no beat for this long: start judging beats afresh
 MIN_BPM, MAX_BPM = 40, 180
 BUFFER_S = 6.0
 
@@ -67,9 +68,10 @@ class HeartTracker:
         n_smooth = max(1, int(PULSE_SMOOTH_S * self.rate))
         if len(x) < n_detrend * 3:
             return []
-        y = x - np.convolve(x, np.ones(n_detrend) / n_detrend, "same")
+        x = x - x.mean()                           # (else the averages' zero padding at the
+        y = x - np.convolve(x, np.ones(n_detrend) / n_detrend, "same")   # ends swamps it)
         y = np.convolve(y, np.ones(n_smooth) / n_smooth, "same")
-        edge = n_detrend // 2                      # the moving averages are wrong at the ends
+        edge = n_detrend // 2 + n_smooth           # the moving averages are wrong at the ends
         half = max(1, int(PEAK_HALF_S * self.rate))
         sd = float(np.std(y[edge:-edge])) or 1.0
         found = []
@@ -80,6 +82,8 @@ class HeartTracker:
             w = y[i - half:i + half + 1]
             if not (y[i] == w.max() and y[i] - w.min() > BEAT_PROMINENCE * sd):
                 continue
+            if self.beats and t[i] - self.beats[-1] > LOST_S:
+                self._heights.clear()              # lost the beat: forget how tall beats were
             if self._heights and y[i] < BEAT_HEIGHT_SHARE * float(np.median(self._heights)):
                 continue                           # a ripple, not a beat
             if self.beats and t[i] - self.beats[-1] < self._min_gap():

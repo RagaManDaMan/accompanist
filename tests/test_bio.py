@@ -11,12 +11,13 @@ from accompanist.controller import Controller
 from accompanist.output import RecordingPort, SafeOutput
 
 
-def pulse_wave(bpm, seconds, rate=64.0, noise=0.05, seed=0):
+def pulse_wave(bpm, seconds, rate=64.0, noise=0.05, seed=0, base=1000.0, amp=40.0):
     t = np.arange(0, seconds, 1 / rate)
     phase = (t * bpm / 60) % 1.0
     beat = np.exp(-((phase - 0.2) ** 2) / 0.004)               # a sharp systolic peak
     rng = np.random.default_rng(seed)
-    return t, 1000 + 40 * beat + 15 * np.sin(2 * np.pi * 0.25 * t) + noise * 40 * rng.normal(size=len(t))
+    return t, (base + amp * beat + 0.4 * amp * np.sin(2 * np.pi * 0.25 * t)
+               + noise * amp * rng.normal(size=len(t)))
 
 
 def test_heart_rate_from_a_pulse_wave():
@@ -94,3 +95,18 @@ def test_before_the_music_the_band_breathes_with_your_heartbeat():
     ctl.on_body(6.5, "beat", 75.0)
     assert len([m for m in port.sent if m.type == "note_on" and m.channel == 9
                 and m.note == 36 and m.velocity <= 40]) == n
+
+
+def test_heart_rate_holds_when_samples_arrive_one_or_two_at_a_time():
+    """Regression (live headband, 2026-10-04): samples come one or two per Bluetooth message;
+    after a few seconds most beats were missed (the moving averages' zero padding swamped
+    the signal, which sits far from zero)."""
+    h = HeartTracker()
+    t, x = pulse_wave(70, 60, base=2.3, amp=0.012)             # the headband's scale
+    i, found, k = 0, 0, 0
+    while i < len(t):
+        n = 1 + (k % 2)
+        found += len(h.process(t[i:i + n], x[i:i + n]))
+        i, k = i + n, k + 1
+    assert found == pytest.approx(70, abs=4)
+    assert h.bpm == pytest.approx(70, abs=2)
