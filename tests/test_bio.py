@@ -142,3 +142,71 @@ def test_between_songs_the_heartbeat_and_a_slow_filler_carry_on():
     assert len(set(roots)) >= 4                                 # the filler moves
     offs = [m for m in port.sent if m.channel == 0 and m.type == "note_off"]
     assert offs                                                 # and lets go when it stops
+
+
+def test_no_headband_is_never_an_error(monkeypatch):
+    """Not wearing it, switched off, out of range: one quiet message, retries, no crash."""
+    import queue
+    import time
+
+    from accompanist import muse_io
+
+    monkeypatch.setattr(muse_io, "available", lambda: None)
+    monkeypatch.setattr(muse_io, "RECONNECT_S", 0.01)
+
+    async def nowhere(self):
+        raise OSError("Device with address 76CF... was not found")
+
+    monkeypatch.setattr(muse_io.MuseInput, "_session", nowhere)
+    q = queue.Queue()
+    m = muse_io.MuseInput("76CF", q)
+    time.sleep(0.3)                                             # many retries
+    m.close()
+    said = [v for k, _, v in list(q.queue) if k == "status"]
+    assert len(said) == 1 and "carrying on" in said[0]
+
+
+def test_without_the_bluetooth_packages_run_warns_and_carries_on(monkeypatch):
+    from accompanist import muse_io
+
+    monkeypatch.setattr(muse_io, "available", lambda: "pip install bleak ...")
+    with pytest.raises(muse_io.MuseError):
+        muse_io.MuseInput("76CF", __import__("queue").Queue())  # run() catches this: a warning
+
+
+def test_a_run_with_a_headband_in_the_config_but_none_worn_plays_on(tmp_path, monkeypatch, capsys):
+    from accompanist import cli, muse_io
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.toml").write_text(
+        '[output]\nport = "fake"\n[[inputs]]\nport = "fake in"\n'
+        '[[inputs]]\nname = "head"\nmuse = "76CFE59F"\n')
+    monkeypatch.setattr(muse_io, "available", lambda: None)
+    monkeypatch.setattr(muse_io, "RECONNECT_S", 0.01)
+
+    async def nowhere(self):
+        raise OSError("not found")
+
+    monkeypatch.setattr(muse_io.MuseInput, "_session", nowhere)
+
+    class Keys:
+        script = iter([None] * 200 + ["q"])
+
+        def poll(self):
+            import time
+            time.sleep(0.001)
+            return next(self.script, "q")
+
+        def close(self):
+            pass
+
+    class Port(RecordingPort):
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "KeyReader", Keys)
+    monkeypatch.setattr(cli, "open_inputs", lambda cfg, q, missing=None: [Port()])
+    monkeypatch.setattr(cli, "open_output", lambda cfg: Port())
+    assert cli.main(["run", "--no-record"]) == 0
+    out = capsys.readouterr().out
+    assert "Traceback" not in out and "Stopped" in out

@@ -53,6 +53,7 @@ class MuseInput:
         self.address, self.out, self.name = address, out, name
         self.decoder = MuseDecoder(out)
         self._raw = open(raw, "a", encoding="utf-8") if raw else None   # OpenMuse's format
+        self._missing_said = False
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -64,13 +65,22 @@ class MuseInput:
 
     # ---- the thread ---------------------------------------------------------------
     def _run(self) -> None:
+        """Connect, and keep trying quietly: no headband (not worn, off, out of range) is
+        never an error. One message when it's missing, one when it (re)connects."""
         while not self._stop.is_set():
             try:
                 asyncio.run(self._session())
-            except Exception as e:                       # a dropped link: try again
-                self.out.put(("status", time.monotonic(), f"headband: {e}; reconnecting"))
-            if not self._stop.wait(RECONNECT_S):
-                continue
+                if not self._stop.is_set():
+                    self._say("headband disconnected: carrying on without it (will reconnect)")
+            except Exception:                            # not there, or a dropped link
+                if not self._missing_said:
+                    self._say("headband not found: carrying on without it (switch it on any "
+                              "time; it will connect)")
+                    self._missing_said = True
+            self._stop.wait(RECONNECT_S)
+
+    def _say(self, text: str) -> None:
+        self.out.put(("status", time.monotonic(), text))
 
     async def _session(self) -> None:
         import bleak
@@ -79,7 +89,8 @@ class MuseInput:
         async with bleak.BleakClient(self.address, timeout=15.0) as client:
             callbacks = {uuid: self._callback(uuid) for uuid in MuseS.DATA_CHARACTERISTICS}
             await MuseS.connect_and_initialize(client, PRESET, callbacks, False)
-            self.out.put(("status", time.monotonic(), "headband connected"))
+            self._say("headband connected")
+            self._missing_said = False
             while not self._stop.is_set() and client.is_connected:
                 await asyncio.sleep(0.1)
 
