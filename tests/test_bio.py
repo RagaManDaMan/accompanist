@@ -110,3 +110,35 @@ def test_heart_rate_holds_when_samples_arrive_one_or_two_at_a_time():
         i, k = i + n, k + 1
     assert found == pytest.approx(70, abs=4)
     assert h.bpm == pytest.approx(70, abs=2)
+
+
+def test_between_songs_the_heartbeat_and_a_slow_filler_carry_on():
+    notes = [(0.2 + i * 0.3, (62, 65, 69)[i % 3], 90) for i in range(25)]
+    taps = [(1.0 + i * 0.5, "tap_tempo") for i in range(4)]
+    cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False},
+                       "harmony": {"keys": "D minor"}, "body": {"filler_beats": 4},
+                       "ending": {"ring_s": 1.0}})
+    port = RecordingPort()
+    ctl = Controller(cfg, SafeOutput(port))
+    i = 0
+    for k in range(3000):                                       # 30 s
+        t = k / 100
+        while i < len(notes) and notes[i][0] <= t:
+            ctl.on_note(*notes[i])
+            i += 1
+        for at, action in taps:
+            if abs(at - t) < 0.005:
+                ctl.do(action, t)
+        if abs(t - 8.0) < 0.005:
+            ctl.do("finish", t)
+        if t >= 12.0 and t < 26.0 and k % 80 == 0:              # talking: heartbeat at 75
+            ctl.on_body(t, "beat", 75.0)
+        ctl.tick(t)
+    assert ctl.engine.finished
+    kicks = [m for m in port.sent if m.type == "note_on" and m.channel == 9 and m.note == 36
+             and m.velocity <= 40]
+    assert len(kicks) >= 15                                     # the heartbeat after the song
+    roots = [m.note % 12 for m in port.sent if m.type == "note_on" and m.channel == 0]
+    assert len(set(roots)) >= 4                                 # the filler moves
+    offs = [m for m in port.sent if m.channel == 0 and m.type == "note_off"]
+    assert offs                                                 # and lets go when it stops

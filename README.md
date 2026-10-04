@@ -430,7 +430,9 @@ muse = "1A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D"   # yours, from `OpenMuse find`
 nod = "break"
 tilt_left = "song_start"    # tilt your head left twice: count in
 tilt_right = "finish"       # ...right twice: finish
-heart = true                # until the music starts: a soft kick and the pad breathe with you
+heart = true                # before a song, between songs and after the set: a soft kick
+filler = true               # and the pad breathe with you, the pad moving slowly through
+filler_beats = 8            # the home key's chords (8 heartbeats each) while you talk
 ```
 
 `accompanist muse` shows what it hears, live. Gestures are recognised by how fast and how

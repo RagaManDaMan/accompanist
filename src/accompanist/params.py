@@ -619,6 +619,11 @@ PARAMS: list[Param] = [
     P("body.heart", bool, True, "Heartbeat before the music",
       "Until the band starts, a soft kick and the pad's home chord breathe with your heartbeat.",
       "Body"),
+    P("body.filler", bool, True, "Filler between songs",
+      "With the heartbeat, the pad moves slowly through chords of the song's home key (before a "
+      "song, between songs, after the set) instead of holding one chord.", "Body"),
+    P("body.filler_beats", int, 8, "Filler chord length", "Heartbeats per filler chord.",
+      "Body", 2, 64, 1),
     P("body.heart_kick_velocity", int, 30, "Heartbeat kick", "Its loudness (MIDI velocity).",
       "Body", 1, 127, 1),
     P("body.heart_pad_level", float, 0.25, "Heartbeat pad",

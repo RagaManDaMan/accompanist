@@ -32,6 +32,8 @@ GROOVE_PATTERNS = {3: "waltz", 4: "basic", (4, "swing"): "swing", 5: "five", 6: 
 HEART_HOLD_S = 3.0
 HEART_DECAY_S = 0.4
 HEART_REST = 0.35
+# The filler between songs: scale degrees (0 = the home chord) its chords sit on, in turn.
+FILLER_DEGREES = (0, 5, 3, 4, 0, 3, 5, 1)
 # Ending shapes; a piano tag's notes (beats of the bar) and softness; a ritardando's last
 # chord rings this much longer (a fermata).
 ENDING_SHAPES = ("chord", "button", "tag", "ritardando", "piano-tag")
@@ -98,6 +100,7 @@ class Engine:
         self._break_return = False                # the band comes back in on this 1
         self._interlude_bar0: Optional[int] = None  # the bar an interlude began (you resting)
         self._heart_t: Optional[float] = None     # the last heartbeat played (before the music)
+        self._heart_count = 0                     # heartbeats played (the filler's progress)
         self._solo_since: Optional[float] = None  # when you started playing after a rest
         self._figure_until = 0                    # beat_count when a triplet figure is over
         self._figure_rng = random.Random(cfg.harmony.seed + 41)
@@ -150,6 +153,13 @@ class Engine:
         self.clock.max_tempo_step = self.cfg.pulse.max_tempo_step
         self.proposal = self.harmony.propose(now)
         self._auto_lock(now)
+        if self.finished:                            # between songs, after the set
+            if self._heart_active(now):
+                self._heart_decay(now)               # ...your heartbeat and the filler pad
+            elif self._heart_t is not None:          # the headband stopped: let the pad go
+                self.pad.release_all()
+                self._heart_t = None
+            return
         if self.muted:
             return
         if self._ending is not None:
@@ -319,7 +329,8 @@ class Engine:
         """A heartbeat from a headband. Until the band starts: a soft kick, and the pad's
         home chord swelling with it (body.heart). True if it played."""
         b = self.cfg.body
-        if not b.heart or self.muted or self.clock.running or self._count_in_left > 0:
+        if (not b.heart or (self.muted and not self.finished) or self.clock.running
+                or self._count_in_left > 0 or self._ending is not None):
             return False
         from .patterns import GM_DRUMS
 
@@ -327,13 +338,45 @@ class Engine:
             ch = self.cfg.drums.channel - 1
             self.out.note_on(ch, GM_DRUMS["kick"], b.heart_kick_velocity)
             self.out.note_off_at(now + self.cfg.drums.note_length_s, ch, GM_DRUMS["kick"])
-        chord = self._home_chord()
+        chord = self._filler_chord(self._heart_count // max(1, b.filler_beats)) if b.filler \
+            else self._home_chord()
+        self._heart_count += 1
         if self.cfg.pad.enabled and chord is not None:
-            if self.pad.current is None or self.pad.current.root_pc != chord.root_pc:
+            if self.pad.current is None or {n % 12 for n in self.pad.current.notes} != {
+                    n % 12 for n in chord.notes}:
                 self.pad.update(now, chord, self.tempo.period)
             self._send_expression(now, round(127 * b.heart_pad_level), force=True)
         self._heart_t = now
         return True
+
+    def _filler_chord(self, step: int) -> Optional[Voicing]:
+        """A slow, quiet progression in the home key while you talk (between songs): the
+        home chord, then chords on the key's other degrees (FILLER_DEGREES), round again."""
+        from .modal import SCALES
+
+        home = self._home_chord()
+        if home is None:
+            return None
+        key = self._home_key()
+        tonic, mode = key
+        scale = sorted(SCALES.get(mode, SCALES["major"]))
+        degree = FILLER_DEGREES[step % len(FILLER_DEGREES)] % len(scale)
+        pcs = [(tonic + scale[(degree + k) % len(scale)]) % 12 for k in (0, 2, 4)]
+        root = pcs[0]
+        third = (pcs[1] - root) % 12
+        base = 12 * (self.cfg.pad.octave + 1) + root
+        notes = (base, base + (pcs[2] - root) % 12, base + 12, base + 12 + third)
+        return Voicing(root, third if third in (3, 4) else None, notes, scheduled=True)
+
+    def _home_key(self) -> Optional[tuple[int, str]]:
+        from .modal import SCALES, parse_keys
+
+        h = self.cfg.harmony
+        if h.keys:
+            return parse_keys(h.keys)[0]
+        if self.cfg.root_pc is not None:
+            return self.cfg.root_pc, h.mode if h.mode in SCALES else "major"
+        return getattr(self.harmony, "key", None)
 
     def _heart_active(self, now: float) -> bool:
         return (self._heart_t is not None and not self.clock.running and not self.muted
@@ -347,12 +390,9 @@ class Engine:
 
     def _home_chord(self) -> Optional[Voicing]:
         """The song's home key (its key palette's first, or the key set or heard), open."""
-        from .modal import SCALES, parse_keys
+        from .modal import SCALES
 
-        h = self.cfg.harmony
-        key = (parse_keys(h.keys)[0] if h.keys else
-               (self.cfg.root_pc, h.mode if h.mode in SCALES else "major")
-               if self.cfg.root_pc is not None else getattr(self.harmony, "key", None))
+        key = self._home_key()
         if not key:
             return None
         tonic, mode = key
