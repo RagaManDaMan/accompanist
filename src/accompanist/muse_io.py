@@ -45,18 +45,22 @@ def available() -> Optional[str]:
 
 
 class MuseInput:
-    def __init__(self, address: str, out: "queue.Queue", name: str = "muse") -> None:
+    def __init__(self, address: str, out: "queue.Queue", name: str = "muse",
+                 raw: Optional[str] = None) -> None:
         problem = available()
         if problem:
             raise MuseError(problem)
         self.address, self.out, self.name = address, out, name
         self.decoder = MuseDecoder(out)
+        self._raw = open(raw, "a", encoding="utf-8") if raw else None   # OpenMuse's format
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def close(self) -> None:
         self._stop.set()
+        if self._raw is not None:
+            self._raw.close()
 
     # ---- the thread ---------------------------------------------------------------
     def _run(self) -> None:
@@ -81,6 +85,8 @@ class MuseInput:
 
     def _callback(self, uuid: str):
         def inner(_, data: bytearray) -> None:
+            if self._raw is not None:
+                self._raw.write(f"{datetime.now(timezone.utc).isoformat()}\t{uuid}\t{data.hex()}\n")
             self.decoder.message(time.monotonic(), uuid, bytes(data))
 
         return inner

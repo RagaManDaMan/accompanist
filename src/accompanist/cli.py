@@ -324,8 +324,10 @@ def cmd_muse(args) -> int:
         raise cfgmod.ConfigError("give the headband's address (OpenMuse find shows it), or add "
                                  "[[inputs]] muse = \"...\" to config.toml")
     q: queue.Queue = queue.Queue()
-    MuseInput(address, q)
-    print(f"Connecting to {address}... nod, tilt left twice, tilt right twice. Ctrl-C to stop.")
+    muse = MuseInput(address, q, raw=args.raw)
+    print(f"Connecting to {address}... nod, tilt left twice, tilt right twice. Ctrl-C to stop."
+          + (f" Saving the raw data to {args.raw}." if args.raw else ""))
+    beats: list[float] = []
     try:
         while True:
             try:
@@ -333,12 +335,17 @@ def cmd_muse(args) -> int:
             except queue.Empty:
                 continue
             if kind == "beat":
-                sys.stdout.write(f"\r\x1b[K♥ {value:5.1f} bpm" if value else "\r\x1b[K♥ ...")
+                beats = (beats + [t])[-6:]
+                gaps = " ".join(f"{b - a:.2f}" for a, b in zip(beats, beats[1:]))
+                sys.stdout.write(f"\r\x1b[K♥ {value:5.1f} bpm" if value else
+                                 f"\r\x1b[K♥ ... (seconds between beats: {gaps or '-'})")
                 sys.stdout.flush()
             else:
                 say(f"{kind}: {value}")
     except KeyboardInterrupt:
         print()
+    finally:
+        muse.close()
     return 0
 
 
@@ -1372,6 +1379,8 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("address", nargs="?", default=None,
                     help="its address (from `OpenMuse find`; default: the one in config.toml)")
+    sp.add_argument("--raw", default=None, metavar="FILE",
+                    help="also save the raw data (OpenMuse's format), to replay and tune")
     sp = sub.add_parser("kitmap", help="play a voice's notes one by one, named, to find "
                                        "where a kit keeps its sounds")
     sp.add_argument("-c", "--config", default="config.toml")
