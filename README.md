@@ -345,6 +345,18 @@ library from the [Groove MIDI Dataset](https://magenta.withgoogle.com/datasets/g
 drummer's own timing and dynamics, with a real fill at phrase ends and now and then
 another groove. 4/4 only (the dataset is); other meters keep the patterns.
 
+A pattern is a small text file, so new grooves need no code. Put your own in
+`./patterns/NAME.toml`:
+
+```toml
+description = "7 beats grouped 3+2+2"
+beats = 7                 # the cycle: any length
+steps_per_beat = 2        # subdivisions of each beat
+[hits]                    # one step per character: X accent, x hit, g ghost, . rest
+kick   = "X. .. .. | x. .. | x. .."
+shaker = "xg xg xg | xg xg | xg xg"
+```
+
 ## Percussion
 
 A second player, `[percussion] enabled = true`: latin hand percussion on its own channel
