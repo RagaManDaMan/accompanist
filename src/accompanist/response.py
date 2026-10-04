@@ -190,6 +190,8 @@ class ResponseResponder:
         self.answered = False
         self.phrase_count = 0                                       # phrases heard so far
         self.partner = None            # another answerer (the piano) that may take a turn
+        self.book = None               # your phrase library (phrasebook.Phrasebook), if any
+        self.key: Optional[tuple[int, str]] = None   # the key of the moment (from the engine)
         self._queue: list[tuple[float, int, int, int, float]] = []   # (t, seq, note, vel, dur)
         self._seq = itertools.count()
         self._sounding: dict[int, float] = {}                       # note -> ends at
@@ -260,8 +262,7 @@ class ResponseResponder:
             notes = make_answer(current, chord_pcs, scale_pcs, self.rng, self.cfg, period, gain, grid)
         else:                                               # one of your own phrases
             if self.cfg.curate >= 1 or self.rng.random() < self.cfg.curate:   # an earlier one...
-                phrase, used = choose_phrase(current, self.memory, chord_pcs, scale_pcs,
-                                             self.rng, self.cfg, self._last_used)
+                phrase, used = self._recall(current, chord_pcs, scale_pcs)
             else:                                           # ...or an echo of the last one
                 phrase, used = current[: self.cfg.max_notes], None
             self._last_used = used
@@ -304,18 +305,36 @@ class ResponseResponder:
         for off, note, vel, dur in notes:
             heapq.heappush(self._queue, (start + off, next(self._seq), note, vel, dur))
 
+    def _recall(self, current, chord_pcs, scale_pcs):
+        """(phrase, index in this run's memory or None): from your whole library now and
+        then (response.library), moved to the key of the moment; else from this run."""
+        if (self.book is not None and self.book.phrases and self.key is not None
+                and self.rng.random() < self.cfg.library):
+            allowed = set(chord_pcs or ()) | set(scale_pcs or ())
+            register = (sum(n for _, n, _ in current) / len(current)) if current else None
+            found = self.book.choose(current, self.key, allowed, self.rng, self.cfg.fit,
+                                     self.cfg.max_notes, register)
+            if found:
+                return found, None
+        if not self.memory:
+            return current[: self.cfg.max_notes], None
+        return choose_phrase(current, self.memory, chord_pcs, scale_pcs, self.rng, self.cfg,
+                             self._last_used)
+
     def play_from_memory(self, now: float, period: float, chord_pcs, scale_pcs, gain: float,
                          next_beat: Optional[float], beats: float = 0.0) -> bool:
         """In an interlude (you resting): a solo of your remembered phrases that fit the
         harmony, on the beat, each in its own rhythm (as played, double, half or triplets),
         strung together to last about `beats` beats (0: one phrase). False if nothing is
         remembered yet."""
-        if not self.cfg.enabled or not self.memory:
+        if not self.cfg.enabled or not (self.memory or (self.book and self.book.phrases)):
             return False
         notes, end = [], 0.0
         while not notes or end < beats * period:
-            phrase, used = choose_phrase(self.memory[-1], self.memory, chord_pcs, scale_pcs,
-                                         self.rng, self.cfg, self._last_used)
+            phrase, used = self._recall(self.memory[-1] if self.memory else [], chord_pcs,
+                                        scale_pcs)
+            if not phrase:
+                break
             self._last_used = used
             part = self._phrase_notes(phrase, period, gain, next_beat is not None)
             if not part:

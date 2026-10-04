@@ -62,6 +62,10 @@ class Engine:
         self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
         self.piano = PianoResponder(cfg.piano, out, cfg.harmony.seed)
         self.response.partner = self.piano          # they take turns answering you
+        if cfg.library.enabled:                       # your phrases, from every run
+            from .phrasebook import Phrasebook
+
+            self.response.book = Phrasebook.open(cfg.library.path)
         self.beat_count = 0                       # beats since the clock started (bar position)
         # A chart is a song: silent until started (count-in), then it plays until panic.
         self.is_chart = hasattr(self.harmony, "restart")
@@ -146,6 +150,7 @@ class Engine:
         voicing = self.frozen if self.chord_held else self.proposal
         waiting = self.is_chart and not self.song_playing   # before the chart starts: no band
 
+        self.response.key = getattr(self.harmony, "key", None)
         if self.response.playing(now) or self.piano.playing(now):
             self.dynamics.heard(now)                 # an answer is playing: not quiet
         self._shape_pad(now)

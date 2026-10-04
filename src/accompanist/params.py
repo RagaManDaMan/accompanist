@@ -595,6 +595,18 @@ PARAMS: list[Param] = [
       "While locked, the pulse leans toward your notes this much as hard as usual (0 = rigid).",
       "Groove lock", 0, 1, 0.05),
 
+    # ---- library (your phrases, remembered across runs) ------------------------
+    P("library.enabled", bool, True, "Phrase library",
+      "Remember your phrases across runs (and from practice and recordings) for the band to "
+      "riff on.", "Library", live=False),
+    P("library.path", str, "~/.accompanist/library", "Library folder",
+      "Where your phrase library lives (notes only, no audio).", "Library", live=False),
+    P("library.learn", bool, True, "Learn from every run",
+      "Add each run's take to the library when the run ends.", "Library", live=False),
+    P("response.library", float, 0.5, "Guitar: from your library",
+      "How often the guitar draws on your whole phrase library (moved to the key of the "
+      "moment) rather than only this run's phrases.", "Response", 0, 1, 0.05),
+
     # ---- mix (each voice's level, set over MIDI; `accompanist levels` measures it) ---
     P("mix.pad_db", float, 0.0, "Pad level",
       "Trim for this voice in dB, sent as MIDI volume (CC7) when the song loads; written by "

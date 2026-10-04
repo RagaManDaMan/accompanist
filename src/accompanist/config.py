@@ -88,12 +88,13 @@ EndingCfg = _section_class("ending")
 BreaksCfg = _section_class("breaks")
 InterludeCfg = _section_class("interlude")
 MixCfg = _section_class("mix")
+LibraryCfg = _section_class("library")
 PanicCfg = _section_class("panic")
 PedalCfg = _section_class("pedal")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
                    "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
                    "drums": DrumsCfg, "percussion": PercussionCfg, "piano": PianoCfg, "audio": AudioCfg, "response": ResponseCfg,
-                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "mix": MixCfg, "pedal": PedalCfg, "panic": PanicCfg}
+                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "mix": MixCfg, "library": LibraryCfg, "pedal": PedalCfg, "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
@@ -132,6 +133,7 @@ class Config:
     breaks: Any = field(default_factory=BreaksCfg)
     interlude: Any = field(default_factory=InterludeCfg)
     mix: Any = field(default_factory=MixCfg)
+    library: Any = field(default_factory=LibraryCfg)
     pedal: Any = field(default_factory=PedalCfg)
     panic: Any = field(default_factory=PanicCfg)
     controls: dict = field(default_factory=dict)   # (kind, number) -> ControlCfg
@@ -416,6 +418,7 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         breaks=_section("breaks", d.get("breaks")),
         interlude=_section("interlude", d.get("interlude")),
         mix=_section("mix", d.get("mix")),
+        library=_section("library", d.get("library")),
         pedal=_section("pedal", d.get("pedal")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls"))[0],

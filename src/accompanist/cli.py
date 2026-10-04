@@ -196,6 +196,110 @@ def soundcheck_plan(cfg) -> list[tuple[str, int, list[tuple[float, int, int]]]]:
     return plan
 
 
+def cmd_library(args) -> int:
+    """Your phrase library: add takes and recordings (folders too), or show what's in it."""
+    from . import phrasebook as pb
+
+    cfg = cfgmod.load(args.config) if Path(args.config).exists() else cfgmod.from_dict({})
+    book = pb.Phrasebook.open(cfg.library.path)
+    if args.action == "stats":
+        tags: dict[str, int] = {}
+        keys: dict[str, int] = {}
+        for ph in book.phrases:
+            for t in ph.tags or ("untagged",):
+                tags[t] = tags.get(t, 0) + 1
+            k = f"{cfgmod.NOTE_NAMES[ph.tonic]} {ph.mode}"
+            keys[k] = keys.get(k, 0) + 1
+        notes = sum(len(ph.notes) for ph in book.phrases)
+        print(f"{len(book.phrases)} phrases, {notes} notes, from {len(book.sources())} "
+              f"sources, in {book.path}")
+        if tags:
+            print("  tags: " + ", ".join(f"{t} {n}" for t, n in sorted(tags.items())))
+        top = sorted(keys.items(), key=lambda kv: -kv[1])[:8]
+        if top:
+            print("  keys: " + ", ".join(f"{k} {n}" for k, n in top))
+        return 0
+    files: list[Path] = []
+    for p in map(lambda s: Path(s).expanduser(), args.paths):
+        files += sorted(p.rglob("*")) if p.is_dir() else [p]
+    files = [f for f in files if f.suffix.lower() in (".jsonl", ".wav")]
+    if not files:
+        print("Nothing to add: give takes (.jsonl), recordings (.wav) or folders of them.")
+        return 1
+    added = skipped = 0
+    for f in files:
+        key = pb.source_key(f)
+        if book.has(key):
+            skipped += 1
+            continue
+        try:
+            phrases = (pb.from_take(f, args.tag) if f.suffix.lower() == ".jsonl"
+                       else pb.from_audio(f, cfg, args.tag))
+        except (TakeError, cfgmod.ConfigError) as e:
+            print(f"  {f.name}: skipped ({str(e).splitlines()[0]})")
+            continue
+        n = book.add(phrases, key)
+        added += n
+        print(f"  {f.name}: {n} phrases")
+    print(f"Added {added} phrases ({skipped} files already in the library). "
+          f"Now {len(book.phrases)} phrases.")
+    return 0
+
+
+def cmd_practice(args) -> int:
+    """Listen while you practise (or teach): every musical phrase goes into your library.
+    Notes only, no audio; speech is left out. No band plays. Ctrl-C to stop."""
+    from . import phrasebook as pb
+    from .audio_io import AudioInput
+    from .audio_notes import NoteTracker
+
+    cfg = cfgmod.load(args.config)
+    book = pb.Phrasebook.open(cfg.library.path)
+    q: queue.Queue = queue.Queue()
+    inputs = [i for i in cfg.inputs if i.is_audio and i.role == "note_source"]
+    if not inputs:
+        raise cfgmod.ConfigError("practice listens to an audio input: add one to [[inputs]]")
+    audios, trackers, events = [], {}, {}
+    for icfg in inputs:
+        a = AudioInput(icfg, q)
+        audios.append(a)
+        trackers[id(icfg)] = NoteTracker(cfg.audio, a.sample_rate)
+        events[id(icfg)] = []
+    tags = list(args.tag) + ["practice"]
+    print(f"Listening for phrases ({', '.join(a.name for a in audios)}), tagged "
+          f"{', '.join(tags)}. Ctrl-C to stop.")
+    total, last_flush = 0, time.monotonic()
+    try:
+        while True:
+            try:
+                t, icfg, block = q.get(timeout=0.1)
+            except queue.Empty:
+                t = None
+            if t is not None:
+                events[id(icfg)] += trackers[id(icfg)].process(block, t)
+            now = time.monotonic()
+            if now - last_flush >= PRACTICE_FLUSH_S:          # bank the finished phrases
+                last_flush = now
+                for k, evs in events.items():
+                    if (not evs or now - evs[-1].t < pb.PHRASE_GAP_S * 2
+                            or trackers[k].note is not None):
+                        continue                              # nothing, or mid-phrase: wait
+                    total += book.add(pb.phrases_from_events(evs, "practice", tags))
+                    events[k] = []
+                sys.stdout.write(f"\r\x1b[K{total} phrases learnt so far")
+                sys.stdout.flush()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for k, evs in events.items():
+            if evs:
+                total += book.add(pb.phrases_from_events(evs, "practice", tags))
+        for a in audios:
+            a.close()
+    print(f"\nLearnt {total} phrases. The library now has {len(book.phrases)}.")
+    return 0
+
+
 def cmd_kitmap(args) -> int:
     """Play every note of a range on one voice's channel, one at a time, named: to find
     where a kit keeps its sounds."""
@@ -362,6 +466,25 @@ def cmd_levels(args) -> int:
         path.write_text(lv.update_song(text, found))
         print(f"Written. The song now sets its levels when it loads (CC7 per voice).")
     return 0
+
+
+def learn_takes(cfg, paths) -> None:
+    """After a run: its takes go into your phrase library (library.learn)."""
+    if not (cfg.library.enabled and cfg.library.learn):
+        return
+    from . import phrasebook as pb
+
+    book = pb.Phrasebook.open(cfg.library.path)
+    total = 0
+    for p in paths:
+        p = Path(p)
+        try:
+            if p.exists() and not book.has(pb.source_key(p)):
+                total += book.add(pb.from_take(p), pb.source_key(p))
+        except (TakeError, OSError):
+            continue
+    if total:
+        print(f"Learnt {total} of your phrases from this run (library: {len(book.phrases)}).")
 
 
 def select_patch(out: SafeOutput, cfg) -> bool:
@@ -744,6 +867,7 @@ PATCH_SETTLE_S = 0.15      # after a patch change, before the new song's levels 
 # long to wait for the DAW to finish writing its recording.
 LEVELS_PAD_EXPRESSION = 0.8
 KITMAP_STEP_S = 0.8        # kitmap: how long each note sounds
+PRACTICE_FLUSH_S = 5.0     # practice: how often finished phrases are banked
 LEVELS_WAIT_S = 3.0
 # Keys that need a second press within this long while the band is playing (a slip of the
 # finger mustn't end the set or change the song mid-song).
@@ -915,6 +1039,7 @@ def cmd_run(args) -> int:
     last_print = 0.0
     confirm = None                             # (key, until): a second press is due
     fade, fade_sent = None, float("-inf")      # (song index, start, end): fading to change song
+    takes_made: list[Path] = []                # this run's earlier songs' takes (a set)
     guard = LiveGuard()
     try:
         while True:
@@ -1007,6 +1132,7 @@ def cmd_run(args) -> int:
                     apply_mix(out, cfg)
                     if rec:
                         rec.close()
+                        takes_made.append(rec.path)
                         rec = Recorder(auto_path(name=args.song))
                     s = cfg.song
                     say(f"Song {song_index + 1}/{len(set_songs)}: {s.title or args.song}"
@@ -1036,6 +1162,7 @@ def cmd_run(args) -> int:
             print("\nPressed the recorder again: MainStage should have stopped recording.")
         if rec:
             rec.close()
+            learn_takes(cfg, takes_made + [rec.path])
         keys.close()
         for p in in_ports:
             p.close()
@@ -1155,6 +1282,16 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None)
     sp.add_argument("--preset", default=None, help=PRESET_HELP)
     add_chart_args(sp)
+    sp = sub.add_parser("library", help="your phrase library: add takes and recordings, or stats")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("action", choices=("add", "stats"))
+    sp.add_argument("paths", nargs="*", help="takes (.jsonl), recordings (.wav), or folders")
+    sp.add_argument("--tag", action="append", default=[],
+                    help="label these phrases (e.g. --tag class --tag alap); repeatable")
+    sp = sub.add_parser("practice", help="listen while you practise: your phrases go into the "
+                                         "library (notes only; speech left out)")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("--tag", action="append", default=[], help="label them (e.g. --tag class)")
     sp = sub.add_parser("kitmap", help="play a voice's notes one by one, named, to find "
                                        "where a kit keeps its sounds")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -1209,7 +1346,8 @@ def main(argv=None) -> int:
                 "listen": cmd_listen, "learn": cmd_learn,
                 "check": cmd_check, "soundcheck": cmd_soundcheck,
                 "recorder": cmd_recorder, "patch": cmd_patch,
-                "levels": cmd_levels, "kitmap": cmd_kitmap}[args.cmd](args)
+                "levels": cmd_levels, "kitmap": cmd_kitmap, "library": cmd_library,
+                "practice": cmd_practice}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

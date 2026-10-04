@@ -364,6 +364,21 @@ as your phrase (at most `piano.max_beats`), and lands on the root. You playing a
 at once; on an ending it rolls the last chord. Its knob is `piano.feel`.
 
 
+## Your phrase library
+
+The guitar riffs on your phrases, and not only this run's: everything you play goes into a
+library (`library.path`, ~/.accompanist/library: notes only, no audio), and the guitar
+draws on it (`response.library`, half the time), moving a phrase to the key of the moment
+and choosing the ones that fit the chord and resemble what you just played.
+
+- Every `run` adds its takes when it ends (`library.learn`).
+- `accompanist library add takes/ ~/Recordings/` adds takes and WAV recordings (folders
+  too), each only once; `--tag class` labels them. `accompanist library stats` shows what's
+  there.
+- `accompanist practice` listens while you practise or teach, and banks every musical
+  phrase (no band plays). Speech is left out: short, unsteady, off-pitch syllables don't
+  count as phrases. Free-time phrases (ālāp, ālāpana, cadenzas) are tagged `rubato`.
+
 ## Interludes
 
 When you rest for a while (`interlude.after_beats`, 6 beats after the answers), the band
