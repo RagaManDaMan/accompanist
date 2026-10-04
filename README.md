@@ -424,7 +424,7 @@ find its address (`OpenMuse find`), and add it:
 ```toml
 [[inputs]]
 name = "head"
-muse = "76CFE59F-ED05-742B-D487-6896233955A0"
+muse = "1A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D"   # yours, from `OpenMuse find`
 
 [body]                      # the defaults:
 nod = "break"
