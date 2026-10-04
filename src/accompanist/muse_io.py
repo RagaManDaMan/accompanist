@@ -25,6 +25,7 @@ OPTICS_RATE = 64.0
 RED = (12, 13)              # the inner left and right red sensors (OPTICS_LI_RED, OPTICS_RI_RED)
 PRESET = "p1041"            # OpenMuse's default: EEG, optics, motion
 RECONNECT_S = 3.0
+CLOCK_SLACK_S = 0.5         # samples' times may run this far from their arrival
 
 
 class MuseError(RuntimeError):
@@ -49,7 +50,7 @@ class MuseInput:
         if problem:
             raise MuseError(problem)
         self.address, self.out, self.name = address, out, name
-        self.heart, self.gestures = HeartTracker(OPTICS_RATE), GestureDetector()
+        self.decoder = MuseDecoder(out)
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -79,32 +80,53 @@ class MuseInput:
                 await asyncio.sleep(0.1)
 
     def _callback(self, uuid: str):
-        from OpenMuse.decode import parse_message
-
         def inner(_, data: bytearray) -> None:
-            now = time.monotonic()
-            stamp = datetime.now(timezone.utc).isoformat()
-            parsed = parse_message(f"{stamp}\t{uuid}\t{data.hex()}")
-            for sub in parsed.get("ACCGYRO", ()):
-                self._motion(now, sub["data"])
-            for sub in parsed.get("OPTICS", ()):
-                self._optics(now, sub["data"])
+            self.decoder.message(time.monotonic(), uuid, bytes(data))
 
         return inner
 
-    def _motion(self, now: float, rows: Any) -> None:
-        n = len(rows)
-        for i, row in enumerate(rows):
-            t = now - (n - 1 - i) / ACC_RATE
+
+class SampleClock:
+    """Times for a stream's samples: evenly spaced at its rate, kept close to when they
+    arrive. (Bluetooth delivers them in bursts: several packets at the same moment.)"""
+
+    def __init__(self, rate: float) -> None:
+        self.rate, self.last = rate, None
+
+    def times(self, n: int, now: float) -> list[float]:
+        arrived = now - (n - 1) / self.rate
+        start = arrived if self.last is None else self.last + 1 / self.rate
+        if abs(start - arrived) > CLOCK_SLACK_S:             # drifted, or a gap: resync
+            start = arrived
+        out = [start + i / self.rate for i in range(n)]
+        if out:
+            self.last = out[-1]
+        return out
+
+
+class MuseDecoder:
+    """The headband's Bluetooth messages -> body events on `out` (no Bluetooth here, so it
+    can be fed from a recording too)."""
+
+    def __init__(self, out: "queue.Queue") -> None:
+        self.out = out
+        self.heart, self.gestures = HeartTracker(OPTICS_RATE), GestureDetector()
+        self.acc_clock, self.optics_clock = SampleClock(ACC_RATE), SampleClock(OPTICS_RATE)
+
+    def message(self, now: float, uuid: str, payload: bytes) -> None:
+        from OpenMuse.decode import parse_message
+
+        stamp = datetime.now(timezone.utc).isoformat()
+        parsed = parse_message(f"{stamp}\t{uuid}\t{payload.hex()}")
+        motion = [row for sub in parsed.get("ACCGYRO", ()) for row in sub["data"]]
+        optics = [row for sub in parsed.get("OPTICS", ()) for row in sub["data"]
+                  if len(row) > max(RED)]
+        for t, row in zip(self.acc_clock.times(len(motion), now), motion):
             g = self.gestures.process(t, row[0:3], row[3:6])
             if g:
                 self.out.put(("gesture", t, g))
-
-    def _optics(self, now: float, rows: Any) -> None:
-        if len(rows) == 0 or len(rows[0]) <= max(RED):
-            return
-        n = len(rows)
-        times = [now - (n - 1 - i) / OPTICS_RATE for i in range(n)]
-        red = [(row[RED[0]] + row[RED[1]]) / 2 for row in rows]
-        for t in self.heart.process(times, red):
-            self.out.put(("beat", t, self.heart.bpm))
+        if optics:
+            times = self.optics_clock.times(len(optics), now)
+            red = [(row[RED[0]] + row[RED[1]]) / 2 for row in optics]
+            for t in self.heart.process(times, red):
+                self.out.put(("beat", t, self.heart.bpm))

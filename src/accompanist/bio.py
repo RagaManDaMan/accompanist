@@ -23,7 +23,9 @@ PULSE_DETREND_S = 0.5      # subtract the 0.5 s moving average (drops breathing,
 PULSE_SMOOTH_S = 0.1       # then smooth over 0.1 s (drops jitter)
 PEAK_HALF_S = 0.15         # a beat is the highest point within this either side
 MIN_BEAT_S = 0.35          # at most ~170 bpm
-BEAT_PROMINENCE = 0.5      # a beat rises at least this many standard deviations
+BEAT_PROMINENCE = 0.5      # a beat rises at least this many standard deviations,
+BEAT_HEIGHT_SHARE = 0.3    # at least this share as high as the recent beats,
+BEAT_GAP_SHARE = 0.5      # and no sooner than this share of the recent beat interval
 RATE_BEATS = 8             # heart rate: from the last this many beats
 MIN_BPM, MAX_BPM = 40, 180
 BUFFER_S = 6.0
@@ -31,7 +33,7 @@ BUFFER_S = 6.0
 # Gestures: how fast the head must turn (deg/s), how far gravity must move sideways (g) for a
 # tilt, how little for a nod, and the pause after a gesture (a set of 3 counts once).
 GYRO_FAST = 40.0
-TILT_G = 0.35
+TILT_G = 0.28
 TILT_HOLD_S = 0.12         # a tilt: gravity this far sideways for at least this long...
 TILT_TIMES = 2             # ...this many times to the same side (and never the other way)
 TILT_WINDOW_S = 3.0        # ...within this long: lifting the sax isn't a tilt
@@ -39,6 +41,7 @@ REARM_CALM_S = 1.0         # after a gesture, the head must be calm this long to
 NOD_MAX_SIDEWAYS_G = 0.25
 NOD_SWINGS = 2             # a nod: at least this many fast swings...
 NOD_WINDOW_S = 1.2         # ...within this long
+NOD_RETURN_SHARE = 0.6     # the swing back needs only this share of the speed
 REFRACTORY_S = 3.0
 BASELINE_S = 5.0           # gravity's resting direction: a slow average while still
 
@@ -49,6 +52,7 @@ class HeartTracker:
         self._t: deque[float] = deque()
         self._x: deque[float] = deque()
         self.beats: deque[float] = deque(maxlen=RATE_BEATS + 1)
+        self._heights: deque[float] = deque(maxlen=RATE_BEATS)
         self._checked = float("-inf")     # samples up to here have been searched for beats
 
     def process(self, times, values) -> list[float]:
@@ -69,16 +73,30 @@ class HeartTracker:
         half = max(1, int(PEAK_HALF_S * self.rate))
         sd = float(np.std(y[edge:-edge])) or 1.0
         found = []
-        for i in range(edge + half, len(y) - max(edge, half)):
+        last = len(y) - edge - half                # a peak's window must be all good samples
+        for i in range(edge + half, last):
             if t[i] <= self._checked:
                 continue
             w = y[i - half:i + half + 1]
-            if y[i] == w.max() and y[i] - w.min() > BEAT_PROMINENCE * sd:
-                if not self.beats or t[i] - self.beats[-1] >= MIN_BEAT_S:
-                    self.beats.append(t[i])
-                    found.append(t[i])
-        self._checked = t[len(y) - max(edge, half) - 1]
+            if not (y[i] == w.max() and y[i] - w.min() > BEAT_PROMINENCE * sd):
+                continue
+            if self._heights and y[i] < BEAT_HEIGHT_SHARE * float(np.median(self._heights)):
+                continue                           # a ripple, not a beat
+            if self.beats and t[i] - self.beats[-1] < self._min_gap():
+                continue
+            self.beats.append(t[i])
+            self._heights.append(float(y[i]))
+            found.append(t[i])
+        if last > edge + half:
+            self._checked = t[last - 1]
         return found
+
+    def _min_gap(self) -> float:
+        """Beats can't come closer than MIN_BEAT_S, nor much faster than the recent rate."""
+        gaps = np.diff(self.beats)
+        if len(gaps) >= 3:
+            return max(MIN_BEAT_S, BEAT_GAP_SHARE * float(np.median(gaps)))
+        return MIN_BEAT_S
 
     @property
     def bpm(self) -> Optional[float]:
@@ -109,7 +127,10 @@ class GestureDetector:
             k = min(1.0, dt / BASELINE_S)
             self._gravity += k * (acc - self._gravity)
         sideways = acc[1] - self._gravity[1]
-        if abs(gyro[1]) > GYRO_FAST:
+        # A nod: a fast swing of the head down (or up), then back the other way, a little
+        # slower is fine (the way back is often gentler).
+        need = GYRO_FAST if not self._swings else GYRO_FAST * NOD_RETURN_SHARE
+        if abs(gyro[1]) > need:
             if not self._swings or np.sign(self._swings[-1][1]) != np.sign(gyro[1]):
                 self._swings.append((t, gyro[1]))
         while self._swings and self._swings[0][0] < t - NOD_WINDOW_S:
