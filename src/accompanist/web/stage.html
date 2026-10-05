@@ -209,12 +209,12 @@ function render(s) {
 async function poll() {
   try {
     const r = await fetch("/state", {headers: {"X-Key": KEY}, cache: "no-store"});
-    if (r.status === 403) { $("flag").textContent = "WRONG ADDRESS"; $("flag").className = "flag offline"; return; }
+    if (r.status === 403) { $("flag").textContent = "OLD PAGE · close this tab"; $("flag").className = "flag offline"; return; }
     render(await r.json());
     lastOk = Date.now();
   } catch (e) {
     if (Date.now() - lastOk > 2000) {
-      $("flag").textContent = "NOT CONNECTED: is the band running?";
+      $("flag").textContent = "BAND STOPPED · this page reconnects when it starts";
       $("flag").className = "flag offline";
     }
   }

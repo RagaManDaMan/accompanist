@@ -67,3 +67,18 @@ def test_the_stage_state_has_the_feel_knobs_and_the_set():
     assert {"pad.feel", "pad.enabled", "drums.feel"} <= keys
     assert s["title"] == "Bay Blues" and s["set"]["index"] == 1 and s["messages"] == ["hello"]
     json.dumps(s, default=str)
+
+
+def test_the_key_stays_the_same_so_an_open_page_reconnects(stage):
+    other = StageServer(stage.port + 20)
+    try:
+        assert other.key == stage.key
+    finally:
+        other.close()
+
+
+def test_a_watching_page_is_noticed(stage):
+    assert stage.last_seen == float("-inf")
+    call(stage, "/state")
+    import time
+    assert time.monotonic() - stage.last_seen < 1

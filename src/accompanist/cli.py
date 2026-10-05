@@ -1367,11 +1367,7 @@ def open_stage(cfg, args):
     if stage.lan_url:
         print(f"  on a phone or tablet (same Wi-Fi): {stage.lan_url}")
     if cfg.ui.open:
-        import webbrowser
-        try:
-            webbrowser.open(stage.url)
-        except Exception:
-            pass
+        stage.open_page_unless_watched()
     return stage
 
 

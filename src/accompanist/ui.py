@@ -12,8 +12,10 @@ a key, a pedal or a CC can't.
   POST /do          {"action": "break"}            an action (config.ACTIONS)
   POST /set         {"key": "pad.feel", "value": 0.6}   a live parameter
 
-Every request carries the page's key (made afresh each run), so only the page this run
-opened, or a phone given its address, can use it.
+Every request carries the page's key, so only someone given the page's address can use
+it. The key and port stay the same from run to run (the key is kept in
+~/.accompanist/ui-key), so a page left open simply reconnects when the band starts again,
+and no new one is opened while one is already watching.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ import queue
 import secrets
 import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Optional
@@ -29,11 +32,32 @@ from typing import Any, Optional
 PAGE = Path(__file__).parent / "web" / "stage.html"
 PORT_TRIES = 10            # the port taken: try the next ones
 MAX_BODY = 4096            # requests are tiny
+KEY_FILE = Path("~/.accompanist/ui-key").expanduser()
+WATCHING_S = 2.5           # a page left open reconnects within this long (it asks 5 times a second)
+
+
+def stage_key() -> str:
+    """The page's key, the same each run (so open pages reconnect); made once."""
+    try:
+        key = KEY_FILE.read_text().strip()
+        if key:
+            return key
+    except OSError:
+        pass
+    key = secrets.token_urlsafe(9)
+    try:
+        KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        KEY_FILE.write_text(key)
+        KEY_FILE.chmod(0o600)
+    except OSError:
+        pass
+    return key
 
 
 class StageServer:
     def __init__(self, port: int, lan: bool = False) -> None:
-        self.key = secrets.token_urlsafe(9)
+        self.key = stage_key()
+        self.last_seen = float("-inf")         # when a page last asked (time.monotonic())
         self.requests: "queue.Queue[tuple[str, Any, Any]]" = queue.Queue()
         self._snapshot = b"{}"
         self._lock = threading.Lock()
@@ -78,6 +102,19 @@ class StageServer:
             except queue.Empty:
                 return out
 
+    def open_page_unless_watched(self) -> None:
+        """Open the page in the browser, unless one left open reconnects first."""
+        def later() -> None:
+            time.sleep(WATCHING_S)
+            if time.monotonic() - self.last_seen > WATCHING_S:
+                import webbrowser
+                try:
+                    webbrowser.open(self.url)
+                except Exception:
+                    pass
+
+        threading.Thread(target=later, daemon=True).start()
+
     def close(self) -> None:
         self.httpd.shutdown()
         self.httpd.server_close()
@@ -118,6 +155,8 @@ def _handler(server: StageServer):
 
         def do_GET(self) -> None:
             path = self.path.split("?")[0]
+            if path == "/state" and self._allowed():
+                server.last_seen = time.monotonic()
             if not self._allowed():
                 self._send(403, b"This page needs the address the accompanist printed "
                                 b"(it ends in ?k=...).", "text/plain; charset=utf-8")
