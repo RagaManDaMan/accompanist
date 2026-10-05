@@ -231,7 +231,8 @@ def cmd_library(args) -> int:
             print("  tags: " + ", ".join(f"{t} {n}" for t, n in sorted(tags.items())))
         top = sorted(keys.items(), key=lambda kv: -kv[1])[:8]
         if top:
-            print("  keys: " + ", ".join(f"{k} {n}" for k, n in top))
+            print("  keys (Western view): " + ", ".join(f"{k} {n}" for k, n in top))
+        print_raga_landscape(book.phrases)
         return 0
     files: list[Path] = []
     for p in map(lambda s: Path(s).expanduser(), args.paths):
@@ -260,6 +261,34 @@ def cmd_library(args) -> int:
     return 0
 
 
+def print_raga_landscape(phrases) -> None:
+    """Sessions of practice and class: each one's Sa and rāga, and the rāgas overall."""
+    from . import ragam
+
+    sessions: dict[str, list] = {}
+    for ph in phrases:
+        if "practice" in ph.tags or "class" in ph.tags:
+            sessions.setdefault(ph.source, []).append(ph)
+    if not sessions:
+        return
+    totals: dict[str, int] = {}
+    print("  rāga view of your practice and classes:")
+    for name, phs in sessions.items():
+        given = next((p.sa for p in phs if p.sa is not None), None)
+        sa, conf = (given, 1.0) if given is not None else ragam.sa_of(phs)
+        prof = ragam.profile(phs, sa)
+        up, down = ragam.directions(phs, sa)
+        best = ragam.candidates(prof, up, down, top=2)
+        label = " / ".join(best[0][1]) if best else "?"
+        other = f" (or {' / '.join(best[1][1])})" if len(best) > 1 else ""
+        kind = "class" if any("class" in p.tags for p in phs) else "practice"
+        found = "" if given is not None else ", found"
+        print(f"    {name} ({kind}, {len(phs)} phrases): Sa = {cfgmod.NOTE_NAMES[sa]}{found}; "
+              f"{label}{other}; swaras {' '.join(ragam.swaras_used(prof))}")
+        totals[label] = totals.get(label, 0) + len(phs)
+    print("  rāgas: " + ", ".join(f"{k} {n}" for k, n in sorted(totals.items(), key=lambda kv: -kv[1])))
+
+
 def cmd_practice(args) -> int:
     """Listen while you practise (or teach): every musical phrase goes into your library.
     Notes only, no audio; speech is left out. No band plays. Ctrl-C to stop."""
@@ -280,6 +309,8 @@ def cmd_practice(args) -> int:
         trackers[id(icfg)] = NoteTracker(cfg.audio, a.sample_rate)
         events[id(icfg)] = []
     tags = list(args.tag) + ["practice"]
+    session = f"practice {time.strftime('%Y-%m-%d %H:%M')}"
+    sa = cfgmod.parse_root(args.sruti) if args.sruti else None
     print(f"Listening for phrases ({', '.join(a.name for a in audios)}), tagged "
           f"{', '.join(tags)}. Ctrl-C to stop.")
     total, last_flush = 0, time.monotonic()
@@ -298,7 +329,7 @@ def cmd_practice(args) -> int:
                     if (not evs or now - evs[-1].t < pb.PHRASE_GAP_S * 2
                             or trackers[k].note is not None):
                         continue                              # nothing, or mid-phrase: wait
-                    total += book.add(pb.phrases_from_events(evs, "practice", tags))
+                    total += book.add(pb.phrases_from_events(evs, session, tags, sa))
                     events[k] = []
                 sys.stdout.write(f"\r\x1b[K{total} phrases learnt so far")
                 sys.stdout.flush()
@@ -307,7 +338,7 @@ def cmd_practice(args) -> int:
     finally:
         for k, evs in events.items():
             if evs:
-                total += book.add(pb.phrases_from_events(evs, "practice", tags))
+                total += book.add(pb.phrases_from_events(evs, session, tags, sa))
         for a in audios:
             a.close()
     print(f"\nLearnt {total} phrases. The library now has {len(book.phrases)}.")
@@ -1375,6 +1406,8 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("--tag", action="append", default=[], help="label them (e.g. --tag class)")
     sp.add_argument("--preset", default=None, help="e.g. voice, when you sing")
+    sp.add_argument("--sruti", default=None, metavar="NOTE",
+                    help="the session's Sa, e.g. C or F# (else found from the singing)")
     sp = sub.add_parser("muse", help="connect to a Muse headband and show heartbeats and "
                                      "gestures live")
     sp.add_argument("-c", "--config", default="config.toml")

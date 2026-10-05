@@ -54,23 +54,27 @@ class Phrase:
     mode: str                     # 'major' | 'minor'
     source: str = ""
     tags: tuple[str, ...] = ()
+    sa: Optional[int] = None      # the session's Sa (śruti), when given
 
     def to_json(self) -> str:
-        return json.dumps({"n": [[round(t, 3), p, v, round(d, 3)] for t, p, v, d in self.notes],
-                           "k": [self.tonic, self.mode], "s": self.source,
-                           "tags": list(self.tags)})
+        d = {"n": [[round(t, 3), p, v, round(dd, 3)] for t, p, v, dd in self.notes],
+             "k": [self.tonic, self.mode], "s": self.source, "tags": list(self.tags)}
+        if self.sa is not None:
+            d["sa"] = self.sa
+        return json.dumps(d)
 
     @staticmethod
     def from_json(line: str) -> "Phrase":
         d = json.loads(line)
         return Phrase(tuple((float(t), int(p), int(v), float(l)) for t, p, v, l in d["n"]),
-                      int(d["k"][0]), str(d["k"][1]), d.get("s", ""), tuple(d.get("tags", ())))
+                      int(d["k"][0]), str(d["k"][1]), d.get("s", ""), tuple(d.get("tags", ())),
+                      d.get("sa"))
 
 
 # ---- from notes to phrases ---------------------------------------------------------------
 
 def phrases_from_notes(notes: list[Note], source: str = "", tags: Iterable[str] = (),
-                       cents: Optional[list[float]] = None) -> list[Phrase]:
+                       cents: Optional[list[float]] = None, sa: Optional[int] = None) -> list[Phrase]:
     """Cut notes [(t, note, vel, length)] into phrases at rests, give each its key, and keep
     the ones that look like music. cents: each note's distance from the tempered pitch (from
     audio), to tell singing from speech."""
@@ -99,7 +103,7 @@ def phrases_from_notes(notes: list[Note], source: str = "", tags: Iterable[str] 
         t0 = ph[0][0]
         extra = ("rubato",) if rubato(ph) and "rubato" not in tags else ()
         out.append(Phrase(tuple((t - t0, p, v, d) for t, p, v, d in ph), tonic, mode, source,
-                          tuple(tags) + extra))
+                          tuple(tags) + extra, sa))
     return out
 
 
@@ -276,7 +280,8 @@ def from_audio(path: Path, cfg: Any, tags: Iterable[str] = ()) -> list[Phrase]:
     return phrases_from_events(events, path.name, tags)
 
 
-def phrases_from_events(events, source: str = "", tags: Iterable[str] = ()) -> list[Phrase]:
+def phrases_from_events(events, source: str = "", tags: Iterable[str] = (),
+                        sa: Optional[int] = None) -> list[Phrase]:
     """Note-detector events (on/off, with cents) -> phrases."""
     notes, cents, open_ = [], [], {}
     for e in events:
@@ -289,4 +294,5 @@ def phrases_from_events(events, source: str = "", tags: Iterable[str] = ()) -> l
             notes.append((t, e.note, v, e.t - t))
             cents.append(c)
     order = sorted(range(len(notes)), key=lambda i: notes[i][0])
-    return phrases_from_notes([notes[i] for i in order], source, tags, [cents[i] for i in order])
+    return phrases_from_notes([notes[i] for i in order], source, tags, [cents[i] for i in order],
+                              sa)

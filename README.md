@@ -399,6 +399,11 @@ and choosing the ones that fit the chord and resemble what you just played.
 - `accompanist library add takes/ ~/Recordings/` adds takes and WAV recordings (folders
   too), each only once; `--tag class` labels them. `accompanist library stats` shows what's
   there.
+- `accompanist library stats` also shows the rāga view of your practice and classes: for
+  each session its Sa (found from where the phrases come home and dwell, or given with
+  `practice --sruti F#`), the swaras sung, and the rāga they fit best among the 72
+  melakartas and the janya and Hindustani rāgas in `indian/` (direction, ārohaṇa against
+  avarohaṇa, breaks ties; rāgas with the same swaras are named together). No tags needed.
 - `accompanist practice` listens while you practise or teach, and banks every musical
   phrase (no band plays). Speech is left out: short, unsteady, off-pitch syllables don't
   count as phrases. Free-time phrases (ālāp, ālāpana, cadenzas) are tagged `rubato`.
