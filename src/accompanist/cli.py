@@ -285,7 +285,14 @@ def print_raga_landscape(phrases) -> None:
         found = "" if given is not None else ", found"
         print(f"    {name} ({kind}, {len(phs)} phrases): Sa = {cfgmod.NOTE_NAMES[sa]}{found}; "
               f"{label}{other}; swaras {' '.join(ragam.swaras_used(prof))}")
-        totals[label] = totals.get(label, 0) + len(phs)
+        parts = ragam.segments(phs, sa)
+        if len(parts) > 1:                       # a session in more than one rāga
+            print("      through the session: " + " → ".join(
+                f"{' / '.join(names)} ({a + 1}-{b})" for a, b, names in parts))
+            for a, b, names in parts:
+                totals[" / ".join(names)] = totals.get(" / ".join(names), 0) + b - a
+        else:
+            totals[label] = totals.get(label, 0) + len(phs)
     print("  rāgas: " + ", ".join(f"{k} {n}" for k, n in sorted(totals.items(), key=lambda kv: -kv[1])))
 
 

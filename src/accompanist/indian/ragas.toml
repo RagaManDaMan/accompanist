@@ -59,6 +59,12 @@ note = "D2 ascending, D1 descending"
 arohana = "S R2 G2 M1 P D2 N2 S'"
 avarohana = "S' N2 D1 P M1 G2 R2 S"
 
+[ragas.anandabhairavi]
+tradition = "carnatic"
+note = "janya of Kharaharapriya (22), vakra ascent; bhashanga: anya swaras (G3, D1) in some phrases (to verify)"
+arohana = "S G2 R2 G2 M1 P D2 P S'"
+avarohana = "S' N2 D2 P M1 G2 R2 S"
+
 [ragas.kambhoji]
 tradition = "carnatic"
 note = "N3 appears as an anya swara in phrases like S N3 P D2 S"

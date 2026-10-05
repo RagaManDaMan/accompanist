@@ -26,6 +26,8 @@ UNUSED_FLOOR = 0.03
 UNUSED_COST = 0.15
 DIRECTION_WEIGHT = 0.1
 SAME = 0.005            # scores this close: the rāgas are reported together
+SEGMENT_PHRASES = 30    # a session is read this many phrases at a time...
+SEGMENT_MIN_SCORE = 0.5  # ...and a window fitting no rāga this well isn't named
 
 
 def sa_of(phrases: Iterable) -> tuple[int, float]:
@@ -118,3 +120,22 @@ def swaras_used(prof: np.ndarray, floor: float = UNUSED_FLOOR * 1.5) -> list[str
     names[9] = "N1" if 8 in used and 10 not in used and 11 not in used else "D2"
     names[10] = "D3" if 11 in used and 9 not in used else "N2"
     return [names[i] for i in sorted(used)]
+
+
+def segments(phrases: list, sa: int, window: int = SEGMENT_PHRASES) -> list[tuple[int, int, list[str]]]:
+    """[(first, end, rāga names)]: the session read a few phrases at a time (phrases are kept in
+    the order sung), neighbouring windows in the same rāga joined; a window too unclear to
+    name (its best fit under SEGMENT_MIN_SCORE) joins its neighbour."""
+    out: list[tuple[int, int, list[str]]] = []
+    for i in range(0, len(phrases), window):
+        part = phrases[i:i + window]
+        prof = profile(part, sa)
+        up, down = directions(part, sa)
+        best = candidates(prof, up, down, top=1)
+        names = best[0][1] if best and best[0][0] >= SEGMENT_MIN_SCORE else None
+        end = i + len(part)
+        if out and (names is None or names == out[-1][2]):
+            out[-1] = (out[-1][0], end, out[-1][2])
+        elif names is not None:
+            out.append((i, end, names))
+    return out
