@@ -1,0 +1,11 @@
+# Singing: the voice glides between notes (portamento, vibrato, and the gamakas of Indian
+# music), and the note detector, set up for saxophone, hears every semitone it passes
+# through as a note of its own. This preset only counts a pitch held longer and closer to
+# a note, so the glides are heard as movement, not as wrong notes.
+# Use: accompanist run --preset voice   (or put these lines under [audio] in a song file)
+# A first setting, to tune on recordings of your singing (monitor --record-audio, listen).
+
+[audio]
+min_note_ms = 130       # sax: 45. A sung note must hold about an eighth of a second...
+cents_tolerance = 30    # sax: 35. ...within 30 cents of a semitone
+release_ms = 110        # sax: 70. Vibrato dips don't end a note

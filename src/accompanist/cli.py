@@ -267,7 +267,7 @@ def cmd_practice(args) -> int:
     from .audio_io import AudioInput
     from .audio_notes import NoteTracker
 
-    cfg = cfgmod.load(args.config)
+    cfg = cfgmod.load(args.config, args.preset)
     book = pb.Phrasebook.open(cfg.library.path)
     q: queue.Queue = queue.Queue()
     inputs = [i for i in cfg.inputs if i.is_audio and i.role == "note_source"]
@@ -1374,6 +1374,7 @@ def main(argv=None) -> int:
                                          "library (notes only; speech left out)")
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("--tag", action="append", default=[], help="label them (e.g. --tag class)")
+    sp.add_argument("--preset", default=None, help="e.g. voice, when you sing")
     sp = sub.add_parser("muse", help="connect to a Muse headband and show heartbeats and "
                                      "gestures live")
     sp.add_argument("-c", "--config", default="config.toml")
