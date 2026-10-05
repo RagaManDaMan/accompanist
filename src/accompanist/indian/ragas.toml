@@ -59,6 +59,12 @@ note = "D2 ascending, D1 descending"
 arohana = "S R2 G2 M1 P D2 N2 S'"
 avarohana = "S' N2 D1 P M1 G2 R2 S"
 
+[ragas.kanada]
+tradition = "carnatic"
+note = "janya of Kharaharapriya (22), vakra; a very close relative of Bageshree (in Hindustani this colour is sometimes called Bageshree Kanada); the gamaka on G2 and the M-G-M-R descent mark it"
+arohana = "S R2 G2 M1 D2 N2 S'"
+avarohana = "S' N2 P M1 G2 M1 R2 S"
+
 [ragas.anandabhairavi]
 tradition = "carnatic"
 note = "janya of Kharaharapriya (22), vakra ascent; bhashanga: anya swaras (G3, D1) in some phrases (to verify)"
