@@ -34,21 +34,73 @@ SEMITONES_PER_TONE = 3.5   # an arpeggio climbs about this much per note
 
 # Comping (an interlude, you resting): chord hits per meter as (beat in the bar, length in
 # beats); two patterns each, alternating bar by bar. A meter not listed: every beat but the 1.
-COMP_PATTERNS = {
-    3: (((1, 0.9), (2, 0.9)), ((0, 0.9), (1.5, 1.3))),
-    4: (((0, 1.4), (1.5, 0.4), (3, 0.9)), ((1, 0.9), (2.5, 1.4))),
-    5: (((1, 0.9), (2, 0.9), (4, 0.9)), ((0, 1.4), (3, 1.4))),
-    6: (((0, 1.4), (3, 1.4)), ((2, 0.9), (5, 0.9))),
-    7: (((1, 0.9), (2, 0.9), (4, 0.9), (6, 0.9)), ((0, 1.4), (3, 0.9), (5, 0.9))),
+# Comping rhythms per meter: (beat in the bar, length in beats). A new one each bar, never the
+# same twice running; the sparse ones (fewer hits) are likelier when you play busily. A
+# hit at 3.5 in 4/4 anticipates the next bar, as jazz pianists do. Other meters: every beat
+# but the 1, or the group starts.
+COMP_RHYTHMS = {
+    4: (((0, 1.4), (1.5, 0.4)),                      # Charleston
+        ((1, 0.5), (3, 0.5)),                        # on 2 and 4
+        ((1.5, 1.0), (3.5, 0.9)),                    # pushed: and-of-2, and-of-4
+        ((0, 3.5),),                                 # a held whole note
+        ((0.5, 0.4), (2.5, 0.9)),                    # and-of-1, and-of-3
+        ((3.5, 1.0),),                               # one anticipation into the next bar
+        ((0, 0.9), (1.5, 0.4), (3, 0.9))),           # Charleston with a 4
+    3: (((1, 0.9), (2, 0.9)), ((0, 2.5),), ((0, 0.9), (1.5, 1.3)), ((1.5, 0.9),),
+        ((0, 0.9), (2.5, 0.4))),
+    5: (((1, 0.9), (2, 0.9), (4, 0.9)), ((0, 1.4), (3, 1.4)), ((0, 2.5), (3, 1.9))),
+    6: (((0, 1.4), (3, 1.4)), ((2, 0.9), (5, 0.9)), ((0, 5.5),)),
+    7: (((1, 0.9), (2, 0.9), (4, 0.9), (6, 0.9)), ((0, 1.4), (3, 0.9), (5, 0.9)),
+        ((0, 2.5), (3, 1.5), (5, 1.5))),
 }
 COMP_SOFTER = 0.8          # comping velocity, as a share of piano.velocity
 COMP_VOICES = 4            # notes in a comping chord
+COMP_RANGE = (50, 74)      # where comping voicings sit (D3 to D5): the pianist's middle
+SPARSE_HITS = 2            # a rhythm with at most this many hits counts as sparse
 
 
-def comp_voicing(pcs: set[int], low: int, high: int, prev: Optional[tuple[int, ...]]
-                 ) -> tuple[int, ...]:
-    """A close chord of up to COMP_VOICES tones in [low, high], moving as little as possible
-    from the previous one."""
+def rootless(root: int, pcs: set[int], scale: Optional[set[int]]) -> list[list[int]]:
+    """Jazz voicings without the root (the bass has it): the A form (3 5|13 7 9) and the B
+    form (7 9 3 5|13), as intervals above the root; colour tones (9, 13) only where they
+    belong to the key; a chord with no seventh gets its 6 (6/9 voicing). Empty if the
+    chord has no third (sus, power chords): use close voicing."""
+    rel = {(pc - root) % 12 for pc in pcs}
+    third = 4 if 4 in rel else 3 if 3 in rel else None
+    if third is None:
+        return []
+    ok = lambda i: scale is None or (root + i) % 12 in scale
+    seventh = 10 if 10 in rel else 11 if 11 in rel else 9 if 9 in rel else None
+    if seventh is None:
+        seventh = 9 if ok(9) else (10 if third == 3 and ok(10) else None)
+    if seventh is None:
+        return []
+    fifth = 6 if 6 in rel and 7 not in rel else 8 if 8 in rel and 7 not in rel else 7
+    colour = 9 if third == 4 and seventh == 10 and ok(9) else fifth   # a dominant's 13
+    ninth = 2 if ok(2) and fifth != 6 else 0                          # half-dim: the root
+    a = [third, colour, seventh, ninth + 12]
+    b = [seventh - 12, ninth, third, colour]
+    return [a, b]
+
+
+def comp_voicing(pcs: set[int], low: int, high: int, prev: Optional[tuple[int, ...]],
+                 root: Optional[int] = None, scale: Optional[set[int]] = None,
+                 style: str = "close") -> tuple[int, ...]:
+    """A comping chord in [low, high], moving as little as possible from the previous one:
+    rootless A/B jazz voicings (style rootless, or auto with a seventh chord), else a close
+    voicing of up to COMP_VOICES chord tones."""
+    if style != "close" and root is not None:
+        forms = rootless(root, pcs, scale)
+        if forms and (style == "rootless" or len(pcs) >= 4):
+            options = []
+            for form in forms:
+                for octave in range(low // 12 - 1, high // 12 + 1):
+                    notes = tuple(sorted(12 * octave + root + i for i in form))
+                    if notes[0] >= low and notes[-1] <= high:
+                        options.append(notes)
+            if options:
+                if prev is None:
+                    return options[len(options) // 2]
+                return min(options, key=lambda o: sum(abs(a - b) for a, b in zip(o, prev)))
     tones = chord_tones(pcs, low, high)
     options = [tuple(tones[i:i + COMP_VOICES]) for i in range(len(tones))
                if len({n % 12 for n in tones[i:i + COMP_VOICES]}) == min(len(pcs), COMP_VOICES)]
@@ -112,6 +164,10 @@ class PianoResponder:
         self._answered_phrase: Optional[int] = None  # id of the phrase it has answered
         self._claimed: Optional[list] = None        # a phrase it took from the guitar
         self._comp_prev: Optional[tuple[int, ...]] = None   # the last comping chord
+        self._comp_rhythm = None                    # this bar's comping rhythm
+        self._comp_queue: list[tuple[float, int, int, int, float]] = []   # comping hits: your
+                                                    # playing doesn't cancel them
+        self._comp_notes: set[int] = set()          # sounding notes that are comping
 
     def claim(self, phrase: list[tuple[float, int, int]]) -> bool:
         """Your phrase just ended: take this turn from the guitar (piano.share of them)?
@@ -128,6 +184,10 @@ class PianoResponder:
     def playing(self, now: float) -> bool:
         return bool(self._queue) or any(end > now for end in self._sounding.values())
 
+    def answering(self) -> bool:
+        """An answer (arpeggio) still to come: comping waits for it."""
+        return bool(self._queue)
+
     def tick(self, now: float, period: float, chord, scale_pcs, gain: float,
              next_beat: Optional[float], response, quiet: float = 0.0) -> None:
         """chord: the Voicing sounding (None: nothing to arpeggiate); response: the guitar,
@@ -136,11 +196,19 @@ class PianoResponder:
         piano's: it takes some of them (piano.chance), and while it plays the pad stays back,
         so the gaps alternate between a swell and an arpeggio."""
         ch = self.cfg.channel - 1
-        while self._queue and self._queue[0][0] <= now:
-            t, _, note, vel, dur = heapq.heappop(self._queue)
-            self.out.note_on(ch, note, vel)
-            self.out.note_off_at(t + dur, ch, note)
-            self._sounding[note] = t + dur
+        for q in (self._queue, self._comp_queue):
+            while q and q[0][0] <= now:
+                t, _, note, vel, dur = heapq.heappop(q)
+                self.out.note_on(ch, note, vel)
+                self.out.note_off_at(t + dur, ch, note)
+                self._sounding[note] = t + dur
+                if q is self._comp_queue:
+                    self._comp_notes.add(note)
+                else:
+                    self._comp_notes.discard(note)
+        for note in [n for n, end in self._sounding.items() if end <= now]:
+            del self._sounding[note]
+            self._comp_notes.discard(note)
         if self._claimed is not None:                   # its turn instead of the guitar's
             phrase, self._claimed = self._claimed, None
             if self.cfg.enabled and chord is not None and next_beat is not None:
@@ -151,7 +219,7 @@ class PianoResponder:
                 or not response.phrase):
             return
         phrase_id = response.phrase_count
-        if phrase_id == self._answered_phrase or response.playing(now) or self.playing(now):
+        if phrase_id == self._answered_phrase or response.playing(now) or self.answering():
             return
         self._answered_phrase = phrase_id               # its turn, once per phrase
         if self.rng.random() >= self.cfg.chance:
@@ -196,23 +264,35 @@ class PianoResponder:
             heapq.heappush(self._queue, (t, next(self._seq), note, vel, dur))
 
     def comp_beat(self, now: float, period: float, bar: int, bar_pos: int, bpb: int, chord,
-                  gain: float) -> None:
-        """An interlude beat: the comping chord hits that fall in this beat."""
+                  gain: float, scale: Optional[set[int]] = None, density: float = 1.0,
+                  busy: float = 0.0) -> None:
+        """A comping beat (an interlude, or under your solo): the chord hits of this bar's
+        rhythm that fall in this beat. density (0-1) thins them out; busy (0-1, how busily you
+        play) leans to the sparse rhythms."""
         if not self.cfg.enabled or chord is None:
             return
-        pattern = COMP_PATTERNS.get(bpb, (tuple((b, 0.9) for b in range(1, bpb)),) * 2)[bar % 2]
+        if bar_pos == 0 or self._comp_rhythm is None:
+            self._comp_rhythm = self._pick_rhythm(bpb, busy)
         c = self.cfg
-        low = 12 * (c.octave + 1) - 5
-        voicing = comp_voicing({n % 12 for n in chord.notes}, low, low + 19, self._comp_prev)
+        pcs = {n % 12 for n in chord.notes}
+        low, high = c.comp_low, c.comp_high
+        voicing = comp_voicing(pcs, low, high, self._comp_prev, chord.root_pc, scale, c.voicing)
         self._comp_prev = voicing
-        for beat, length in pattern:
-            if int(beat) != bar_pos:
+        for beat, length in self._comp_rhythm:
+            if int(beat) != bar_pos or self.rng.random() > density:
                 continue
             t = now + (beat - bar_pos) * period
             vel = humanize_velocity(min(max(round(c.velocity * COMP_SOFTER * gain), 1), 127),
                                     c.velocity_spread, self.rng)
             for note in voicing:
-                heapq.heappush(self._queue, (t, next(self._seq), note, vel, length * period))
+                heapq.heappush(self._comp_queue, (t, next(self._seq), note, vel, length * period))
+
+    def _pick_rhythm(self, bpb: int, busy: float):
+        options = list(COMP_RHYTHMS.get(bpb, (tuple((b, 0.9) for b in range(1, bpb)),)))
+        if len(options) > 1 and self._comp_rhythm in options:
+            options.remove(self._comp_rhythm)                 # never the same twice running
+        weights = [1.0 + (2.0 * busy if len(r) <= SPARSE_HITS else 0.0) for r in options]
+        return self.rng.choices(options, weights)[0]
 
     def final_chord(self, now: float, chord, period: float) -> None:
         """The ending: the last chord, rolled up quickly from the root."""
@@ -228,11 +308,21 @@ class PianoResponder:
                                          min(127, c.velocity), 4 * period))
 
     def cancel(self) -> None:
+        """You played: the answer gives way (what's to come, and what's sounding); comping
+        goes on."""
         self._queue.clear()
+        for note in [n for n in self._sounding if n not in self._comp_notes]:
+            self.out.note_off(self.cfg.channel - 1, note)
+            del self._sounding[note]
+
+    def stop(self) -> None:
+        """Everything stops, answers and comping (a break, the end)."""
+        self._queue.clear()
+        self._comp_queue.clear()
         for note in list(self._sounding):
             self.out.note_off(self.cfg.channel - 1, note)
         self._sounding.clear()
 
     def reset(self) -> None:
-        self.cancel()
+        self.stop()
         self._answered_phrase, self._claimed = None, None

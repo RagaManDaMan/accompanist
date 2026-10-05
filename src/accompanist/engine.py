@@ -196,7 +196,7 @@ class Engine:
                             0.0 if self.in_interlude else self.dynamics.quiet(now))
             if self.in_break:                         # a break: you alone, no answers
                 self.response.cancel()
-                self.piano.cancel()
+                self.piano.stop()
 
         # The beat clock runs while bass (pulse) or drums need it, or a chart is counting in.
         if not (self.cfg.pulse.enabled or self.cfg.drums.enabled or self.cfg.percussion.enabled
@@ -305,6 +305,7 @@ class Engine:
                     self.percussion.on_beat(beat_t, self.clock.period, gain * lift, form_beat,
                                             swing, boost, bpb, self.dynamics.busyness(now))
                 self._interlude_beat(now, form_beat, bar_pos, bpb)
+                self._comp_under_solo(now, form_beat, bar_pos, bpb)
                 self.beat_count += 1
             self.drums.tick(now)
             self.percussion.tick(now)
@@ -412,6 +413,18 @@ class Engine:
     def in_interlude(self) -> bool:
         return self._interlude_bar0 is not None
 
+    def _comp_under_solo(self, now: float, form_beat: int, bar_pos: int, bpb: int) -> None:
+        """While you play: the piano comps behind you (piano.comp), sparser when you're busy,
+        quiet while it is answering you."""
+        p = self.cfg.piano
+        if (p.comp <= 0 or not p.enabled or self.in_interlude or self.in_break
+                or self.piano.answering()):
+            return
+        chord = self.pad.current or self.proposal
+        busy = self.dynamics.busyness(now)
+        self.piano.comp_beat(now, self.clock.period, form_beat // max(1, bpb), bar_pos, bpb, chord,
+                             self.dynamics.follow_gain(), self._scale_pcs(), p.comp, busy)
+
     def _interlude_beat(self, now: float, form_beat: int, bar_pos: int, bpb: int) -> None:
         """You have rested a while: the piano comps and the guitar plays your phrases, taking
         turns every interlude.turn_bars bars, until you come back in (on_note ends it)."""
@@ -437,7 +450,8 @@ class Engine:
         who = players[turn % len(players)]
         gain = self.dynamics.follow_gain()
         if who == "piano":
-            self.piano.comp_beat(now, self.clock.period, bar, bar_pos, bpb, chord, gain)
+            self.piano.comp_beat(now, self.clock.period, bar, bar_pos, bpb, chord, gain,
+                                 self._scale_pcs())
         elif bar_pos == 0 and (bar - self._interlude_bar0) % max(1, il.guitar_every_bars) == 0 \
                 and not self.response.playing(now):
             left = il.turn_bars - (bar - self._interlude_bar0) % max(1, il.turn_bars)
@@ -476,7 +490,7 @@ class Engine:
             self._break_requested = False
             self._break_left = max(1, self.cfg.breaks.bars) * bpb
             self.response.cancel()
-            self.piano.cancel()
+            self.piano.stop()
             self._reset_drums()
             if self.cfg.breaks.hit:
                 self._hit(now, root_pc)

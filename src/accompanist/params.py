@@ -447,6 +447,16 @@ PARAMS: list[Param] = [
     P("piano.max_beats", int, 4, "Piano: longest answer", "In beats.", "Piano", 1, 16, 1),
     P("piano.variety", float, 0.3, "Piano variety",
       "How often auto plays triplets instead of eighths (0 = never).", "Piano", 0, 1, 0.05),
+    P("piano.comp", float, 0.0, "Piano comps under you",
+      "While you play, the piano comps chords behind you (jazz style): 0 = only answers and "
+      "interludes; higher = more of the comping rhythm's hits, sparser when you're busy.",
+      "Piano", 0, 1, 0.05),
+    P("piano.voicing", str, "auto", "Piano voicings",
+      "rootless: jazz A/B voicings without the root (3-5-7-9, 7-9-3-5, with 13 on dominants); "
+      "close: the chord's own tones; auto: rootless for seventh chords.", "Piano",
+      choices=("auto", "rootless", "close")),
+    P("piano.comp_low", int, 50, "Comping low", "Lowest comping note (MIDI).", "Piano", 36, 72, 1),
+    P("piano.comp_high", int, 74, "Comping high", "Highest comping note (MIDI).", "Piano", 55, 96, 1),
     P("piano.timing_ms", float, 0.0, "Piano timing spread",
       "Each note up to this many ms early or late (humanize; the first stays on the beat).",
       "Piano", 0, 30, 1),

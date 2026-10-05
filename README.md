@@ -387,6 +387,18 @@ third, fifth, seventh), strictly on the beat: eighths, triplets now and then, qu
 as your phrase (at most `piano.max_beats`), and lands on the root. You playing again stops it
 at once; on an ending it rolls the last chord. Its knob is `piano.feel`.
 
+**Comping, jazz style.** `piano.comp` (0 to 1; 0, off, by default) has the piano comp
+chords behind you while you play, the way a jazz pianist does: a different comping rhythm
+each bar (the Charleston, 2 and 4, pushed off-beats, an anticipation into the next bar, a
+held whole note...), never the same twice running, sparser when you play busily, and
+quiet while it answers you. Higher `comp`: more of the rhythm's hits. Interludes comp the
+same way. Voicings (`piano.voicing`): `rootless` jazz A/B voicings, without the root (the
+bass has it): 3-5-7-9 and 7-9-3-5, with the 13 on dominants and the 6/9 on chords without
+a seventh, colour tones only where they belong to the key, each chord moving as little as
+possible from the last (so a ii-V-I moves by step); `close` plays the chord's own tones;
+`auto` (default) uses rootless for seventh chords. They sit between `piano.comp_low` and
+`piano.comp_high` (D3 to D5).
+
 
 ## Your phrase library
 

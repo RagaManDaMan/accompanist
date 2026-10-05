@@ -24,6 +24,8 @@ tuned = true             # ...so it plays the chart's chord tones, not fixed dru
 
 [piano]
 enabled = true
+comp = 0.5               # comps behind you, jazz style
+voicing = "rootless"
 
 [response]
 enabled = true
