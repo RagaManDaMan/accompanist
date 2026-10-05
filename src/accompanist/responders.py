@@ -362,7 +362,7 @@ FILL_CHANCE = 1.2
 FILL_NOTES = {"low": "tom_low", "mid": "tom_mid", "snare": "snare"}
 # Library grooves: the chance of moving to another groove of the style at a phrase start, and
 # the velocity the drummers' own dynamics are taken relative to (drums.velocity scales them).
-GROOVE_CHANGE = 0.3
+GROOVE_CHANGE = 0.5
 GROOVE_REFERENCE_VELOCITY = 70
 
 

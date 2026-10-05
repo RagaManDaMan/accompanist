@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +26,12 @@ BEATS = 4                              # 4/4 only (nearly all of the dataset)
 MIN_HITS = 4                           # a bar with fewer is a pickup or the end
 # The electronic kit's notes -> General MIDI (edges, rims and second cymbals folded in).
 KIT_TO_GM = {22: 42, 26: 46, 58: 43, 47: 45, 50: 48, 55: 49, 57: 49, 52: 49, 59: 51, 40: 38}
-TEMPO_RATIO = 1.35                     # a groove fits tempi within this ratio of its own
+TEMPO_RATIO = 1.35                     # a groove fits tempi within this ratio of its own...
+MIN_CHOICES = 5                        # ...but there are always at least this many to vary
+# A family asked for by name ("jazz") leaves out the dataset's sub-styles that aren't its
+# idiom: a jazz drummer's march or klezmer exercise isn't what "jazz" means in a song (a
+# song can still ask for "jazz/march" exactly).
+NOT_THE_IDIOM = {"jazz": ("jazz/march", "jazz/klezmer")}
 
 
 @dataclass(frozen=True)
@@ -98,9 +104,14 @@ class DrumBook:
     def choose(self, style: str, bpm: float, kind: str, rng: random.Random,
                avoid: Optional[Groove] = None) -> Optional[Groove]:
         """A groove (or fill) of this style ("jazz", or exactly "jazz/swing"), near the tempo."""
-        same = [g for g in self.grooves if g.kind == kind and (g.style == style or g.family == style)]
+        left_out = NOT_THE_IDIOM.get(style, ())
+        same = [g for g in self.grooves if g.kind == kind and g.style not in left_out
+                and (g.style == style or g.family == style)]
         if not same:
             return None
-        near = [g for g in same if 1 / TEMPO_RATIO <= g.bpm / bpm <= TEMPO_RATIO and g is not avoid]
-        pool = near or sorted(same, key=lambda g: abs(g.bpm - bpm))[:3]
+        by_tempo = sorted(same, key=lambda g: abs(math.log(g.bpm / bpm)))
+        near = [g for g in by_tempo if 1 / TEMPO_RATIO <= g.bpm / bpm <= TEMPO_RATIO]
+        pool = near if len(near) >= MIN_CHOICES else by_tempo[:MIN_CHOICES]
+        if len(pool) > 1 and avoid in pool:
+            pool = [g for g in pool if g is not avoid]       # a change is a change
         return rng.choice(pool)

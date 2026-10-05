@@ -58,3 +58,21 @@ def test_the_drums_play_the_groove_and_fill_into_phrases(tmp_path, monkeypatch):
     gaps = {round(b - a, 2) for a, b in zip(rides, rides[1:])}
     assert {0.33, 0.17} <= gaps                                # swung: long-short at 120 bpm
     assert any(n == 38 for t, n in hits) and any(n == 49 for t, n in hits)   # fills, crashes
+
+
+def test_jazz_means_the_idiom_and_there_is_always_a_choice():
+    import random
+
+    bar = ((0.0, 36, 90), (1.0, 38, 80), (2.0, 36, 90), (3.0, 38, 80))
+    grooves = [db.Groove("jazz/march", 88, "beat", "d1", (bar,))]          # the only one near
+    grooves += [db.Groove(s, bpm, "beat", "d2", (bar,)) for s, bpm in
+                (("jazz", 92), ("jazz", 120), ("jazz/swing", 110), ("jazz/fusion", 96),
+                 ("jazz/swing", 215))]
+    book = db.DrumBook(grooves)
+    rng = random.Random(0)
+    picks = [book.choose("jazz", 66, "beat", rng) for _ in range(100)]
+    assert all(g.style != "jazz/march" for g in picks)                    # no march-past
+    assert len({id(g) for g in picks}) >= 4                               # several to vary
+    assert book.choose("jazz/march", 66, "beat", rng).style == "jazz/march"   # if asked for
+    g = picks[0]
+    assert all(book.choose("jazz", 66, "beat", rng, avoid=g) is not g for _ in range(20))
