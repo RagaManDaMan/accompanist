@@ -495,7 +495,7 @@ PARAMS: list[Param] = [
     P("response.enabled", bool, False, "Answer your phrases",
       "When you pause after a phrase, answer it with a short line on its own channel.",
       "Response", primary=True),
-    P("response.feel", float, 0.6, "Response feel",
+    P("response.feel", float, 0.6, "Guitar feel",
       "Algorithmic (0: an exact, on-the-grid echo of your last phrase, every pause) to humanize (1: curated earlier phrases, sometimes varied, in your own timing, not every pause, gives way partly).",
       "Response", 0, 1, 0.01, primary=True),
     P("response.channel", int, 4, "Response channel", "MIDI channel (1-16), e.g. a guitar track.",
@@ -770,6 +770,21 @@ PARAMS: list[Param] = [
     P("pedal.hold_s", float, 0.6, "Hold time",
       "A switch with a tap and a hold action ([controls] \"cc:80\" = { tap = ..., hold = ... }): "
       "held this long, it does its hold action instead.", "Controls", 0.2, 3, 0.05),
+
+    # ---- the stage screen (a page in your browser, phone or tablet) --------------
+    P("ui.enabled", bool, True, "Stage screen",
+      "While the band runs, a page in your browser shows the song, tempo, key and chord, with "
+      "buttons for count-in, break, finish, panic and the songs of a set, and the feel knobs.",
+      "Stage screen", live=False),
+    P("ui.port", int, 8765, "Stage screen port",
+      "The page is at http://localhost:PORT (another number if this one is taken).",
+      "Stage screen", 1024, 65535, 1, live=False),
+    P("ui.open", bool, True, "Open it",
+      "Open the stage screen in your browser when the band starts.", "Stage screen", live=False),
+    P("ui.lan", bool, False, "Phone or tablet",
+      "Also offer the page on your network (Wi-Fi), for a phone or tablet on the music stand. "
+      "Its address carries a key, printed at the start: only someone with it can use the page.",
+      "Stage screen", live=False),
 
     # ---- panic ----------------------------------------------------------------
     P("panic.cc", int, None, "Panic CC",

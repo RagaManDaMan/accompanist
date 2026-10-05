@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111">
+<title>Accompanist</title>
+<style>
+  :root {
+    --bg: #111; --panel: #1c1c1c; --line: #2c2c2c; --text: #eee; --dim: #8a8a8a;
+    --accent: #e8b04a; --stop: #d9534f; --go: #5cb85c; --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f2ee; --panel: #fff; --line: #e2ded6; --text: #1b1b1b; --dim: #6b6b6b;
+            --accent: #b07a10; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 16px 40px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h1 { font-size: 1.35rem; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis;
+       white-space: nowrap; }
+  .setpos { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .flag { display: inline-block; margin-top: 10px; padding: 4px 10px; border-radius: 999px;
+          font-size: .8rem; font-weight: 700; letter-spacing: .06em; background: var(--line); }
+  .flag.playing { background: var(--go); color: #fff; }
+  .flag.muted, .flag.offline { background: var(--stop); color: #fff; }
+  .flag.ending, .flag.break { background: var(--accent); color: #111; }
+  .big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
+  .big div { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+             padding: 12px; min-width: 0; }
+  .big b { display: block; font-size: clamp(1.4rem, 6vw, 2.4rem); font-weight: 600;
+           font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+           text-overflow: ellipsis; }
+  .big span { color: var(--dim); font-size: .8rem; }
+  .buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  button { font: inherit; font-weight: 600; color: var(--text); background: var(--panel);
+           border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 8px;
+           min-height: 64px; cursor: pointer; touch-action: manipulation; }
+  button:active { transform: scale(.98); }
+  button small { display: block; color: var(--dim); font-weight: 400; font-size: .72rem; margin-top: 2px; }
+  button.panic { background: var(--stop); border-color: var(--stop); color: #fff; }
+  button.panic small { color: #ffe; }
+  button.on { outline: 2px solid var(--accent); }
+  button.confirm { background: var(--accent); color: #111; }
+  .messages { min-height: 1.4em; margin: 14px 2px; color: var(--accent); font-size: .95rem; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
+       font-weight: 600; margin: 26px 2px 8px; }
+  .voices { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  .voice { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 12px;
+           padding: 12px 14px; border-top: 1px solid var(--line); }
+  .voice:first-child { border-top: 0; }
+  .voice label { font-weight: 600; }
+  .voice output { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .switch { justify-self: end; }
+  footer { color: var(--dim); font-size: .8rem; margin-top: 26px; }
+  @media (max-width: 420px) {
+    .big { grid-template-columns: repeat(2, 1fr); }
+    .big div:last-child { grid-column: span 2; }
+    .voice { grid-template-columns: 78px 1fr 44px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">Accompanist</h1>
+    <span class="setpos" id="setpos"></span>
+  </header>
+  <span class="flag" id="flag">connecting…</span>
+
+  <section class="big">
+    <div><b id="bpm">--</b><span>tempo</span></div>
+    <div><b id="key">--</b><span>key</span></div>
+    <div><b id="chord">--</b><span>chord · <span id="heard">--</span></span></div>
+  </section>
+
+  <section class="buttons">
+    <button data-action="song_start">Count in<small>s</small></button>
+    <button data-action="break">Break<small>b</small></button>
+    <button data-action="finish">Finish<small>f</small></button>
+    <button data-action="panic_toggle" class="panic" id="panic">Silence<small>space</small></button>
+    <button data-action="lock_toggle" id="lock">Lock tempo<small>l</small></button>
+    <button data-action="chord_toggle" id="hold">Hold chord<small>c</small></button>
+    <button data-action="song_prev" data-confirm id="prev">◀ Song<small>[</small></button>
+    <button data-action="tap_tempo">Tap tempo<small>t</small></button>
+    <button data-action="song_next" data-confirm id="next">Song ▶<small>]</small></button>
+  </section>
+
+  <div class="messages" id="messages" aria-live="polite"></div>
+
+  <h2>The band</h2>
+  <section class="voices" id="voices"></section>
+
+  <footer>The same keys work here as in the terminal. Changes last for this run.</footer>
+</main>
+<script>
+const KEY = new URLSearchParams(location.search).get("k") || "";
+const $ = id => document.getElementById(id);
+const KEYS = {" ": "panic_toggle", p: "panic_toggle", r: "resume", t: "tap_tempo",
+  l: "lock_toggle", c: "chord_toggle", s: "song_start", f: "finish", b: "break",
+  "]": "song_next", ArrowRight: "song_next", "[": "song_prev", ArrowLeft: "song_prev"};
+const CONFIRM_MS = 2000;
+let state = null, pending = null, dragging = null, lastOk = 0;
+
+async function post(path, body) {
+  try {
+    await fetch(path, {method: "POST", headers: {"Content-Type": "application/json", "X-Key": KEY},
+                       body: JSON.stringify(body)});
+  } catch (e) { /* shown as offline by the poll */ }
+}
+
+function act(action, button) {
+  // Changing song while the band plays needs a second press, as with the keys.
+  const playing = state && state.pulse && !state.muted;
+  if (button && button.hasAttribute("data-confirm") && playing) {
+    if (!pending || pending.action !== action || Date.now() > pending.until) {
+      pending = {action, until: Date.now() + CONFIRM_MS, button};
+      button.classList.add("confirm");
+      setTimeout(() => button.classList.remove("confirm"), CONFIRM_MS);
+      $("messages").textContent = "Playing: press again to change song";
+      return;
+    }
+    button.classList.remove("confirm");
+    pending = null;
+  }
+  post("/do", {action});
+}
+
+document.querySelectorAll("button[data-action]").forEach(b =>
+  b.addEventListener("click", () => act(b.dataset.action, b)));
+
+document.addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.target.tagName === "INPUT") return;
+  const action = KEYS[e.key];
+  if (!action) return;
+  e.preventDefault();
+  const b = document.querySelector(`button[data-action="${action}"]`);
+  act(action, b);
+});
+
+function buildVoices(voices) {
+  const box = $("voices");
+  box.innerHTML = "";
+  for (const v of voices) {
+    if (v.type === "bool") continue;              // on/off goes with its feel knob
+    const on = voices.find(o => o.type === "bool" && o.group === v.group);
+    const row = document.createElement("div");
+    row.className = "voice";
+    row.title = v.help;
+    const name = v.label.replace(/ feel$/, "");
+    row.innerHTML = `<label for="${v.key}">${name}</label>
+      <input type="range" id="${v.key}" min="${v.min}" max="${v.max}" step="${v.step || 0.01}">
+      <output></output>`;
+    const input = row.querySelector("input"), out = row.querySelector("output");
+    input.addEventListener("input", () => {
+      dragging = v.key; out.textContent = Math.round(input.value * 100);
+      post("/set", {key: v.key, value: parseFloat(input.value)});
+    });
+    input.addEventListener("change", () => { dragging = null; });
+    if (on) {
+      out.style.cursor = "pointer";
+      out.title = "tap: " + on.label;
+      out.addEventListener("click", () => post("/set", {key: on.key, value: !on.value}));
+    }
+    box.appendChild(row);
+  }
+}
+
+function render(s) {
+  state = s;
+  const set = s.set;
+  $("title").textContent = s.title || (set && set.songs[set.index]) || "Accompanist";
+  $("setpos").textContent = set ? `${set.index + 1} / ${set.songs.length}` +
+    (set.index + 1 < set.songs.length ? ` · next: ${set.songs[set.index + 1]}` : "") : "";
+  const flag = s.finished ? ["FINISHED", ""] : s.muted ? ["SILENT", "muted"]
+    : s.ending ? ["ENDING", "ending"] : s.break ? ["BREAK", "break"]
+    : s.song && s.song.startsWith("count") ? [s.song.toUpperCase(), "break"]
+    : s.pulse ? ["PLAYING", "playing"] : ["LISTENING", ""];
+  $("flag").textContent = flag[0] + (s.locked ? " · LOCKED" : "") + (s.interlude ? " · INTERLUDE" : "");
+  $("flag").className = "flag " + flag[1];
+  $("bpm").textContent = s.pulse || s.locked ? Math.round(s.bpm) : "--";
+  $("key").textContent = s.key || s.root || "--";
+  $("chord").textContent = s.pad || "--";
+  $("heard").textContent = s.heard || "--";
+  $("panic").firstChild.textContent = s.muted ? "Resume" : "Silence";
+  $("lock").classList.toggle("on", !!s.locked);
+  $("hold").classList.toggle("on", !!s.chord_held);
+  $("prev").style.visibility = $("next").style.visibility = set ? "visible" : "hidden";
+  if (s.messages && s.messages.length && !pending) $("messages").textContent = s.messages[s.messages.length - 1];
+  const sig = (s.voices || []).map(v => v.key).join();
+  if ($("voices").dataset.sig !== sig) { buildVoices(s.voices || []); $("voices").dataset.sig = sig; }
+  for (const v of s.voices || []) {
+    if (v.type === "bool") continue;
+    const input = $(v.key);
+    if (!input) continue;
+    const on = s.voices.find(o => o.type === "bool" && o.group === v.group);
+    const out = input.parentElement.querySelector("output");
+    if (dragging !== v.key) { input.value = v.value; out.textContent = Math.round(v.value * 100); }
+    const off = on && !on.value;
+    input.disabled = off;
+    if (off) out.textContent = "off";
+  }
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/state", {headers: {"X-Key": KEY}, cache: "no-store"});
+    if (r.status === 403) { $("flag").textContent = "WRONG ADDRESS"; $("flag").className = "flag offline"; return; }
+    render(await r.json());
+    lastOk = Date.now();
+  } catch (e) {
+    if (Date.now() - lastOk > 2000) {
+      $("flag").textContent = "NOT CONNECTED: is the band running?";
+      $("flag").className = "flag offline";
+    }
+  }
+  setTimeout(poll, 200);
+}
+poll();
+</script>
+</body>
+</html>

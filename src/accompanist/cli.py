@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import queue
 import re
@@ -965,13 +966,19 @@ LEVELS_WAIT_S = 3.0
 # Keys that need a second press within this long while the band is playing (a slip of the
 # finger mustn't end the set or change the song mid-song).
 CONFIRM_S = 2.0
+STAGE_EVERY_S = 0.1        # the stage screen's view of the band is refreshed this often
+
+
+UI_MESSAGES: "collections.deque[str]" = collections.deque(maxlen=8)   # for the stage screen
 
 
 def say(message) -> None:
-    """Print an event line above the status line (which is redrawn after it)."""
+    """Print an event line above the status line (which is redrawn after it), and show it
+    on the stage screen."""
     if message:
         sys.stdout.write(f"\r\x1b[K{message}\n")
         sys.stdout.flush()
+        UI_MESSAGES.append(str(message))
 
 
 LAST_GOOD = ".last-good"                  # config.toml.last-good: the last config that started
@@ -1135,6 +1142,7 @@ def cmd_run(args) -> int:
           "      [b] = break (the band stops for a bar or two; you alone)   [q] = quit"
           + ("\n      [ / ] or left / right = previous / next song in the set" if set_songs else "")
           + "\n")
+    stage = open_stage(cfg, args)
     if select_patch(out, cfg):
         print(f"MainStage patch {cfg.song.patch} (channel {cfg.output.patch_channel})")
     apply_mix(out, cfg)
@@ -1146,6 +1154,7 @@ def cmd_run(args) -> int:
     fade, fade_sent = None, float("-inf")      # (song index, start, end): fading to change song
     takes_made: list[Path] = []                # this run's earlier songs' takes (a set)
     guard = LiveGuard()
+    stage_sent = float("-inf")
     try:
         while True:
             now = time.monotonic()
@@ -1258,6 +1267,18 @@ def cmd_run(args) -> int:
                         + (f", {s.tempo:g} bpm" if s.tempo else "")
                         + (f" in {s.count}" if s.count else "") + ": s to count in")
                     last_print = 0.0
+                if stage is not None:              # the stage screen's buttons and knobs
+                    for kind, what, value in stage.take():
+                        try:
+                            if kind == "do":
+                                say(ctl.do(what, now))
+                                if rec and what not in ("song_next", "song_prev"):
+                                    rec.action(now, what)
+                            else:
+                                ctl.set_param(what, value)
+                        except cfgmod.ConfigError as e:
+                            say(str(e))
+                        last_print = 0.0
                 ctl.tick(now)
                 for t_held, held in ctl.take_holds():  # a switch held: its hold action
                     if rec:
@@ -1265,6 +1286,12 @@ def cmd_run(args) -> int:
                 for message in ctl.take_events():     # e.g. a count-off completing
                     say(message)
                     last_print = 0.0
+                if stage is not None and now - stage_sent >= STAGE_EVERY_S:
+                    from .ui import stage_state
+                    stage.publish(stage_state(ctl, now, {"title": set_title, "songs": set_songs,
+                                                         "index": song_index} if set_songs else None,
+                                              list(UI_MESSAGES)))
+                    stage_sent = now
                 if now - last_print >= 0.25:
                     width = shutil.get_terminal_size((100, 20)).columns - 1
                     sys.stdout.write("\r\x1b[K" + format_status(ctl.get_state(now))[:width])
@@ -1283,6 +1310,8 @@ def cmd_run(args) -> int:
             rec.close()
             learn_takes(cfg, takes_made + [rec.path])
         keys.close()
+        if stage is not None:
+            stage.close()
         for p in in_ports:
             p.close()
         for a in audios:
@@ -1292,6 +1321,30 @@ def cmd_run(args) -> int:
         port.close()
         print("\nStopped. All notes off.")
     return 0
+
+
+def open_stage(cfg, args):
+    """The stage screen (ui.py), if on: its address printed and opened. Never stops the band:
+    if it can't start, a warning, and the keys still work."""
+    if not cfg.ui.enabled or getattr(args, "no_ui", False):
+        return None
+    from .ui import StageServer
+
+    try:
+        stage = StageServer(cfg.ui.port, cfg.ui.lan)
+    except OSError as e:
+        print(f"warning: the stage screen couldn't start ({e}): carrying on with the keys")
+        return None
+    print(f"Stage screen: {stage.url}")
+    if stage.lan_url:
+        print(f"  on a phone or tablet (same Wi-Fi): {stage.lan_url}")
+    if cfg.ui.open:
+        import webbrowser
+        try:
+            webbrowser.open(stage.url)
+        except Exception:
+            pass
+    return stage
 
 
 def cmd_simulate(args) -> int:
@@ -1392,6 +1445,8 @@ def main(argv=None) -> int:
                                  "or takes/<song>-<time>.jsonl with --song)")
             sp.add_argument("--no-record", action="store_true",
                             help="don't record this run, even with [output] record = true")
+            sp.add_argument("--no-ui", action="store_true",
+                            help="no stage screen in the browser this time (ui.enabled)")
     sp = sub.add_parser("replay", help="run a recorded take through the engine offline (no hardware)")
     sp.add_argument("take", help="a take file made with `run --record`")
     sp.add_argument("-c", "--config", default=None, help="default: ./config.toml if present, else defaults")

@@ -32,7 +32,7 @@ accompanist = "accompanist.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-accompanist = ["presets/*.toml", "patterns/*.toml", "songs/*.toml", "indian/*.toml"]
+accompanist = ["presets/*.toml", "patterns/*.toml", "songs/*.toml", "indian/*.toml", "web/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

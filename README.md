@@ -376,6 +376,22 @@ the likelier (`percussion.triplets`, reaching full after `percussion.triplet_bui
 and past 70% of that it doubles up into eighth-note triplets. Its knob is
 `percussion.feel`.
 
+## The stage screen
+
+While the band runs, a page opens in your browser: the song (and where you are in a set),
+the tempo, key and chord, what you just played, and big buttons for what the keys do
+(count in, break, finish, silence/resume, lock tempo, hold chord, tap tempo, previous and
+next song). The keys work on the page too. Below them, each voice's feel, and a tap on its
+number turns it on or off. Changes last for this run.
+
+- Keep it in a small window beside your lyrics, or put it on a **phone or tablet** on the
+  music stand: `[ui] lan = true` in config.toml prints a second address for your Wi-Fi.
+  Each address carries a key made afresh each run, so nobody else on the venue's Wi-Fi can
+  use it.
+- `[ui] enabled = false` (or `run --no-ui`) for none; `ui.open = false` to not open it;
+  `ui.port` if 8765 is taken (it tries the next ones itself). If it can't start, the band
+  plays on and the keys still work.
+
 ## Piano
 
 `[piano] enabled = true` (channel 5) answers you too, taking turns with the guitar: when your
