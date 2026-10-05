@@ -46,8 +46,9 @@ def test_colour_chords():
 
 def test_auto_detects_key_and_mode():
     assert chord([C, D, E, F, G, A, B, C + 12, G, E, C])[1] == "C major"
-    assert chord([A, B, C + 12, D + 12, E + 12, F + 12, Gs + 12, A + 12, E + 12, C + 12, A])[1] == "A minor"
-    assert chord([D, F, A, D + 12, F, A, C + 12, D], root="D")[1] == "D minor"
+    assert chord([A, B, C + 12, D + 12, E + 12, F + 12, Gs + 12, A + 12, E + 12, C + 12, A])[1] in (
+        "A minor", "A harmonic-minor")                         # G-sharp and no G: harmonic
+    assert chord([D, F, A, D + 12, F, A, C + 12, D], root="D")[1].startswith("D minor")
 
 
 def test_voicings_are_in_range_and_contain_the_chord():
@@ -143,3 +144,33 @@ def test_a_palette_starts_at_home_and_follows_you_between_its_keys():
             m.observe(Onset(t, n, 80))
             m.propose(t)
     assert m.key_label == "F lydian"
+
+
+@pytest.mark.parametrize("line,expected", [
+    ([60, 63, 65, 67, 70, 72, 70, 67, 65, 63, 60, 67, 63, 60], "C minor-pentatonic"),
+    ([60, 63, 65, 66, 67, 70, 72, 70, 67, 66, 65, 63, 60, 60], "C blues"),
+    ([62, 64, 65, 67, 69, 71, 72, 74, 72, 71, 69, 65, 62, 62], "D dorian"),
+    ([67, 69, 71, 72, 74, 76, 77, 79, 77, 74, 71, 67, 67, 67], "G mixolydian"),
+    ([60, 62, 64, 67, 69, 72, 69, 67, 64, 62, 60, 64, 60], "C major-pentatonic"),
+])
+def test_auto_hears_modes_pentatonics_and_the_blues(line, expected):
+    from accompanist.modal import ModalModel
+
+    m = ModalModel(c.from_dict({"harmony": {"model": "modal", "half_life_s": 60}}))
+    t = 0.0
+    for _ in range(4):
+        for n in line:
+            m.observe(Onset(t, n, 80))
+            m.propose(t)
+            t += 0.4
+    assert m.key_label == expected
+
+
+def test_auto_modes_can_be_turned_off():
+    from accompanist.modal import ModalModel
+
+    m = ModalModel(c.from_dict({"harmony": {"model": "modal", "auto_modes": False}}))
+    for i, n in enumerate([60, 63, 65, 67, 70, 72, 70, 67, 65, 63, 60] * 3):
+        m.observe(Onset(i * 0.4, n, 80))
+        m.propose(i * 0.4)
+    assert m.key_label in ("C minor", "D# major")

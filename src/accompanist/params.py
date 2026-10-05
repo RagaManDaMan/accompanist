@@ -198,7 +198,10 @@ PARAMS: list[Param] = [
       "(major or minor, detected from your playing).", "Harmony",
       choices=("auto", "major", "minor", "chromatic", "ionian", "dorian", "phrygian", "lydian",
                "mixolydian", "aeolian", "locrian", "harmonic-minor", "melodic-minor",
-               "bebop-major", "bebop-dominant")),
+               "bebop-major", "bebop-dominant", "major-pentatonic", "minor-pentatonic", "blues")),
+    P("harmony.auto_modes", bool, True, "Hear modes",
+      "modal model, auto: besides major and minor, hear dorian, mixolydian, lydian, phrygian, "
+      "harmonic minor, the pentatonics and the blues scale from what you play.", "Harmony"),
     P("harmony.keys", str, None, "Key palette",
       "modal model: the song's keys, e.g. 'F lydian, D minor, A minor': it starts in the first "
       "and follows you between them (overrides root and mode).", "Harmony", nullable=True,

@@ -233,8 +233,11 @@ A song can name its keys: `[harmony] keys = "F lydian, D minor, A minor"`. The b
 the first (home) from your first note and follows you between them, telling them apart by
 the notes that differ (B natural, B-flat, G-sharp) and by where your lines rest (the tonic
 and its triad). Modes: major, minor (with the raised 7th), ionian, dorian, phrygian,
-lydian, mixolydian, aeolian, locrian, harmonic-minor, melodic-minor, bebop-major and
-bebop-dominant. One fixed key works too: `root = "F"`, `mode = "lydian"`. The ending lands on
+lydian, mixolydian, aeolian, locrian, harmonic-minor, melodic-minor, bebop-major,
+bebop-dominant, major-pentatonic, minor-pentatonic and blues. Without a palette the band
+also hears the colour of the key by itself (`harmony.auto_modes`): the tonic and major or
+minor from your playing, then whichever of the plain scale, dorian, mixolydian, lydian,
+phrygian, harmonic minor, the pentatonics or the blues scale fits what you play best. One fixed key works too: `root = "F"`, `mode = "lydian"`. The ending lands on
 the palette key you're in, or the one whose tonic you finished on.
 
 ## Groove: meter, downbeat, feel

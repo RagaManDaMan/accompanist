@@ -40,7 +40,18 @@ SCALES = {"major": MAJOR, "minor": MINOR, "chromatic": CHROMATIC,
           "harmonic-minor": frozenset({0, 2, 3, 5, 7, 8, 11}),
           "melodic-minor": frozenset({0, 2, 3, 5, 7, 9, 11}),
           "bebop-major": frozenset({0, 2, 4, 5, 7, 8, 9, 11}),
-          "bebop-dominant": frozenset({0, 2, 4, 5, 7, 9, 10, 11})}
+          "bebop-dominant": frozenset({0, 2, 4, 5, 7, 9, 10, 11}),
+          "major-pentatonic": frozenset({0, 2, 4, 7, 9}),
+          "minor-pentatonic": frozenset({0, 3, 5, 7, 10}),
+          "blues": frozenset({0, 3, 5, 6, 7, 10})}
+# Auto key (harmony.mode = "auto", harmony.auto_modes): the tonic and major/minor come from
+# the key profiles; then the colour of that key from how well each of these scales fits
+# what you played (a mode must beat the plain scale by FLAVOUR_MARGIN to be chosen).
+FLAVOURS = {"major": ("major", "mixolydian", "lydian", "major-pentatonic"),
+            "minor": ("minor", "dorian", "phrygian", "harmonic-minor", "minor-pentatonic", "blues")}
+FLAVOUR_MARGIN = 0.04
+UNUSED_FLOOR = 0.03       # a scale degree played less than this share counts as unused
+UNUSED_COST = 0.4         # per unused degree, as a share of the scale: prefer the scale you use
 MODES = tuple(k for k in SCALES if k != "chromatic")
 
 # Key palettes (harmony.keys): how a palette key is scored against what you played: the
@@ -73,6 +84,28 @@ def parse_keys(text: str) -> list[tuple[int, str]]:
                              f"{', '.join(MODES)}")
         out.append((tonic, mode))
     return out
+
+
+def scale_fit(hist: list[float], tonic: int, mode: str) -> float:
+    """How well a scale explains a pitch-class histogram: its share of what you played,
+    less what falls outside it, less the degrees it has that you barely used."""
+    total = sum(hist) or 1.0
+    share = [x / total for x in hist]
+    pcs = {(tonic + i) % 12 for i in SCALES[mode]}
+    inside = sum(share[pc] for pc in pcs)
+    unused = sum(max(0.0, UNUSED_FLOOR - share[pc]) for pc in pcs) / UNUSED_FLOOR
+    return inside - OUTSIDE_KEY_COST * (1 - inside) - UNUSED_COST * unused / len(pcs)
+
+
+def flavour(hist: list[float], tonic: int, quality: str,
+            current: Optional[tuple[int, str]] = None) -> str:
+    """The colour of a major or minor key: the plain scale, a mode, a pentatonic or the blues,
+    whichever fits best by a margin (the current one is kept unless clearly beaten)."""
+    options = FLAVOURS.get(quality, (quality,))
+    fits = {m: scale_fit(hist, tonic, m) for m in options}
+    keep = current[1] if current and current[0] == tonic and current[1] in fits else quality
+    best = max(fits, key=fits.get)
+    return best if fits[best] > fits[keep] + FLAVOUR_MARGIN else keep
 
 
 def palette_scores(hist: list[float], palette: list[tuple[int, str]]) -> list[tuple[float, int, str]]:
@@ -158,7 +191,8 @@ class ModalModel:
         h = cfg.harmony
         self.key_memory = PitchClassTracker(h.half_life_s)
         self.chord_memory = PitchClassTracker(h.chord_memory_s)
-        self.key: Optional[tuple[int, str]] = None        # (tonic, 'major'|'minor'|'chromatic')
+        self.key: Optional[tuple[int, str]] = None        # (tonic, a mode of SCALES)
+        self._base: Optional[tuple[int, str]] = None      # auto: (tonic, 'major'|'minor')
         self.current: Optional[tuple[int, str]] = None    # (root, suffix) last proposed
         self._current_since: Optional[float] = None        # when it became the chord
         self._resting: Optional[tuple[int, float]] = None  # (root, until): held too long
@@ -217,9 +251,11 @@ class ModalModel:
             return
         scores = key_scores(hist, tonic, mode)
         best = max(scores)
-        current = next((s for s in scores if self.key and (s[1], s[2]) == self.key), None)
+        current = next((s for s in scores if self._base and (s[1], s[2]) == self._base), None)
         if current is None or best[0] > current[0] + h.key_margin:
-            self.key = (best[1], best[2])
+            self._base = (best[1], best[2])
+        tonic, quality = self._base
+        self.key = (tonic, flavour(hist, tonic, quality, self.key) if h.auto_modes else quality)
 
     def propose(self, now: float) -> Optional[Voicing]:
         self._sync()
