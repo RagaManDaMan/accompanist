@@ -432,6 +432,14 @@ and choosing the ones that fit the chord and resemble what you just played.
   `practice --sruti F#`), the swaras sung, and the rāga they fit best among the 72
   melakartas and the janya and Hindustani rāgas in `indian/` (direction, ārohaṇa against
   avarohaṇa, breaks ties; rāgas with the same swaras are named together). No tags needed.
+- `accompanist library ragas datasets/RagaDataset` learns how 70 rāgas (40 Carnatic, 30
+  Hindustani) are actually sung, from the pitch tracks of 780 concert recordings in the
+  Indian Art Music Raga Recognition Dataset (features), CompMusic, CC BY 4.0 (Gulati, Serrà,
+  Ganguli, Şentürk & Serra; zenodo.org/records/7278506): how long each swara is dwelt on,
+  and from which direction it is reached. `library stats` then adds, for each session, the
+  nearest rāgas as sung in concert beside the reading from scales. On the dataset's own
+  Carnatic recordings (each left out in turn) it names the rāga first about 4 times in 5;
+  on noisy class recordings it is still a second opinion.
 - `accompanist practice` listens while you practise or teach, and banks every musical
   phrase (no band plays). Speech is left out: short, unsteady, off-pitch syllables don't
   count as phrases. Free-time phrases (ālāp, ālāpana, cadenzas) are tagged `rubato`.

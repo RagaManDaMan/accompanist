@@ -217,6 +217,25 @@ def cmd_library(args) -> int:
         print(f"Built {n} grooves and fills into {out}\n  from the {CREDIT}.\n"
               f"Set [drums] style = \"jazz\" (or latin, funk, soul, rock...) in a song to use them.")
         return 0
+    if args.action == "ragas":
+        from .ragabook import CREDIT, build
+
+        if len(args.paths) != 1:
+            print("accompanist library ragas DATASET_FOLDER  (the Indian Art Music Raga Recognition"
+                  " Dataset (features), unzipped: the RagaDataset folder)")
+            return 1
+        out = Path(cfg.library.path).expanduser() / "ragas.json"
+        seen: set = set()
+
+        def progress(tradition, name):
+            if (tradition, name) not in seen:
+                seen.add((tradition, name))
+                print(f"\r\x1b[K  {tradition}: {len(seen)} rāgas ({name})", end="", flush=True)
+
+        n = build(Path(args.paths[0]).expanduser(), out, progress)
+        print(f"\nLearnt {n} rāgas into {out}\n  from the {CREDIT}.\n"
+              f"`accompanist library stats` now names your sessions' rāgas from these.")
+        return 0
     if args.action == "stats":
         tags: dict[str, int] = {}
         keys: dict[str, int] = {}
@@ -233,7 +252,7 @@ def cmd_library(args) -> int:
         top = sorted(keys.items(), key=lambda kv: -kv[1])[:8]
         if top:
             print("  keys (Western view): " + ", ".join(f"{k} {n}" for k, n in top))
-        print_raga_landscape(book.phrases)
+        print_raga_landscape(book.phrases, cfg.library.path)
         return 0
     files: list[Path] = []
     for p in map(lambda s: Path(s).expanduser(), args.paths):
@@ -262,9 +281,12 @@ def cmd_library(args) -> int:
     return 0
 
 
-def print_raga_landscape(phrases) -> None:
-    """Sessions of practice and class: each one's Sa and rāga, and the rāgas overall."""
+def print_raga_landscape(phrases, library=None) -> None:
+    """Sessions of practice and class: each one's Sa and rāga, and the rāgas overall. With
+    rāgas learnt from recordings (library ragas), named from how they're sung; else from
+    their scales."""
     from . import ragam
+    from .ragabook import RagaBook
 
     sessions: dict[str, list] = {}
     for ph in phrases:
@@ -272,20 +294,25 @@ def print_raga_landscape(phrases) -> None:
             sessions.setdefault(ph.source, []).append(ph)
     if not sessions:
         return
+    book = RagaBook.open(library) if library else None
     totals: dict[str, int] = {}
-    print("  rāga view of your practice and classes:")
+    print("  rāga view of your practice and classes"
+          + (f" (by scales, and nearest of {len(book.ragas)} rāgas as sung in concert):" if book
+             else " (by scales; `library ragas` adds how rāgas are sung, from recordings):"))
     for name, phs in sessions.items():
         given = next((p.sa for p in phs if p.sa is not None), None)
         sa, conf = (given, 1.0) if given is not None else ragam.sa_of(phs)
         prof = ragam.profile(phs, sa)
-        up, down = ragam.directions(phs, sa)
-        best = ragam.candidates(prof, up, down, top=2)
+        best = ragam.identify(phs, sa, None, top=2)
         label = " / ".join(best[0][1]) if best else "?"
         other = f" (or {' / '.join(best[1][1])})" if len(best) > 1 else ""
         kind = "class" if any("class" in p.tags for p in phs) else "practice"
         found = "" if given is not None else ", found"
         print(f"    {name} ({kind}, {len(phs)} phrases): Sa = {cfgmod.NOTE_NAMES[sa]}{found}; "
-              f"{label}{other}; swaras {' '.join(ragam.swaras_used(prof))}")
+              f"by its swaras {label}{other}; swaras {' '.join(ragam.swaras_used(prof))}")
+        if book is not None:                     # the second opinion: as rāgas are sung
+            sung = ragam.identify(phs, sa, book, top=3)
+            print("      as sung in concert, nearest: " + ", ".join(n[0] for _, n in sung))
         parts = ragam.segments(phs, sa)
         if len(parts) > 1:                       # a session in more than one rāga
             print("      through the session: " + " → ".join(
@@ -1458,9 +1485,10 @@ def main(argv=None) -> int:
     add_chart_args(sp)
     sp = sub.add_parser("library", help="your phrase library: add takes and recordings, or stats")
     sp.add_argument("-c", "--config", default="config.toml")
-    sp.add_argument("action", choices=("add", "stats", "drums"))
+    sp.add_argument("action", choices=("add", "stats", "drums", "ragas"))
     sp.add_argument("paths", nargs="*", help="add: takes (.jsonl), recordings (.wav), or folders;"
-                                             " drums: the Groove MIDI Dataset folder")
+                                             " drums: the Groove MIDI Dataset folder; ragas: the"
+                                             " RagaDataset folder (Raga Recognition Dataset)")
     sp.add_argument("--tag", action="append", default=[],
                     help="label these phrases (e.g. --tag class --tag alap); repeatable")
     sp = sub.add_parser("practice", help="listen while you practise: your phrases go into the "

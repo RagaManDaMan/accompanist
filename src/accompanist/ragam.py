@@ -122,17 +122,29 @@ def swaras_used(prof: np.ndarray, floor: float = UNUSED_FLOOR * 1.5) -> list[str
     return [names[i] for i in sorted(used)]
 
 
-def segments(phrases: list, sa: int, window: int = SEGMENT_PHRASES) -> list[tuple[int, int, list[str]]]:
+def identify(phrases: list, sa: int, book=None, top: int = 3) -> list[tuple[float, list[str]]]:
+    """The rāgas these phrases fit best: from how rāgas are sung (a RagaBook, learnt from
+    recordings) when there is one, else from their scales (candidates)."""
+    if book is not None:
+        from .ragabook import features, phrase_notes
+
+        return [(score, [r.label]) for score, r in
+                book.rank(features(phrase_notes(phrases, sa)), top)]
+    up, down = directions(phrases, sa)
+    return candidates(profile(phrases, sa), up, down, top)
+
+
+def segments(phrases: list, sa: int, window: int = SEGMENT_PHRASES, book=None
+             ) -> list[tuple[int, int, list[str]]]:
     """[(first, end, rāga names)]: the session read a few phrases at a time (phrases are kept in
     the order sung), neighbouring windows in the same rāga joined; a window too unclear to
     name (its best fit under SEGMENT_MIN_SCORE) joins its neighbour."""
     out: list[tuple[int, int, list[str]]] = []
     for i in range(0, len(phrases), window):
         part = phrases[i:i + window]
-        prof = profile(part, sa)
-        up, down = directions(part, sa)
-        best = candidates(prof, up, down, top=1)
-        names = best[0][1] if best and best[0][0] >= SEGMENT_MIN_SCORE else None
+        best = identify(part, sa, book, top=1)
+        floor = SEGMENT_MIN_SCORE if book is None else 0.0
+        names = best[0][1] if best and best[0][0] >= floor else None
         end = i + len(part)
         if out and (names is None or names == out[-1][2]):
             out[-1] = (out[-1][0], end, out[-1][2])

@@ -61,3 +61,38 @@ def test_rāgas_with_the_same_swaras_are_reported_together():
     prof = ragam.profile(phs, 0)
     names = ragam.candidates(prof)[0][1]
     assert "mohanam" in names and len(names) >= 1
+
+
+def test_a_pitch_track_becomes_held_notes_and_glides_are_left_out():
+    import numpy as np
+
+    from accompanist.ragabook import HOP_S, notes_from_pitch
+
+    sa = 200.0
+    held = lambda semis, s: [sa * 2 ** (semis / 12)] * int(s / HOP_S)
+    glide = list(sa * 2 ** (np.linspace(0, 4, int(0.2 / HOP_S)) / 12))      # S up to G3, sliding
+    hz = np.array(held(0, 0.5) + glide + held(4, 0.3) + [0.0] * 50 + held(7, 0.4))
+    notes = notes_from_pitch(hz, sa)
+    assert [k for _, k, _ in notes] == [0, 4, 7]
+    assert abs(notes[0][2] - 0.5) < 0.02
+
+
+def test_learnt_profiles_name_the_nearest_raga(tmp_path):
+    import json
+
+    import numpy as np
+
+    from accompanist.ragabook import RagaBook, features
+
+    mohanam = [(i * 0.5, k, 0.4) for i, k in enumerate([0, 2, 4, 7, 9, 12, 9, 7, 4, 2, 0] * 5)]
+    hamsa = [(i * 0.5, k, 0.4) for i, k in enumerate([0, 2, 4, 7, 11, 12, 11, 7, 4, 2, 0] * 5)]
+    data = {"credit": "test", "ragas": [
+        {"name": "Mōhanaṁ", "tradition": "Carnatic", "recordings": 1,
+         "profile": features(mohanam).tolist()},
+        {"name": "Hamsadhvāni", "tradition": "Carnatic", "recordings": 1,
+         "profile": features(hamsa).tolist()}]}
+    (tmp_path / "ragas.json").write_text(json.dumps(data))
+    book = RagaBook.open(tmp_path)
+    sung = [(t, k, d) for t, k, d in mohanam if k != 2]                # a little different
+    (score, best), _ = book.rank(features(sung), top=2)
+    assert best.name == "Mōhanaṁ" and best.label == "Mōhanaṁ (C)" and 0 < score <= 1
