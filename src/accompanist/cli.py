@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import os
 import queue
 import re
 import select
@@ -1451,6 +1452,42 @@ def cmd_params(args) -> int:
     return 0
 
 
+HOME_NOTE = Path("~/.accompanist/home").expanduser()   # where your config.toml lives
+PATH_ARGS = ("take", "paths", "record_audio", "record", "wav", "file")
+
+
+def find_home(args) -> None:
+    """Your accompanist folder is the one with your config.toml. Run from there and it is
+    remembered; run from anywhere else (another folder, a new terminal) and the accompanist
+    goes there first, so songs/, takes/ and the config are found. Paths you typed still mean
+    what they meant where you typed them."""
+    here = Path.cwd()
+    if Path("config.toml").exists():
+        try:
+            if not HOME_NOTE.exists() or HOME_NOTE.read_text().strip() != str(here):
+                HOME_NOTE.parent.mkdir(parents=True, exist_ok=True)
+                HOME_NOTE.write_text(str(here))
+        except OSError:
+            pass
+        return
+    if getattr(args, "config", "config.toml") not in ("config.toml", None):
+        return                                   # -c given: as typed
+    try:
+        home = Path(HOME_NOTE.read_text().strip())
+    except OSError:
+        return
+    if not (home / "config.toml").is_file() or home == here:
+        return
+    for name in PATH_ARGS:                       # what you typed, from where you typed it
+        v = getattr(args, name, None)
+        if isinstance(v, str) and v != "auto":
+            setattr(args, name, str((here / Path(v).expanduser()).resolve()))
+        elif isinstance(v, list):
+            setattr(args, name, [str((here / Path(p).expanduser()).resolve()) for p in v])
+    os.chdir(home)
+    print(f"(using your accompanist folder, {home})")
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="accompanist", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1554,6 +1591,7 @@ def main(argv=None) -> int:
                     help="only the few controls a simple interface shows (the feel knobs)")
     args = p.parse_args(argv)
     try:
+        find_home(args)
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
                 "listen": cmd_listen, "learn": cmd_learn,
