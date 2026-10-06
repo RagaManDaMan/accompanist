@@ -1,0 +1,16 @@
+# Latin: a real drummer's latin grooves, congas and shaker, the piano comping close chords.
+[drums]
+enabled = true
+style = "latin"
+pattern = "basic"
+[percussion]
+enabled = true
+pattern = "latin"
+tuned = false
+[piano]
+enabled = true
+comp = 0.4
+voicing = "close"
+[pulse]
+movement = 0.7
+rhythm = 0.5

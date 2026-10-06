@@ -425,8 +425,13 @@ shape = "tag"      # chord | button | tag | ritardando | piano-tag | random
   finish = "tag"
   ```
 
-  A set's plan comes over the song file's own `[start]` and `[ending]`, so the same song
-  can start one way at one gig and another way at the next. `--set NAME` says which set
+  The menu also moves the **key** (`<` `>` a semitone down or up: the chart, key palette and
+  root move together) and tries a **style pack** (type its name: `jazz-ballad`, `swing`,
+  `latin`, `pop`, `fusion`, or `as-written`), and `k` keeps those too (`transpose = 2`,
+  `style = "latin"`). A style pack (styles/NAME.toml; add your own in ./styles) sets how
+  the drums, bass, piano, percussion and pad play; the sounds stay the song's patch.
+  A set's plan comes over the song file's own settings, so the same song can start one
+  way, in one key and style, at one gig, and another way at the next. `--set NAME` says which set
   (needed only when the song is in more than one); `--start`/`--finish` begin with others.
 - The stage screen shows this song's start and finish (change them there for this run) and
   the set's, song by song.

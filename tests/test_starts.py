@@ -136,3 +136,42 @@ def test_rehearse_tries_others_from_the_menu_and_keeps_one(tmp_path, monkeypatch
     monkeypatch.setattr(cli.time, "monotonic", lambda: next(clock))
     assert cli.main(["rehearse", "--song", "waltz"]) == 0
     assert c.set_plan("gig")["example-waltz"] == {"start": "intro", "bars": 4, "finish": "tag"}
+
+
+def test_a_plan_can_move_the_key_and_choose_a_style(tmp_path, monkeypatch):
+    a_set(tmp_path, monkeypatch)
+    c.save_plan("gig", "example-waltz", start="count", finish="chord", transpose=-2, style="latin")
+    entry = c.set_plan("gig")["example-waltz"]
+    assert entry["transpose"] == -2 and entry["style"] == "latin"
+    cfg = c.load(None, overrides=c.plan_layers(entry), song="example-waltz")
+    assert cfg.song.transpose == -2 and cfg.percussion.enabled and cfg.drums.style == "latin"
+    with pytest.raises(c.ConfigError, match="style"):
+        c.save_plan("gig", "example-waltz", style="polka")
+
+
+def test_transpose_moves_the_keys_the_root_and_a_chart():
+    cfg = c.load(None, overrides={"song": {"transpose": 2}, "harmony": {"keys": "F lydian, D minor"}})
+    assert cfg.harmony.keys == "G lydian, E minor"
+    cfg = c.load(None, overrides={"song": {"transpose": -1}, "harmony": {"root": "C"}})
+    assert cfg.harmony.root == "B"
+    cfg = c.load(None, overrides={"song": {"transpose": 3}}, song="lady-sings-the-blues")
+    assert cfg.harmony.transpose == 3
+
+
+def test_every_style_pack_loads_on_every_song():
+    for style in c.available_styles():
+        for song in c.available_songs():
+            c.load(None, overrides=c.plan_layers({"style": style}), song=song)
+
+
+def test_rehearse_keeps_key_and_style_too(tmp_path, monkeypatch):
+    a_set(tmp_path, monkeypatch)
+    answers = iter([">>", "swing", "k", "q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    monkeypatch.setattr(cli, "open_output", lambda cfg: RecordingPort())
+    monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+    clock = iter(x * 0.01 for x in range(10 ** 7))
+    monkeypatch.setattr(cli.time, "monotonic", lambda: next(clock))
+    assert cli.main(["rehearse", "--song", "waltz"]) == 0
+    entry = c.set_plan("gig")["example-waltz"]
+    assert entry["transpose"] == 2 and entry["style"] == "swing"

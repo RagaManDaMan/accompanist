@@ -1193,8 +1193,9 @@ def cmd_run(args) -> int:
     set_cards = []                             # the reckoner for the set, on the stage screen
     if stage is not None and set_songs:
         from .reckoner import card
-        set_cards = [card(cfgmod.load(args.config, args.preset, song_overrides(args, n), song=n), n)
-                     for n in set_songs]
+        plan = cfgmod.set_plan(args.set)
+        set_cards = [card(cfgmod.load(args.config, args.preset, song_overrides(args, n), song=n), n,
+                          plan.get(n, {}).get("style")) for n in set_songs]
     if select_patch(out, cfg):
         print(f"MainStage patch {cfg.song.patch} (channel {cfg.output.patch_channel})")
     apply_mix(out, cfg)
@@ -1406,14 +1407,15 @@ def cmd_reckoner(args) -> int:
         songs = [args.song] if args.song else cfgmod.available_songs()
         title = None
     for i, name in enumerate(songs):
-        cfg = cfgmod.load(args.config, overrides=cfgmod.plan_overrides(args.set, name) or None,
-                          song=name)
-        print(format_card(card(cfg, name), i + 1 if title else None) + "\n")
+        entry = cfgmod.set_plan(args.set).get(name, {}) if args.set else {}
+        cfg = cfgmod.load(args.config, overrides=cfgmod.plan_layers(entry) or None, song=name)
+        print(format_card(card(cfg, name, entry.get("style")), i + 1 if title else None) + "\n")
     print("Choose a song's start and finish by ear, and keep them for the set:\n"
           "  accompanist rehearse --set NAME --song SONG\n"
           "Or in the song's file (songs/NAME.toml), for every set:\n"
           "  [start]  shape = \"count\" | \"intro\" | \"drums\" | \"you\" | \"drone\"   bars = 4\n"
           "  [ending] shape = \"chord\" | \"button\" | \"tag\" | \"ritardando\" | \"piano-tag\"\n"
+          f"Styles (rehearse, or style = in a set's plan): {', '.join(cfgmod.available_styles())}\n"
           "Hear one, the band alone:  accompanist rehearse --song NAME "
           "[--start SHAPE] [--finish SHAPE]")
     return 0
@@ -1489,43 +1491,53 @@ def sets_with(song: str) -> list[str]:
     return out
 
 
-def rehearse_menu(start: str, finish: str, bars: int, kept_in: Optional[str]) -> str:
+def rehearse_menu(ch: dict, keys: str, kept_in: Optional[str]) -> str:
     from .reckoner import FINISH_SHAPES, START_SHAPES
 
-    starts = "  ".join(f"{i + 1} {s}{'*' if s == start else ''}" for i, s in enumerate(START_SHAPES))
-    finishes = "  ".join(f"{chr(97 + i)} {f}{'*' if f == finish else ''}"
+    mark = lambda on: "*" if on else ""
+    starts = "  ".join(f"{i + 1} {s}{mark(s == ch['start'])}" for i, s in enumerate(START_SHAPES))
+    finishes = "  ".join(f"{chr(97 + i)} {f}{mark(f == ch['finish'])}"
                          for i, f in enumerate(FINISH_SHAPES[:-1]))
-    keep = f"k = keep this pair for the set '{kept_in}'" if kept_in else "k = keep it for a set"
-    return (f"\n  Starts:   {starts}   (+/- intro bars: {bars})\n"
+    styles = "  ".join(f"{s}{mark(s == (ch['style'] or 'as-written'))}"
+                       for s in ["as-written"] + cfgmod.available_styles())
+    t = ch["transpose"] or 0
+    keep = f"k = keep it all for the set '{kept_in}'" if kept_in else "k = keep it for a set"
+    return (f"\n  Starts:   {starts}   (+/- intro bars: {ch['bars']})\n"
             f"  Finishes: {finishes}\n"
-            f"  Enter = play again   a number and/or letter = try that (e.g. 2c)   "
-            f"{keep}   q = quit\n> ")
+            f"  Key:      < / > a semitone down / up (now {t:+d}: {keys})\n"
+            f"  Style:    {styles}   (type its name)\n"
+            f"  Enter = play again   e.g. 2c or 3d> = try that   {keep}   q = quit\n> ")
 
 
 def cmd_rehearse(args) -> int:
     """Hear a song's start and finish, the band alone (holding the home chord, or following
-    the chart), then try others from a menu and keep the pair you like in the set list."""
-    from .reckoner import FINISH_SHAPES, START_SHAPES, card, format_card
+    the chart), then try other starts, finishes, keys and styles from a menu and keep what
+    you like in the set list."""
+    from .reckoner import FINISH_SHAPES, START_SHAPES, card, format_card, harmony
 
-    plan = cfgmod.plan_overrides(args.set, args.song)
-    base = cfgmod.load(args.config, overrides=plan or None, song=args.song)
-    start = args.start or base.start.shape
-    finish = args.finish or base.ending.shape
-    bars = args.bars or base.start.bars
+    entry = cfgmod.set_plan(args.set).get(args.song, {}) if args.set else {}
+    target = args.set or (lambda s: s[0] if len(s) == 1 else None)(sets_with(args.song))
+    if not args.set and target:
+        entry = cfgmod.set_plan(target).get(args.song, {})
+    base = cfgmod.load(args.config, overrides=cfgmod.plan_layers(entry) or None, song=args.song)
+    ch = {"start": args.start or base.start.shape, "finish": args.finish or base.ending.shape,
+          "bars": args.bars or base.start.bars,
+          "transpose": args.transpose if args.transpose is not None else base.song.transpose,
+          "style": args.style or entry.get("style")}
     print(format_card(card(base, args.song)))
     out = SafeOutput(open_output(base.output))
     if select_patch(out, base):
         time.sleep(PATCH_SETTLE_S)
     apply_mix(out, base)
-    target = args.set or (lambda s: s[0] if len(s) == 1 else None)(sets_with(args.song))
     try:
         while True:
-            over = {**plan, "start": {"shape": "count" if start == "you" else start, "bars": bars},
-                    "ending": {**plan.get("ending", {}), "shape": finish}}
-            cfg = cfgmod.load(args.config, overrides=over, song=args.song)
-            print(f"\nPlaying: start {start}" + (f" ({bars} bars)" if start in ("intro", "drums") else "")
-                  + (" (with a count: a 'you' start needs you)" if start == "you" else "")
-                  + f", four bars, finish {finish}.   (Ctrl-C stops it)")
+            layers = cfgmod.plan_layers({**ch, "start": "count" if ch["start"] == "you" else ch["start"]})
+            cfg = cfgmod.load(args.config, overrides=layers, song=args.song)
+            print(f"\nPlaying: start {ch['start']}"
+                  + (f" ({ch['bars']} bars)" if ch["start"] in ("intro", "drums") else "")
+                  + (" (with a count: a 'you' start needs you)" if ch["start"] == "you" else "")
+                  + f", four bars, finish {ch['finish']}; {harmony(cfg)}"
+                  + (f", {ch['style']} style" if ch["style"] else "") + ".   (Ctrl-C stops it)")
             rehearsal = Rehearsal(Controller(cfg, out), cfg)
             try:
                 while not rehearsal.step(time.monotonic(), say):
@@ -1536,7 +1548,7 @@ def cmd_rehearse(args) -> int:
             if args.once:
                 break
             try:
-                answer = input(rehearse_menu(start, finish, bars, target)).strip().lower()
+                answer = input(rehearse_menu(ch, harmony(cfg), target)).strip().lower()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
@@ -1555,19 +1567,41 @@ def cmd_rehearse(args) -> int:
                     if not pick.isdigit() or not 1 <= int(pick) <= len(options):
                         continue
                     where = target = options[int(pick) - 1]
-                path = cfgmod.save_plan(where, args.song, start=start, finish=finish,
-                                        bars=bars if start in ("intro", "drums") else None)
-                print(f"Kept in {path}: {args.song} starts '{start}' and finishes '{finish}'.")
+                path = cfgmod.save_plan(
+                    where, args.song, start=ch["start"], finish=ch["finish"],
+                    bars=ch["bars"] if ch["start"] in ("intro", "drums") else None,
+                    transpose=ch["transpose"] or None, style=ch["style"])
+                print(f"Kept in {path}: {args.song}: start '{ch['start']}', finish "
+                      f"'{ch['finish']}'" + (f", {ch['transpose']:+d} semitones" if ch["transpose"] else "")
+                      + (f", {ch['style']} style" if ch["style"] else "") + ".")
                 continue
-            for ch in answer:
-                if ch.isdigit() and 1 <= int(ch) <= len(START_SHAPES):
-                    start = START_SHAPES[int(ch) - 1]
-                elif "a" <= ch < chr(97 + len(FINISH_SHAPES) - 1):
-                    finish = FINISH_SHAPES[ord(ch) - 97]
-                elif ch == "+":
-                    bars = min(16, bars + 1)
-                elif ch == "-":
-                    bars = max(1, bars - 1)
+            word = answer.replace("-", "")
+            if word in ("aswritten", "written", "nostyle", "none"):
+                ch["style"] = None
+                continue
+            if len(answer) > 2 and answer.isalpha() or "-" in answer.strip("-"):   # a style
+                try:
+                    name = cfgmod.resolve_name(answer, cfgmod.available_styles(), "style")
+                except cfgmod.ConfigError as e:
+                    print(f"  {e}")
+                    continue
+                if name in cfgmod.available_styles():
+                    ch["style"] = name
+                else:
+                    print(f"  no style '{answer}': {', '.join(cfgmod.available_styles())}")
+                continue
+            for c in answer:
+                if c.isdigit() and 1 <= int(c) <= len(START_SHAPES):
+                    ch["start"] = START_SHAPES[int(c) - 1]
+                elif "a" <= c < chr(97 + len(FINISH_SHAPES) - 1):
+                    ch["finish"] = FINISH_SHAPES[ord(c) - 97]
+                elif c == "+":
+                    ch["bars"] = min(16, ch["bars"] + 1)
+                elif c == "-":
+                    ch["bars"] = max(1, ch["bars"] - 1)
+                elif c in "<>":
+                    t = (ch["transpose"] or 0) + (1 if c == ">" else -1)
+                    ch["transpose"] = max(-11, min(11, t))
     finally:
         out.panic()
     return 0
@@ -1696,6 +1730,7 @@ _accompanist() {
     --song)   compadd -- ${(f)"$(accompanist complete songs 2>/dev/null)"}; return ;;
     --set)    compadd -- ${(f)"$(accompanist complete sets 2>/dev/null)"}; return ;;
     --preset) compadd -- ${(f)"$(accompanist complete presets 2>/dev/null)"}; return ;;
+    --style)  compadd -- ${(f)"$(accompanist complete styles 2>/dev/null)"}; return ;;
     --start)  compadd -- count intro drums you drone; return ;;
     --finish) compadd -- chord button tag ritardando piano-tag random; return ;;
   esac
@@ -1755,7 +1790,7 @@ def main(argv=None) -> int:
     sp = sub.add_parser("completion", help="Tab completion for zsh: add "
                         "eval \"$(accompanist completion)\" to ~/.zshrc")
     sp = sub.add_parser("complete")             # (for the completion script: names, one a line)
-    sp.add_argument("what", choices=("songs", "sets", "presets", "commands", "options"))
+    sp.add_argument("what", choices=("songs", "sets", "presets", "styles", "commands", "options"))
     sp.add_argument("command", nargs="?", default=None)
     sp = sub.add_parser("reckoner", help="how each song starts and finishes (a set, a song, "
                                           "or all songs): settle it before the show")
@@ -1768,6 +1803,10 @@ def main(argv=None) -> int:
     sp.add_argument("--song", required=True, help="the song (songs/NAME.toml)")
     sp.add_argument("--set", default=None, help="the set whose plan to hear and keep it in")
     sp.add_argument("--bars", type=int, default=None, help="intro / drums start: how many bars")
+    sp.add_argument("--transpose", type=int, default=None, metavar="N",
+                    help="in another key: N semitones up (+) or down (-)")
+    sp.add_argument("--style", default=None, help="a style pack (styles/NAME.toml): jazz-ballad, "
+                                                  "swing, latin, pop, fusion")
     sp.add_argument("--once", action="store_true", help="play it once, no menu")
     sp.add_argument("--start", default=None, choices=("count", "intro", "drums", "you", "drone"),
                     help="try another start than the song's")
@@ -1849,14 +1888,16 @@ def main(argv=None) -> int:
                      if o.startswith("--")]
         else:
             names = {"songs": cfgmod.available_songs, "sets": cfgmod.available_sets,
-                     "presets": cfgmod.available_presets}[args.what]()
+                     "presets": cfgmod.available_presets,
+                     "styles": cfgmod.available_styles}[args.what]()
         print("\n".join(names))
         return 0
     try:
         find_home(args)
         for name, names, what in (("song", cfgmod.available_songs, "song"),
                                   ("set", cfgmod.available_sets, "set"),
-                                  ("preset", cfgmod.available_presets, "preset")):
+                                  ("preset", cfgmod.available_presets, "preset"),
+                                  ("style", cfgmod.available_styles, "style")):
             v = getattr(args, name, None)              # part of a name is enough
             if isinstance(v, str) and v:
                 setattr(args, name, cfgmod.resolve_name(v, names(), what))

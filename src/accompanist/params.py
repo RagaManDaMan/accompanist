@@ -774,6 +774,10 @@ PARAMS: list[Param] = [
       "Program change sent when this song is loaded (in a set, or with --song), so MainStage "
       "(or your DAW) switches to the song's sounds: the Program Change number as MainStage "
       "shows it, 1-128 (sent as 0-127 on the wire).", "Song", 1, 128, 1, nullable=True),
+    P("song.transpose", int, 0, "Song key",
+      "Play the song this many semitones up (+) or down (-) from how it is written: its chart, "
+      "key palette and root move together (a set's plan: transpose = 2).", "Song", -11, 11, 1,
+      live=False),
     P("song.count", int, None, "Song meter",
       "Beats per bar for the count-in and the band: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 = 3+2+2.",
       "Song", 3, 7, 1, nullable=True),

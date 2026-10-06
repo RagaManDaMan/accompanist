@@ -83,10 +83,11 @@ def harmony(cfg: Any) -> str:
     return "key heard from you"
 
 
-def card(cfg: Any, name: str) -> dict:
+def card(cfg: Any, name: str, style: Optional[str] = None) -> dict:
     """One song's line in the reckoner (JSON-able, for the stage screen too)."""
     s = cfg.song
-    return {"name": name, "title": s.title or name, "patch": s.patch,
+    return {"name": name, "title": s.title or name, "patch": s.patch, "style": style,
+            "transpose": s.transpose,
             "meter": METERS.get(s.count, "") if s.count else "",
             "tempo": s.tempo, "harmony": harmony(cfg),
             "start_shape": cfg.start.shape, "start": describe_start(cfg),
@@ -98,7 +99,9 @@ def format_card(c: dict, number: Optional[int] = None) -> str:
     head = f"{number}. " if number is not None else ""
     facts = " · ".join(x for x in (
         f"patch {c['patch']}" if c["patch"] else "",
-        c["meter"], f"{c['tempo']:g} bpm" if c["tempo"] else "tempo from you", c["harmony"]) if x)
+        c["meter"], f"{c['tempo']:g} bpm" if c["tempo"] else "tempo from you", c["harmony"],
+        f"{c['transpose']:+d} semitones" if c.get("transpose") else "",
+        f"{c['style']} style" if c.get("style") else "") if x)
     pad = " " * len(head)
     return (f"{head}{c['title']}\n{pad}   {facts}\n"
             f"{pad}   Start  ({c['start_shape']}): {c['start']}\n"

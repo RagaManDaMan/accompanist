@@ -233,7 +233,9 @@ function render(s) {
     $("settitle").textContent = set.title || "The set";
     const html = set.cards.map((c, i) => `<li class="${i === set.index ? "now" : ""}">${i + 1}. ${c.title}` +
       `<small>${[c.meter, c.tempo ? Math.round(c.tempo) + " bpm" : "", c.harmony].filter(Boolean).join(" · ")}` +
-      `<br>start: ${c.start_shape} · finish: ${c.finish_shape}</small></li>`).join("");
+      `<br>start: ${c.start_shape} · finish: ${c.finish_shape}` +
+      `${c.transpose ? " · key " + (c.transpose > 0 ? "+" : "") + c.transpose : ""}` +
+      `${c.style ? " · " + c.style : ""}</small></li>`).join("");
     if ($("setlist").innerHTML !== html) $("setlist").innerHTML = html;
   }
   const sig = (s.voices || []).map(v => v.key).join();
