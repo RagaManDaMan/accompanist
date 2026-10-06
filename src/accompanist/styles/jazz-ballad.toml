@@ -13,6 +13,7 @@ enabled = true
 comp = 0.35
 voicing = "rootless"
 [pulse]
+line = "two"
 movement = 0.9
 rhythm = 0.2
 [pad]

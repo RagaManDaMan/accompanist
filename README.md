@@ -452,6 +452,18 @@ number turns it on or off. Changes last for this run.
   `ui.port` if 8765 is taken (it tries the next ones itself). If it can't start, the band
   plays on and the keys still work.
 
+## Walking bass
+
+`[pulse] line = "walk"`: the bass walks, a note on every beat, as a jazz bassist does: the
+root when a chord arrives; the beat before a new chord, an approach into its root (a half
+step from below or above, a step of the scale, its fifth, or now and then an enclosure:
+above, then below); between, chord tones and scale steps, never the same note twice,
+heading for where the next root lies. With a chart it knows the next chord; else it heads
+for the root on the next 1. `pulse.rhythm` adds swung "skips" (a ghosted eighth before
+the beat). `line = "two"`: the two-feel, half notes, root then fifth (or an approach),
+with pickups. `line = "shapes"` (default) keeps the bass shapes. The style packs `swing`
+(walk) and `jazz-ballad` (two-feel) use them: `accompanist rehearse --song lady --style swing`.
+
 ## Piano
 
 `[piano] enabled = true` (channel 5) answers you too, taking turns with the guitar: when your

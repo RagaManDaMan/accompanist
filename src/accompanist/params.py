@@ -303,6 +303,13 @@ PARAMS: list[Param] = [
       "Each bass note up to this many ms behind the beat (humanize).", "Pulse", 0, 60, 1),
     P("pulse.velocity_spread", int, 0, "Bass velocity spread",
       "Each bass note up to this much softer or louder.", "Pulse", 0, 40, 1),
+    P("pulse.line", str, "shapes", "Bass line",
+      "shapes: bass shapes (roots, fifths, octaves, steps into the next bar; pulse.movement); "
+      "walk: a jazz walking line, a note every beat, chord tones and scale steps heading for "
+      "the next chord, approached by a half step, a scale step, its fifth or an enclosure "
+      "(pulse.rhythm adds swung skips); two: the two-feel, half notes, root and fifth, with "
+      "pickups. With a chart it knows the next chord; else it heads for the root on the next 1.",
+      "Pulse", choices=("shapes", "walk", "two")),
     P("pulse.movement", float, 0.8, "Bass movement",
       "0 = the root on every beat; higher = bass shapes more often: fifths, thirds, octaves "
       "and a step into the next bar.", "Pulse", 0, 1, 0.05),

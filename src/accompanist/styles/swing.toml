@@ -12,5 +12,6 @@ enabled = true
 comp = 0.6
 voicing = "rootless"
 [pulse]
+line = "walk"
 movement = 1.0
 rhythm = 0.1
