@@ -60,3 +60,13 @@ def test_every_section_in_a_config_file_is_read():
             cfg = c.from_dict({section: {name: value}})
             assert getattr(getattr(cfg, section), name) == value, p.key
             break
+
+
+def test_part_of_a_name_is_enough_when_it_is_clear():
+    names = ["example-waltz", "kann-pona-pokkile", "lady-sings-the-blues"]
+    assert c.resolve_name("lady", names, "song") == "lady-sings-the-blues"
+    assert c.resolve_name("Kann Pona", names, "song") == "kann-pona-pokkile"
+    assert c.resolve_name("blues", names, "song") == "lady-sings-the-blues"   # inside the name
+    assert c.resolve_name("nothing", names, "song") == "nothing"              # said later
+    with pytest.raises(c.ConfigError, match="could be"):
+        c.resolve_name("a", names, "song")

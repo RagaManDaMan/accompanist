@@ -1589,7 +1589,33 @@ def find_home(args) -> None:
         elif isinstance(v, list):
             setattr(args, name, [str((here / Path(p).expanduser()).resolve()) for p in v])
     os.chdir(home)
-    print(f"(using your accompanist folder, {home})")
+    if args.cmd != "complete":
+        print(f"(using your accompanist folder, {home})", file=sys.stderr)
+
+
+ZSH_COMPLETION = r"""
+# accompanist: Tab completes commands, and the names after --song, --set, --preset,
+# --start and --finish. Load with:  eval "$(accompanist completion)"  (in ~/.zshrc)
+_accompanist() {
+  local prev=${words[CURRENT-1]}
+  case $prev in
+    --song)   compadd -- ${(f)"$(accompanist complete songs 2>/dev/null)"}; return ;;
+    --set)    compadd -- ${(f)"$(accompanist complete sets 2>/dev/null)"}; return ;;
+    --preset) compadd -- ${(f)"$(accompanist complete presets 2>/dev/null)"}; return ;;
+    --start)  compadd -- count intro drums you drone; return ;;
+    --finish) compadd -- chord button tag ritardando piano-tag random; return ;;
+  esac
+  if (( CURRENT == 2 )); then
+    compadd -- ${(f)"$(accompanist complete commands 2>/dev/null)"}
+  elif [[ ${words[CURRENT]} == -* ]]; then
+    compadd -- ${(f)"$(accompanist complete options ${words[2]} 2>/dev/null)"}
+  else
+    _files
+  fi
+}
+(( $+functions[compdef] )) || { autoload -Uz compinit && compinit -i }
+compdef _accompanist accompanist
+"""
 
 
 def main(argv=None) -> int:
@@ -1632,6 +1658,11 @@ def main(argv=None) -> int:
                                              " RagaDataset folder (Raga Recognition Dataset)")
     sp.add_argument("--tag", action="append", default=[],
                     help="label these phrases (e.g. --tag class --tag alap); repeatable")
+    sp = sub.add_parser("completion", help="Tab completion for zsh: add "
+                        "eval \"$(accompanist completion)\" to ~/.zshrc")
+    sp = sub.add_parser("complete")             # (for the completion script: names, one a line)
+    sp.add_argument("what", choices=("songs", "sets", "presets", "commands", "options"))
+    sp.add_argument("command", nargs="?", default=None)
     sp = sub.add_parser("reckoner", help="how each song starts and finishes (a set, a song, "
                                           "or all songs): settle it before the show")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -1707,8 +1738,30 @@ def main(argv=None) -> int:
     sp.add_argument("--primary", action="store_true",
                     help="only the few controls a simple interface shows (the feel knobs)")
     args = p.parse_args(argv)
+    if args.cmd == "completion":
+        print(ZSH_COMPLETION.strip())
+        return 0
+    if args.cmd == "complete":
+        find_home(args)
+        if args.what == "commands":
+            names = [n for n in sub.choices if n not in ("complete", "completion")]
+        elif args.what == "options":
+            sp = sub.choices.get(args.command)
+            names = [o for a in (sp._actions if sp else []) for o in a.option_strings
+                     if o.startswith("--")]
+        else:
+            names = {"songs": cfgmod.available_songs, "sets": cfgmod.available_sets,
+                     "presets": cfgmod.available_presets}[args.what]()
+        print("\n".join(names))
+        return 0
     try:
         find_home(args)
+        for name, names, what in (("song", cfgmod.available_songs, "song"),
+                                  ("set", cfgmod.available_sets, "set"),
+                                  ("preset", cfgmod.available_presets, "preset")):
+            v = getattr(args, name, None)              # part of a name is enough
+            if isinstance(v, str) and v:
+                setattr(args, name, cfgmod.resolve_name(v, names(), what))
         return {"devices": cmd_devices, "monitor": cmd_monitor, "run": cmd_run,
                 "replay": cmd_replay, "simulate": cmd_simulate, "params": cmd_params,
                 "listen": cmd_listen, "learn": cmd_learn,

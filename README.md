@@ -376,6 +376,15 @@ the likelier (`percussion.triplets`, reaching full after `percussion.triplet_bui
 and past 70% of that it doubles up into eighth-note triplets. Its knob is
 `percussion.feel`.
 
+## Typing less
+
+- **Part of a name is enough:** `--song lady`, `--set fusion`, `--preset voice`, as long as
+  only one name fits (else it lists the ones that do).
+- **Tab completes** commands and the names after `--song`, `--set`, `--preset`, `--start`
+  and `--finish` (zsh, the Mac's shell). Once:
+  `echo 'eval "$(accompanist completion)"' >> ~/.zshrc`, then open a new terminal window.
+- Run it from any folder: it finds your accompanist folder (the one with config.toml).
+
 ## How do we start this song? How do we finish?
 
 Settle it before the show, song by song, as a band does in rehearsal. In the song's file:

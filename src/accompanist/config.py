@@ -297,6 +297,7 @@ def available_sets() -> list[str]:
 
 def load_set(name: str) -> tuple[str, list[str]]:
     """A set list (./sets/NAME.toml): (title, song names in order). Every song must exist."""
+    name = resolve_name(name, available_sets(), "set")
     p = USER_SETS / f"{name}.toml"
     if not p.is_file():
         raise ConfigError(f"unknown set '{name}'; available: {', '.join(available_sets()) or '(none)'}"
@@ -305,6 +306,7 @@ def load_set(name: str) -> tuple[str, list[str]]:
     songs = data.get("songs")
     if not isinstance(songs, list) or not songs or not all(isinstance(s, str) for s in songs):
         raise ConfigError(f"set '{name}' ({p}): needs songs = [\"song-name\", ...] (at least one)")
+    songs = [resolve_name(s, available_songs(), "song") for s in songs]
     missing = [s for s in songs if s not in available_songs()]
     if missing:
         raise ConfigError(f"set '{name}': no song file for {', '.join(missing)} "
@@ -317,8 +319,25 @@ def available_songs() -> list[str]:
     return sorted(names)
 
 
+def resolve_name(name: str, names: list[str], what: str) -> str:
+    """A song, set or preset by part of its name: 'lady' -> 'lady-sings-the-blues', if only
+    one name starts with it (or else, only one contains it). Spaces count as dashes and
+    case doesn't matter. Unchanged if exact or not found (the caller says what's available)."""
+    if name in names:
+        return name
+    want = name.strip().lower().replace(" ", "-").replace("_", "-")
+    for test in (lambda n: n.lower().startswith(want), lambda n: want in n.lower()):
+        found = [n for n in names if test(n)]
+        if len(found) == 1:
+            return found[0]
+        if len(found) > 1:
+            raise ConfigError(f"'{name}' could be the {what} {', '.join(found)}: say a little more")
+    return name
+
+
 def song_path(name: str) -> Path:
     """The song's file (./songs/NAME.toml first, else the built-in example)."""
+    name = resolve_name(name, available_songs(), "song")
     for d in (USER_SONGS, BUILTIN_SONGS):
         p = d / f"{name}.toml"
         if p.is_file():
