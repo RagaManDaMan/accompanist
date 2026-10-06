@@ -728,6 +728,18 @@ PARAMS: list[Param] = [
       "The pad's level during a break (share of full expression): recessed, no swells.",
       "Breaks", 0, 1, 0.05),
 
+    # ---- start (s, or a pedal: how the song begins) ----------------------------
+    P("start.shape", str, "count", "How the song starts",
+      "count: a bar of clicks, then the band on the 1 (drums and bass first, the pad once it "
+      "hears you); intro: clicks, then the band plays start.bars bars on the home chord before "
+      "you come in, the drums filling you in; drums: clicks, then the drums alone for "
+      "start.bars bars, then the rest of the band with you; you: no count, you start alone and "
+      "the band comes in when it has your tempo; drone: s holds the home chord in free time "
+      "(for an alap), and s again counts the band in.", "Start",
+      choices=("count", "intro", "drums", "you", "drone")),
+    P("start.bars", int, 4, "Intro bars",
+      "How long an intro or drums start lasts before you come in (bars).", "Start", 1, 16, 1),
+
     # ---- ending (f, or a pedal: finish the song) --------------------------------
     P("ending.shape", str, "chord", "Ending shape",
       "How f ends the song: chord (the last chord rings and fades), button (one short, tight "

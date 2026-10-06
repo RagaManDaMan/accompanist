@@ -83,6 +83,11 @@ class Engine:
         self._count_in_left = 0
         self._count_total = 0
         self._count_meter: Optional[int] = None
+        self._intro_left = 0                      # beats of the intro still to play (start.shape)
+        self._intro_shape: Optional[str] = None   # 'intro' (band) or 'drums' (drums alone)
+        self._intro_held = False                  # the intro holds the home chord
+        self.droning = False                      # start.shape drone: the home chord, free time
+        self._end_intro_next = False
         self._low_conf_since: Optional[float] = None   # unlocked pulse: when confidence dropped
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
@@ -167,7 +172,8 @@ class Engine:
         idle = float("inf") if self.last_onset_t is None else now - self.last_onset_t
         period = self.tempo.period
         voicing = self.frozen if self.chord_held else self.proposal
-        waiting = self.is_chart and not self.song_playing   # before the chart starts: no band
+        waiting = self.is_chart and not self.song_playing and not self.droning   # before the chart
+                                                                                # starts: no band
 
         self.response.key = getattr(self.harmony, "key", None)
         if self.response.playing(now) or self.piano.playing(now):
@@ -178,7 +184,7 @@ class Engine:
             self._shape_pad(now)
         if self._heart_active(now):
             pass                                     # the home chord holds
-        elif not self.cfg.pad.enabled or waiting:
+        elif not self.cfg.pad.enabled or waiting or self._drums_alone:
             self.pad.release_all()
         elif idle > self.cfg.pad.idle_release_s and not (self.locked or self.chord_held):
             self.pad.release_all()
@@ -240,6 +246,8 @@ class Engine:
                 self.groove.update(now, self.clock.period)
                 self._choose_drums()
             for beat_t in self.clock.due(now):
+                if self._end_intro_next:                      # the intro is over: you, bar 1
+                    self._end_intro()
                 bpb, bar_pos, form_beat, sure = self._bar(self.beat_count)
                 if self._count_in_left > 0:                   # count-in click: 1, 2, 3, 4
                     self._click(beat_t, first=self._count_in_left == self._count_total)
@@ -249,7 +257,15 @@ class Engine:
                         self.song_playing = True
                         if self._count_meter:                 # a song's meter, like a count-off
                             self.groove.pin(self._count_meter)
+                        self._begin_intro(now, bpb)
                     continue
+                intro = self._intro_left > 0
+                if intro:                                     # the band's intro, before you
+                    self._intro_left -= 1
+                    if self._intro_left == bpb - 1:           # its last bar: a fill brings you in
+                        self.drums.fill_requested = True
+                    if self._intro_left == 0:
+                        self._end_intro_next = True
                 if self._finish_requested and bar_pos == 0 and self._ending_bar(bpb, now):
                     self._play_ending(beat_t, now)            # the end: one last chord
                     break
@@ -260,7 +276,7 @@ class Engine:
                     self.beat_count += 1
                     continue
                 resting = self._break_beat(bar_pos, bpb, now, pulse_root)
-                if hasattr(self.harmony, "on_beat"):          # a chart: its chord for this beat
+                if hasattr(self.harmony, "on_beat") and not intro:   # a chart: its chord this beat
 
                     self.harmony.on_beat(beat_t)
                     self.proposal = self.harmony.propose(now)
@@ -270,14 +286,15 @@ class Engine:
                     if chord is not None:
                         pulse_root = chord.root_pc
                 boost = self.cfg.groove.downbeat_accent if (sure and bar_pos == 0) else 0
-                if self.cfg.pad.enabled:
+                if self.cfg.pad.enabled and not self._drums_alone:
                     self.pad.on_beat(now, bar_pos)
                     if self.pad.current and not self.chord_held:
                         pulse_root = self.pad.current.root_pc
                 if resting:                                   # a break: only the pad plays
                     self.beat_count += 1
                     continue
-                if p.enabled and pulse_root is not None:     # no harmony heard yet: no bass
+                if p.enabled and pulse_root is not None and not self._drums_alone:   # no harmony
+                                                                                    # heard: no bass
                     group = bar_pos in GROUPS.get(bpb, (0,))
                     bass_chord = next((v for v in (self.pad.current, self.proposal, voicing)
                                        if v is not None and v.root_pc == pulse_root), None)
@@ -642,6 +659,8 @@ class Engine:
         """Kill switch: silence now and stay silent until resume(). Also ends both locks, and
         stops a chart (start it again with a count-in)."""
         self.song_playing, self._count_in_left = False, 0
+        self._intro_left, self._intro_shape, self._end_intro_next = 0, None, False
+        self._intro_held = self.droning = False
         self._finish_requested, self._ending, self.finished = False, None, False
         self._final_bars, self._rit_step = None, 1.0
         self._break_requested, self._break_left, self._break_return = False, 0, False
@@ -886,6 +905,13 @@ class Engine:
                 return None                         # nothing to go on: count off with taps
         if bpm is not None:
             self.tempo.set_bpm(bpm)
+        if self.droning:                             # the drone gives way to the count
+            self.droning = False
+            self.release_chord()
+        self._intro_left, self._intro_shape, self._end_intro_next = 0, None, False
+        if self._intro_held:
+            self._intro_held = False
+            self.release_chord()
         self.clock.start(now, self.tempo.period)     # first click one beat from now
         self.song_playing = False
         self.pad.release_all()
@@ -898,6 +924,44 @@ class Engine:
         self._count_in_left = self._count_total = max(1, beats)
         self.lock(now, settle=False)
         return self.tempo.bpm
+
+    @property
+    def _drums_alone(self) -> bool:
+        return self.in_intro and self._intro_shape == "drums"
+
+    @property
+    def in_intro(self) -> bool:
+        """From the intro's 1 until you come in on the bar after it."""
+        return self._intro_left > 0 or self._end_intro_next
+
+    def _begin_intro(self, now: float, bpb: int) -> None:
+        """After the count-in: start.shape intro (the band on the home chord, or the chart's
+        first chord) or drums (the drums alone), for start.bars bars."""
+        shape = self.cfg.start.shape
+        if shape not in ("intro", "drums"):
+            return
+        self._intro_shape, self._intro_left = shape, self.cfg.start.bars * max(1, bpb)
+        if shape == "intro" and not self.chord_held:
+            chord = (self.harmony.propose(now) if self.is_chart else None) or self._home_chord()
+            if chord is not None:
+                self.chord_held, self.frozen, self._intro_held = True, chord, True
+
+    def _end_intro(self) -> None:
+        self._end_intro_next = False
+        self._intro_left, self._intro_shape = 0, None
+        self.restart_form()                       # your entry is bar 1 of the song
+        if self._intro_held:
+            self._intro_held = False
+            self.release_chord()
+
+    def start_drone(self) -> Optional[Voicing]:
+        """start.shape drone: the home chord holds in free time (an alap over it), until the
+        count-in. Returns the chord, or None (no home key known, or muted)."""
+        chord = (self.harmony.propose(0.0) if self.is_chart else None) or self._home_chord()
+        if self.muted or chord is None:                # (a chart: its first chord)
+            return None
+        self.chord_held, self.frozen, self.droning = True, chord, True
+        return chord
 
     def _click(self, t: float, first: bool) -> None:
         d = self.cfg.drums
@@ -945,6 +1009,8 @@ class Engine:
             "groove": None if self.is_chart else self.groove.label(),
             "groove_confidence": self.groove.confidence,
             "chart": getattr(self.harmony, "position", None),
+            "intro": self.in_intro,
+            "drone": self.droning,
             "song": None if not self.is_chart else
                     "playing" if self.song_playing else
                     f"count-in {self._count_in_left}" if self._count_in_left else "waiting",

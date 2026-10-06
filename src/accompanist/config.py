@@ -86,6 +86,7 @@ ResponseCfg = _section_class("response")
 GrooveCfg = _section_class("groove")
 SongCfg = _section_class("song")
 EndingCfg = _section_class("ending")
+StartCfg = _section_class("start")
 BreaksCfg = _section_class("breaks")
 InterludeCfg = _section_class("interlude")
 MixCfg = _section_class("mix")
@@ -97,7 +98,7 @@ PedalCfg = _section_class("pedal")
 SECTION_CLASSES = {"output": OutputCfg, "tempo": TempoCfg, "harmony": HarmonyCfg,
                    "pad": PadCfg, "pulse": PulseCfg, "lock": LockCfg, "dynamics": DynamicsCfg,
                    "drums": DrumsCfg, "percussion": PercussionCfg, "piano": PianoCfg, "audio": AudioCfg, "response": ResponseCfg,
-                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "mix": MixCfg, "library": LibraryCfg, "body": BodyCfg, "ui": UiCfg, "pedal": PedalCfg, "panic": PanicCfg}
+                   "groove": GrooveCfg, "song": SongCfg, "ending": EndingCfg, "start": StartCfg, "breaks": BreaksCfg, "interlude": InterludeCfg, "mix": MixCfg, "library": LibraryCfg, "body": BodyCfg, "ui": UiCfg, "pedal": PedalCfg, "panic": PanicCfg}
 assert set(SECTION_CLASSES) == set(registry.SECTIONS), "every registry section needs a class"
 
 
@@ -138,6 +139,7 @@ class Config:
     groove: Any = field(default_factory=GrooveCfg)
     song: Any = field(default_factory=SongCfg)
     ending: Any = field(default_factory=EndingCfg)
+    start: Any = field(default_factory=StartCfg)
     breaks: Any = field(default_factory=BreaksCfg)
     interlude: Any = field(default_factory=InterludeCfg)
     mix: Any = field(default_factory=MixCfg)
@@ -428,11 +430,13 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         groove=_section("groove", d.get("groove")),
         song=_section("song", d.get("song")),
         ending=_section("ending", d.get("ending")),
+        start=_section("start", d.get("start")),
         breaks=_section("breaks", d.get("breaks")),
         interlude=_section("interlude", d.get("interlude")),
         mix=_section("mix", d.get("mix")),
         library=_section("library", d.get("library")),
         body=_section("body", d.get("body")),
+        ui=_section("ui", d.get("ui")),
         pedal=_section("pedal", d.get("pedal")),
         panic=_section("panic", d.get("panic")),
         controls=_controls(d.get("controls"))[0],

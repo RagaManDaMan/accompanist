@@ -376,6 +376,36 @@ the likelier (`percussion.triplets`, reaching full after `percussion.triplet_bui
 and past 70% of that it doubles up into eighth-note triplets. Its knob is
 `percussion.feel`.
 
+## How do we start this song? How do we finish?
+
+Settle it before the show, song by song, as a band does in rehearsal. In the song's file:
+
+```toml
+[start]
+shape = "intro"    # count | intro | drums | you | drone
+bars = 4           # how long an intro or drums start lasts
+
+[ending]
+shape = "tag"      # chord | button | tag | ritardando | piano-tag | random
+```
+
+| Start | What happens |
+|---|---|
+| `count` (default) | `s`: a bar of clicks, then the band on the 1 (drums and bass first, the pad once it hears you) |
+| `intro` | `s`: clicks, then the band plays `bars` bars on the home chord (or the chart's first chord), the drums filling you in; you come in on the next 1, the top of the song |
+| `drums` | `s`: clicks, then the drums alone for `bars` bars; you come in with the band |
+| `you` | no count: you start alone and the band comes in when it has your tempo |
+| `drone` | `s`: the home chord holds in free time, for an ālāp; `s` again counts the band in |
+
+- `accompanist reckoner --set fusion-1` prints the ready reckoner: each song's patch,
+  meter, tempo and keys, its start and finish in words, and who plays. (`--song NAME` for
+  one, nothing for every song.)
+- `accompanist rehearse --song NAME` plays the song's start, four bars, and its finish, the
+  band alone, so you can hear them. `--start drums --finish ritardando` tries others
+  without editing the file.
+- The stage screen shows this song's start and finish (change them there for this run) and
+  the set's, song by song.
+
 ## The stage screen
 
 While the band runs, a page opens in your browser: the song (and where you are in a set),

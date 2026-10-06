@@ -1171,6 +1171,11 @@ def cmd_run(args) -> int:
           + ("\n      [ / ] or left / right = previous / next song in the set" if set_songs else "")
           + "\n")
     stage = open_stage(cfg, args)
+    set_cards = []                             # the reckoner for the set, on the stage screen
+    if stage is not None and set_songs:
+        from .reckoner import card
+        set_cards = [card(cfgmod.load(args.config, args.preset, chart_overrides(args), song=n), n)
+                     for n in set_songs]
     if select_patch(out, cfg):
         print(f"MainStage patch {cfg.song.patch} (channel {cfg.output.patch_channel})")
     apply_mix(out, cfg)
@@ -1317,8 +1322,8 @@ def cmd_run(args) -> int:
                 if stage is not None and now - stage_sent >= STAGE_EVERY_S:
                     from .ui import stage_state
                     stage.publish(stage_state(ctl, now, {"title": set_title, "songs": set_songs,
-                                                         "index": song_index} if set_songs else None,
-                                              list(UI_MESSAGES)))
+                                                         "index": song_index, "cards": set_cards}
+                                              if set_songs else None, list(UI_MESSAGES)))
                     stage_sent = now
                 if now - last_print >= 0.25:
                     width = shutil.get_terminal_size((100, 20)).columns - 1
@@ -1369,6 +1374,109 @@ def open_stage(cfg, args):
     if cfg.ui.open:
         stage.open_page_unless_watched()
     return stage
+
+
+def cmd_reckoner(args) -> int:
+    """How each song starts and finishes, before the show: a set, a song, or every song."""
+    from .reckoner import card, format_card
+
+    if args.set:
+        title, songs = cfgmod.load_set(args.set)
+        print(f"{title}: {len(songs)} song{'s' if len(songs) != 1 else ''}\n")
+    else:
+        songs = [args.song] if args.song else cfgmod.available_songs()
+        title = None
+    for i, name in enumerate(songs):
+        cfg = cfgmod.load(args.config, song=name)
+        print(format_card(card(cfg, name), i + 1 if title else None) + "\n")
+    print("Change a song's start or finish in its file (songs/NAME.toml):\n"
+          "  [start]  shape = \"count\" | \"intro\" | \"drums\" | \"you\" | \"drone\"   bars = 4\n"
+          "  [ending] shape = \"chord\" | \"button\" | \"tag\" | \"ritardando\" | \"piano-tag\"\n"
+          "Hear one, the band alone:  accompanist rehearse --song NAME "
+          "[--start SHAPE] [--finish SHAPE]")
+    return 0
+
+
+REHEARSE_BARS = 4          # rehearse: bars the band plays between the start and the finish
+REHEARSE_DRONE_S = 6.0     # rehearse: how long a drone start holds before the count
+
+
+class Rehearsal:
+    """rehearse, step by step (any clock, so it can be tested): the start, REHEARSE_BARS bars
+    of the band alone (the home chord held, or the chart), then the finish, until it has
+    rung out."""
+
+    def __init__(self, ctl, cfg) -> None:
+        self.ctl, self.cfg, self.eng = ctl, cfg, ctl.engine
+        self.home = self.eng._home_chord()
+        if self.home is None and not self.eng.is_chart:
+            raise cfgmod.ConfigError("no home key to rehearse on: give the song [harmony] keys "
+                                     "(or root)")
+        self.phase, self.drone_until, self.done_at = "begin", None, None
+
+    def step(self, now: float, say=lambda m: None) -> bool:
+        """Advance to `now`. True when the rehearsal is over."""
+        ctl, eng, cfg = self.ctl, self.eng, self.cfg
+        if self.phase == "begin":
+            self.phase = "start"
+            say(ctl.do("song_start", now))
+            if eng.droning:
+                self.drone_until = now + REHEARSE_DRONE_S
+        if self.drone_until is not None and now >= self.drone_until:
+            self.drone_until = None
+            say(ctl.do("song_start", now))
+        if (not eng.is_chart and self.home is not None and not eng.chord_held
+                and not eng.droning and eng.song_playing and not eng._drums_alone):
+            eng.chord_held, eng.frozen = True, self.home     # no soloist: the home chord
+        if self.phase == "start" and eng.song_playing and not eng.in_intro:
+            self.phase = "middle"
+            say(f"(the song: {REHEARSE_BARS} bars, then f)")
+        if self.phase == "middle":
+            bpb = cfg.song.count or cfg.pulse.beats_per_bar
+            if eng.beat_count >= REHEARSE_BARS * bpb - 1:
+                self.phase = "finish"
+                say(ctl.do("finish", now))
+        if self.phase == "finish" and eng.finished:
+            self.done_at = self.done_at or now
+            if now - self.done_at >= cfg.ending.ring_s + 1.0:
+                return True
+        ctl.tick(now)
+        for message in ctl.take_events():
+            say(message)
+        return False
+
+
+def cmd_rehearse(args) -> int:
+    """Play a song's start and finish, the band alone (holding the home chord, or following
+    the chart), so you can hear them before the show. --start / --finish try others."""
+    from .reckoner import card, format_card
+
+    over: dict = {}
+    if args.start:
+        over["start"] = {"shape": args.start}
+    if args.finish:
+        over["ending"] = {"shape": args.finish}
+    cfg = cfgmod.load(args.config, overrides=over or None, song=args.song)
+    print(format_card(card(cfg, args.song)) + "\n")
+    if cfg.start.shape == "you":
+        print("A 'you' start has nothing to hear without you: rehearsing it with a count.\n")
+        cfg = cfgmod.load(args.config, overrides={**over, "start": {"shape": "count"}},
+                          song=args.song)
+    out = SafeOutput(open_output(cfg.output))
+    if select_patch(out, cfg):
+        time.sleep(PATCH_SETTLE_S)
+    apply_mix(out, cfg)
+    rehearsal = Rehearsal(Controller(cfg, out), cfg)
+    try:
+        while not rehearsal.step(time.monotonic(), say):
+            time.sleep(0.005)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        out.panic()
+    print("Done. Try another: --start count|intro|drums|drone  --finish "
+          "chord|button|tag|ritardando|piano-tag")
+    return 0
 
 
 def cmd_simulate(args) -> int:
@@ -1524,6 +1632,19 @@ def main(argv=None) -> int:
                                              " RagaDataset folder (Raga Recognition Dataset)")
     sp.add_argument("--tag", action="append", default=[],
                     help="label these phrases (e.g. --tag class --tag alap); repeatable")
+    sp = sub.add_parser("reckoner", help="how each song starts and finishes (a set, a song, "
+                                          "or all songs): settle it before the show")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("--set", default=None, help="a set list (sets/NAME.toml), in order")
+    sp.add_argument("--song", default=None, help="one song")
+    sp = sub.add_parser("rehearse", help="hear a song's start and finish, the band alone")
+    sp.add_argument("-c", "--config", default="config.toml")
+    sp.add_argument("--song", required=True, help="the song (songs/NAME.toml)")
+    sp.add_argument("--start", default=None, choices=("count", "intro", "drums", "you", "drone"),
+                    help="try another start than the song's")
+    sp.add_argument("--finish", default=None,
+                    choices=("chord", "button", "tag", "ritardando", "piano-tag", "random"),
+                    help="try another finish than the song's")
     sp = sub.add_parser("practice", help="listen while you practise: your phrases go into the "
                                          "library (notes only; speech left out)")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -1594,7 +1715,8 @@ def main(argv=None) -> int:
                 "check": cmd_check, "soundcheck": cmd_soundcheck,
                 "recorder": cmd_recorder, "patch": cmd_patch,
                 "levels": cmd_levels, "kitmap": cmd_kitmap, "library": cmd_library,
-                "practice": cmd_practice, "muse": cmd_muse}[args.cmd](args)
+                "practice": cmd_practice, "muse": cmd_muse, "reckoner": cmd_reckoner,
+                "rehearse": cmd_rehearse}[args.cmd](args)
     except (cfgmod.ConfigError, PortError, TakeError, AudioError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

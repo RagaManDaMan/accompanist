@@ -206,6 +206,11 @@ def stage_state(ctl, now: float, set_info: Optional[dict], messages: list[str]) 
                        "min": p.min, "max": p.max, "step": p.step,
                        "value": getattr(getattr(cfg, section), name), "group": p.group})
     s["voices"] = voices
+    from .reckoner import FINISH_SHAPES, START_SHAPES, describe_finish, describe_start
+    s["start"] = {"key": "start.shape", "shape": cfg.start.shape, "text": describe_start(cfg),
+                  "choices": list(START_SHAPES)}
+    s["finish"] = {"key": "ending.shape", "shape": cfg.ending.shape, "text": describe_finish(cfg),
+                   "choices": list(FINISH_SHAPES)}
     s["title"] = cfg.song.title
     s["set"] = set_info
     s["messages"] = messages[-4:]

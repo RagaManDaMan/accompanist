@@ -56,6 +56,20 @@
   .voice output { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
   .switch { justify-self: end; }
+  .plan { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  .plan .row { display: grid; grid-template-columns: 92px 1fr; gap: 4px 12px; padding: 12px 14px;
+               border-top: 1px solid var(--line); align-items: start; }
+  .plan .row:first-child { border-top: 0; }
+  .plan b { font-weight: 600; }
+  .plan select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                 border-radius: 8px; padding: 4px 6px; justify-self: start; }
+  .plan p { grid-column: 2; margin: 0; color: var(--dim); font-size: .88rem; }
+  .setlist { margin: 0; padding: 0; list-style: none; background: var(--panel);
+             border: 1px solid var(--line); border-radius: var(--radius); }
+  .setlist li { padding: 10px 14px; border-top: 1px solid var(--line); font-size: .9rem; }
+  .setlist li:first-child { border-top: 0; }
+  .setlist li.now { border-left: 3px solid var(--accent); }
+  .setlist small { display: block; color: var(--dim); margin-top: 2px; }
   footer { color: var(--dim); font-size: .8rem; margin-top: 26px; }
   @media (max-width: 420px) {
     .big { grid-template-columns: repeat(2, 1fr); }
@@ -92,8 +106,19 @@
 
   <div class="messages" id="messages" aria-live="polite"></div>
 
+  <h2>This song</h2>
+  <section class="plan">
+    <div class="row"><b>Start</b><select id="startSel"></select><p id="startText"></p></div>
+    <div class="row"><b>Finish</b><select id="finishSel"></select><p id="finishText"></p></div>
+  </section>
+
   <h2>The band</h2>
   <section class="voices" id="voices"></section>
+
+  <div id="setbox" hidden>
+    <h2 id="settitle">The set</h2>
+    <ol class="setlist" id="setlist"></ol>
+  </div>
 
   <footer>The same keys work here as in the terminal. Changes last for this run.</footer>
 </main>
@@ -170,6 +195,15 @@ function buildVoices(voices) {
   }
 }
 
+function fillSelect(sel, info) {
+  if (sel.dataset.sig !== info.choices.join()) {
+    sel.innerHTML = info.choices.map(c => `<option>${c}</option>`).join("");
+    sel.dataset.sig = info.choices.join();
+    sel.onchange = () => post("/set", {key: info.key, value: sel.value});
+  }
+  if (document.activeElement !== sel) sel.value = info.shape;
+}
+
 function render(s) {
   state = s;
   const set = s.set;
@@ -178,6 +212,7 @@ function render(s) {
     (set.index + 1 < set.songs.length ? ` · next: ${set.songs[set.index + 1]}` : "") : "";
   const flag = s.finished ? ["FINISHED", ""] : s.muted ? ["SILENT", "muted"]
     : s.ending ? ["ENDING", "ending"] : s.break ? ["BREAK", "break"]
+    : s.drone ? ["DRONE · s counts in", "break"] : s.intro ? ["INTRO · you come in next", "playing"]
     : s.song && s.song.startsWith("count") ? [s.song.toUpperCase(), "break"]
     : s.pulse ? ["PLAYING", "playing"] : ["LISTENING", ""];
   $("flag").textContent = flag[0] + (s.locked ? " · LOCKED" : "") + (s.interlude ? " · INTERLUDE" : "");
@@ -191,6 +226,16 @@ function render(s) {
   $("hold").classList.toggle("on", !!s.chord_held);
   $("prev").style.visibility = $("next").style.visibility = set ? "visible" : "hidden";
   if (s.messages && s.messages.length && !pending) $("messages").textContent = s.messages[s.messages.length - 1];
+  if (s.start) { fillSelect($("startSel"), s.start); $("startText").textContent = s.start.text; }
+  if (s.finish) { fillSelect($("finishSel"), s.finish); $("finishText").textContent = s.finish.text; }
+  $("setbox").hidden = !(set && set.cards && set.cards.length);
+  if (set && set.cards) {
+    $("settitle").textContent = set.title || "The set";
+    const html = set.cards.map((c, i) => `<li class="${i === set.index ? "now" : ""}">${i + 1}. ${c.title}` +
+      `<small>${[c.meter, c.tempo ? Math.round(c.tempo) + " bpm" : "", c.harmony].filter(Boolean).join(" · ")}` +
+      `<br>start: ${c.start_shape} · finish: ${c.finish_shape}</small></li>`).join("");
+    if ($("setlist").innerHTML !== html) $("setlist").innerHTML = html;
+  }
   const sig = (s.voices || []).map(v => v.key).join();
   if ($("voices").dataset.sig !== sig) { buildVoices(s.voices || []); $("voices").dataset.sig = sig; }
   for (const v of s.voices || []) {

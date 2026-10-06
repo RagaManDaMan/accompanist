@@ -219,13 +219,25 @@ class Controller:
         if action in ("song_start", "chart_restart"):
             if eng.muted:
                 return "can't start while muted (r = resume first)"
+            shape = self.cfg.start.shape
+            if action == "song_start" and shape == "you" and not eng.is_chart:
+                return ("this song starts with you: play, and the band comes in when it has "
+                        "your tempo (t taps a count-off if you want one)")
+            if action == "song_start" and shape == "drone" and not eng.droning \
+                    and not eng.song_playing:
+                chord = eng.start_drone()
+                if chord is None:
+                    return "no home key for the drone: set [harmony] keys (or root) for this song"
+                return f"drone: {chord.label()} holds, in free time; s again counts the band in"
             bpm = eng.start_song(now)
             if bpm is None:
                 return "no song tempo to count in at: set [song] tempo, or count off with t"
             title = self.cfg.song.title
             count = eng._count_total
+            then = {"intro": f", then {self.cfg.start.bars} bars of the band before you",
+                    "drums": f", then {self.cfg.start.bars} bars of drums before you"}.get(shape, "")
             return (f"{'' if not title else title + ': '}counting in at {bpm:.0f} bpm: "
-                    f"{' '.join(str(i + 1) for i in range(count))}, then 1 (tempo LOCKED)")
+                    f"{' '.join(str(i + 1) for i in range(count))}{then}, then 1 (tempo LOCKED)")
         if action == "chord_toggle":
             action = "chord_release" if eng.chord_held else "chord_hold"
         if action == "chord_hold":
