@@ -410,8 +410,24 @@ shape = "tag"      # chord | button | tag | ritardando | piano-tag | random
   meter, tempo and keys, its start and finish in words, and who plays. (`--song NAME` for
   one, nothing for every song.)
 - `accompanist rehearse --song NAME` plays the song's start, four bars, and its finish, the
-  band alone, so you can hear them. `--start drums --finish ritardando` tries others
-  without editing the file.
+  band alone, so you can hear them. Then a menu: a number for another start, a letter for
+  another finish (`2c` = intro and tag), `+`/`-` for the intro's length, Enter to hear it
+  again, and **`k` keeps the pair in the set list**, as the song's plan for that gig:
+
+  ```toml
+  # sets/fusion-1.toml
+  title = "Fusion set 1"
+  songs = ["kann-pona-pokkile", "lady-sings-the-blues"]
+
+  [plan.kann-pona-pokkile]
+  start = "intro"
+  bars = 4
+  finish = "tag"
+  ```
+
+  A set's plan comes over the song file's own `[start]` and `[ending]`, so the same song
+  can start one way at one gig and another way at the next. `--set NAME` says which set
+  (needed only when the song is in more than one); `--start`/`--finish` begin with others.
 - The stage screen shows this song's start and finish (change them there for this run) and
   the set's, song by song.
 

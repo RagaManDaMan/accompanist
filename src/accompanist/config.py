@@ -314,6 +314,86 @@ def load_set(name: str) -> tuple[str, list[str]]:
     return str(data.get("title", name)), songs
 
 
+# A set list's plan: how each song starts and finishes at this gig ([plan.SONG] in the set's
+# file), over the song file's own [start] and [ending].
+PLAN_KEYS = {"start": ("start", "shape"), "bars": ("start", "bars"), "finish": ("ending", "shape")}
+
+
+def set_plan(name: str) -> dict[str, dict]:
+    """{song: {"start": ..., "finish": ..., "bars": ...}} from sets/NAME.toml's [plan.SONG]."""
+    name = resolve_name(name, available_sets(), "set")
+    p = USER_SETS / f"{name}.toml"
+    if not p.is_file():
+        return {}
+    data = _read_toml(p)
+    plan = data.get("plan") or {}
+    _, songs = load_set(name)
+    out = {}
+    for song, entry in plan.items():
+        if song not in songs:
+            raise ConfigError(f"set '{name}' ({p}): [plan.{song}] isn't one of its songs "
+                              f"({', '.join(songs)})")
+        if not isinstance(entry, dict):
+            raise ConfigError(f"set '{name}' ({p}): [plan.{song}] should have start = ..., finish = ...")
+        for key, value in entry.items():
+            if key not in PLAN_KEYS:
+                raise ConfigError(f"set '{name}' ({p}): [plan.{song}] {key} = ...: use "
+                                  f"{', '.join(PLAN_KEYS)}")
+            section, field_name = PLAN_KEYS[key]
+            try:
+                registry.coerce(registry.get(f"{section}.{field_name}"), value)
+            except ValueError as e:
+                raise ConfigError(f"set '{name}' ({p}): [plan.{song}] {key}: {e}") from None
+        out[song] = dict(entry)
+    return out
+
+
+def plan_overrides(set_name: Optional[str], song: Optional[str]) -> dict:
+    """The set's plan for this song, as config layers ({} if none)."""
+    if not set_name or not song:
+        return {}
+    entry = set_plan(set_name).get(song, {})
+    out: dict = {}
+    for key, value in entry.items():
+        section, field_name = PLAN_KEYS[key]
+        out.setdefault(section, {})[field_name] = value
+    return out
+
+
+def save_plan(set_name: str, song: str, **entry) -> Path:
+    """Write [plan.SONG] (start, finish, bars) into the set's file, replacing any earlier one;
+    the rest of the file (comments too) stays as it is."""
+    set_name = resolve_name(set_name, available_sets(), "set")
+    p = USER_SETS / f"{set_name}.toml"
+    _, songs = load_set(set_name)
+    if song not in songs:
+        raise ConfigError(f"'{song}' isn't in the set '{set_name}' ({', '.join(songs)})")
+    lines = p.read_text().splitlines()
+    out, skipping = [], False
+    for line in lines:
+        head = line.strip()
+        if head.startswith("["):
+            skipping = head.replace('"', "") == f"[plan.{song}]"
+        if not skipping:
+            out.append(line)
+    while out and not out[-1].strip():
+        out.pop()
+    out += ["", f"[plan.{song}]"]
+    for key in ("start", "bars", "finish"):
+        if entry.get(key) is not None:
+            v = entry[key]
+            out.append(f"{key} = {v}" if isinstance(v, int) else f'{key} = "{v}"')
+    text = "\n".join(out) + "\n"
+    old = p.read_text()
+    p.write_text(text)
+    try:
+        set_plan(set_name)                     # it must still read
+    except ConfigError:
+        p.write_text(old)
+        raise
+    return p
+
+
 def available_songs() -> list[str]:
     names = {p.stem for d in (BUILTIN_SONGS, USER_SONGS) if d.is_dir() for p in d.glob("*.toml")}
     return sorted(names)

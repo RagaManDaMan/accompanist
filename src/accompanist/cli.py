@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from typing import Optional
 import collections
 import json
 import os
@@ -947,7 +948,25 @@ def voices_summary(cfg) -> str:
 
 
 def chart_overrides(args) -> dict:
-    """--chart FILE / --transpose N: play a chord chart (a command-line layer over config.toml)."""
+    """--chart FILE / --transpose N: play a chord chart (a command-line layer over config.toml).
+    In a set (--set), also the set's plan for the song (how it starts and finishes)."""
+    plan = cfgmod.plan_overrides(getattr(args, "set", None), getattr(args, "song", None))
+    out = _chart_overrides(args)
+    for section, values in plan.items():
+        out.setdefault(section, {})
+        out[section] = {**values, **out[section]}
+    return out
+
+
+def song_overrides(args, song: str) -> dict:
+    """chart_overrides for one song of the set (its own plan)."""
+    import copy
+    a = copy.copy(args)
+    a.song = song
+    return chart_overrides(a)
+
+
+def _chart_overrides(args) -> dict:
     h = {}
     if getattr(args, "chart", None):
         h.update(model="chart", chart=args.chart)
@@ -1092,7 +1111,7 @@ def cmd_run(args) -> int:
     set_title, set_songs = (cfgmod.load_set(args.set) if args.set else (None, []))
     if set_songs:
         for name in set_songs:                       # all of them load, before the first note
-            cfgmod.load(args.config, args.preset, chart_overrides(args), song=name)
+            cfgmod.load(args.config, args.preset, song_overrides(args, name), song=name)
         args.song = set_songs[0]
     song_index = 0
     cfg = load_for_run(args)
@@ -1174,7 +1193,7 @@ def cmd_run(args) -> int:
     set_cards = []                             # the reckoner for the set, on the stage screen
     if stage is not None and set_songs:
         from .reckoner import card
-        set_cards = [card(cfgmod.load(args.config, args.preset, chart_overrides(args), song=n), n)
+        set_cards = [card(cfgmod.load(args.config, args.preset, song_overrides(args, n), song=n), n)
                      for n in set_songs]
     if select_patch(out, cfg):
         print(f"MainStage patch {cfg.song.patch} (channel {cfg.output.patch_channel})")
@@ -1387,9 +1406,12 @@ def cmd_reckoner(args) -> int:
         songs = [args.song] if args.song else cfgmod.available_songs()
         title = None
     for i, name in enumerate(songs):
-        cfg = cfgmod.load(args.config, song=name)
+        cfg = cfgmod.load(args.config, overrides=cfgmod.plan_overrides(args.set, name) or None,
+                          song=name)
         print(format_card(card(cfg, name), i + 1 if title else None) + "\n")
-    print("Change a song's start or finish in its file (songs/NAME.toml):\n"
+    print("Choose a song's start and finish by ear, and keep them for the set:\n"
+          "  accompanist rehearse --set NAME --song SONG\n"
+          "Or in the song's file (songs/NAME.toml), for every set:\n"
           "  [start]  shape = \"count\" | \"intro\" | \"drums\" | \"you\" | \"drone\"   bars = 4\n"
           "  [ending] shape = \"chord\" | \"button\" | \"tag\" | \"ritardando\" | \"piano-tag\"\n"
           "Hear one, the band alone:  accompanist rehearse --song NAME "
@@ -1409,17 +1431,27 @@ class Rehearsal:
     def __init__(self, ctl, cfg) -> None:
         self.ctl, self.cfg, self.eng = ctl, cfg, ctl.engine
         self.home = self.eng._home_chord()
-        if self.home is None and not self.eng.is_chart:
-            raise cfgmod.ConfigError("no home key to rehearse on: give the song [harmony] keys "
-                                     "(or root)")
         self.phase, self.drone_until, self.done_at = "begin", None, None
+        if self.home is None and not self.eng.is_chart:     # no key in the song: C will do
+            from .harmony import Voicing
+            base = 12 * (cfg.pad.octave + 1)
+            self.home = Voicing(0, 4, (base, base + 7, base + 12, base + 16), scheduled=True)
+            self.phase = "begin-c"
 
     def step(self, now: float, say=lambda m: None) -> bool:
         """Advance to `now`. True when the rehearsal is over."""
         ctl, eng, cfg = self.ctl, self.eng, self.cfg
-        if self.phase == "begin":
+        if self.phase in ("begin", "begin-c"):
+            keyless = self.phase == "begin-c"
             self.phase = "start"
-            say(ctl.do("song_start", now))
+            if keyless:
+                say("(the song has no key: rehearsing in C)")
+            if keyless and cfg.start.shape == "drone":
+                eng.chord_held, eng.frozen, eng.droning = True, self.home, True
+                ctl._started(now)
+                say(f"drone: {self.home.label()} holds, in free time; s again counts the band in")
+            else:
+                say(ctl.do("song_start", now))
             if eng.droning:
                 self.drone_until = now + REHEARSE_DRONE_S
         if self.drone_until is not None and now >= self.drone_until:
@@ -1446,36 +1478,98 @@ class Rehearsal:
         return False
 
 
-def cmd_rehearse(args) -> int:
-    """Play a song's start and finish, the band alone (holding the home chord, or following
-    the chart), so you can hear them before the show. --start / --finish try others."""
-    from .reckoner import card, format_card
+def sets_with(song: str) -> list[str]:
+    out = []
+    for name in cfgmod.available_sets():
+        try:
+            if song in cfgmod.load_set(name)[1]:
+                out.append(name)
+        except cfgmod.ConfigError:
+            pass
+    return out
 
-    over: dict = {}
-    if args.start:
-        over["start"] = {"shape": args.start}
-    if args.finish:
-        over["ending"] = {"shape": args.finish}
-    cfg = cfgmod.load(args.config, overrides=over or None, song=args.song)
-    print(format_card(card(cfg, args.song)) + "\n")
-    if cfg.start.shape == "you":
-        print("A 'you' start has nothing to hear without you: rehearsing it with a count.\n")
-        cfg = cfgmod.load(args.config, overrides={**over, "start": {"shape": "count"}},
-                          song=args.song)
-    out = SafeOutput(open_output(cfg.output))
-    if select_patch(out, cfg):
+
+def rehearse_menu(start: str, finish: str, bars: int, kept_in: Optional[str]) -> str:
+    from .reckoner import FINISH_SHAPES, START_SHAPES
+
+    starts = "  ".join(f"{i + 1} {s}{'*' if s == start else ''}" for i, s in enumerate(START_SHAPES))
+    finishes = "  ".join(f"{chr(97 + i)} {f}{'*' if f == finish else ''}"
+                         for i, f in enumerate(FINISH_SHAPES[:-1]))
+    keep = f"k = keep this pair for the set '{kept_in}'" if kept_in else "k = keep it for a set"
+    return (f"\n  Starts:   {starts}   (+/- intro bars: {bars})\n"
+            f"  Finishes: {finishes}\n"
+            f"  Enter = play again   a number and/or letter = try that (e.g. 2c)   "
+            f"{keep}   q = quit\n> ")
+
+
+def cmd_rehearse(args) -> int:
+    """Hear a song's start and finish, the band alone (holding the home chord, or following
+    the chart), then try others from a menu and keep the pair you like in the set list."""
+    from .reckoner import FINISH_SHAPES, START_SHAPES, card, format_card
+
+    plan = cfgmod.plan_overrides(args.set, args.song)
+    base = cfgmod.load(args.config, overrides=plan or None, song=args.song)
+    start = args.start or base.start.shape
+    finish = args.finish or base.ending.shape
+    bars = args.bars or base.start.bars
+    print(format_card(card(base, args.song)))
+    out = SafeOutput(open_output(base.output))
+    if select_patch(out, base):
         time.sleep(PATCH_SETTLE_S)
-    apply_mix(out, cfg)
-    rehearsal = Rehearsal(Controller(cfg, out), cfg)
+    apply_mix(out, base)
+    target = args.set or (lambda s: s[0] if len(s) == 1 else None)(sets_with(args.song))
     try:
-        while not rehearsal.step(time.monotonic(), say):
-            time.sleep(0.005)
-    except KeyboardInterrupt:
-        pass
+        while True:
+            over = {**plan, "start": {"shape": "count" if start == "you" else start, "bars": bars},
+                    "ending": {**plan.get("ending", {}), "shape": finish}}
+            cfg = cfgmod.load(args.config, overrides=over, song=args.song)
+            print(f"\nPlaying: start {start}" + (f" ({bars} bars)" if start in ("intro", "drums") else "")
+                  + (" (with a count: a 'you' start needs you)" if start == "you" else "")
+                  + f", four bars, finish {finish}.   (Ctrl-C stops it)")
+            rehearsal = Rehearsal(Controller(cfg, out), cfg)
+            try:
+                while not rehearsal.step(time.monotonic(), say):
+                    time.sleep(0.005)
+            except KeyboardInterrupt:
+                pass
+            out.panic()
+            if args.once:
+                break
+            try:
+                answer = input(rehearse_menu(start, finish, bars, target)).strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if answer in ("q", "quit"):
+                break
+            if answer == "k":
+                where = target
+                if where is None:
+                    options = sets_with(args.song)
+                    if not options:
+                        print(f"'{args.song}' isn't in any set yet: add it to one (sets/NAME.toml, "
+                              f"songs = [...]) and keep it again")
+                        continue
+                    pick = input("  Which set? " + "  ".join(f"{i + 1} {s}" for i, s in
+                                                            enumerate(options)) + "\n> ").strip()
+                    if not pick.isdigit() or not 1 <= int(pick) <= len(options):
+                        continue
+                    where = target = options[int(pick) - 1]
+                path = cfgmod.save_plan(where, args.song, start=start, finish=finish,
+                                        bars=bars if start in ("intro", "drums") else None)
+                print(f"Kept in {path}: {args.song} starts '{start}' and finishes '{finish}'.")
+                continue
+            for ch in answer:
+                if ch.isdigit() and 1 <= int(ch) <= len(START_SHAPES):
+                    start = START_SHAPES[int(ch) - 1]
+                elif "a" <= ch < chr(97 + len(FINISH_SHAPES) - 1):
+                    finish = FINISH_SHAPES[ord(ch) - 97]
+                elif ch == "+":
+                    bars = min(16, bars + 1)
+                elif ch == "-":
+                    bars = max(1, bars - 1)
     finally:
         out.panic()
-    print("Done. Try another: --start count|intro|drums|drone  --finish "
-          "chord|button|tag|ritardando|piano-tag")
     return 0
 
 
@@ -1668,9 +1762,13 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("--set", default=None, help="a set list (sets/NAME.toml), in order")
     sp.add_argument("--song", default=None, help="one song")
-    sp = sub.add_parser("rehearse", help="hear a song's start and finish, the band alone")
+    sp = sub.add_parser("rehearse", help="hear a song's start and finish, the band alone; try "
+                                          "others and keep the pair you like in a set")
     sp.add_argument("-c", "--config", default="config.toml")
     sp.add_argument("--song", required=True, help="the song (songs/NAME.toml)")
+    sp.add_argument("--set", default=None, help="the set whose plan to hear and keep it in")
+    sp.add_argument("--bars", type=int, default=None, help="intro / drums start: how many bars")
+    sp.add_argument("--once", action="store_true", help="play it once, no menu")
     sp.add_argument("--start", default=None, choices=("count", "intro", "drums", "you", "drone"),
                     help="try another start than the song's")
     sp.add_argument("--finish", default=None,

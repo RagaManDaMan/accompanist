@@ -95,3 +95,44 @@ def test_the_reckoner_says_how_each_song_starts_and_finishes():
     text = reckoner.format_card(card, 1)
     assert "2 bars on the home chord" in text and "4 bars more" in text
     assert "3/4" in text and "138 bpm" in text and text.startswith("1. ")
+
+
+def a_set(tmp_path, monkeypatch, extra=""):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "sets").mkdir()
+    f = tmp_path / "sets" / "gig.toml"
+    f.write_text('# my gig\ntitle = "Gig"\nsongs = ["example-waltz", "example-seven"]\n' + extra)
+    return f
+
+
+def test_a_set_keeps_each_songs_start_and_finish(tmp_path, monkeypatch):
+    f = a_set(tmp_path, monkeypatch)
+    c.save_plan("gig", "example-waltz", start="intro", finish="ritardando", bars=2)
+    c.save_plan("gig", "example-waltz", start="drums", finish="tag", bars=4)   # replaces
+    c.save_plan("gig", "example-seven", start="drone", finish="button")
+    text = f.read_text()
+    assert text.startswith("# my gig") and text.count("[plan.example-waltz]") == 1
+    assert c.set_plan("gig") == {"example-waltz": {"start": "drums", "bars": 4, "finish": "tag"},
+                                 "example-seven": {"start": "drone", "finish": "button"}}
+    cfg = c.load(None, overrides=c.plan_overrides("gig", "example-waltz"), song="example-waltz")
+    assert (cfg.start.shape, cfg.start.bars, cfg.ending.shape) == ("drums", 4, "tag")
+
+
+def test_a_bad_plan_is_a_readable_error(tmp_path, monkeypatch):
+    a_set(tmp_path, monkeypatch, '\n[plan.example-waltz]\nstart = "fanfare"\n')
+    with pytest.raises(c.ConfigError, match="plan.example-waltz.*start"):
+        c.set_plan("gig")
+    with pytest.raises(c.ConfigError, match="isn't in the set"):
+        c.save_plan("gig", "lady-sings-the-blues", start="count")
+
+
+def test_rehearse_tries_others_from_the_menu_and_keeps_one(tmp_path, monkeypatch):
+    a_set(tmp_path, monkeypatch)
+    answers = iter(["2c", "k", "q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    monkeypatch.setattr(cli, "open_output", lambda cfg: RecordingPort())
+    monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+    clock = iter(x * 0.01 for x in range(10 ** 7))
+    monkeypatch.setattr(cli.time, "monotonic", lambda: next(clock))
+    assert cli.main(["rehearse", "--song", "waltz"]) == 0
+    assert c.set_plan("gig")["example-waltz"] == {"start": "intro", "bars": 4, "finish": "tag"}
