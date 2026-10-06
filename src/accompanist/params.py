@@ -51,6 +51,28 @@ class Param:
         }
 
 
+def _check_tala(v: Any) -> None:
+    from . import indian
+    from .config import ConfigError
+
+    if v is None:
+        return
+    try:
+        indian.tala(v)
+    except ConfigError as e:
+        raise ValueError(str(e)) from e
+
+
+def _check_kit(v: Any) -> None:
+    from .config import ConfigError
+    from .tala import load_kit
+
+    try:
+        load_kit(v)
+    except ConfigError as e:
+        raise ValueError(str(e)) from e
+
+
 def _check_pattern(v: Any) -> None:
     from .config import ConfigError
     from .patterns import load
@@ -374,6 +396,22 @@ PARAMS: list[Param] = [
       "Its pattern in 4 (in 3, 5, 6 and 7 it plays latin-waltz, latin-five, bembe and "
       "latin-seven).", "Percussion",
       choices=("latin", "latin-waltz", "latin-five", "bembe", "latin-seven"), check=_check_pattern),
+    P("percussion.tala", str, None, "Tāla",
+      "Play a tāla instead of the pattern: its theka (Hindustani: tintal, ektal, jhaptal, "
+      "rupak, keherwa, dadra...) or sarvalaghu (Carnatic: adi, rupakam, misra-chapu, "
+      "khanda-chapu, or any sūlādi tāla like khanda-jhampa), on your tabla, mridangam, pakhwaj... "
+      "(percussion.kit). The band's meter should match (song.count, or a chart's).",
+      "Percussion", nullable=True, check=_check_tala),
+    P("percussion.theka", str, None, "Your theka",
+      "Your own cycle for the tāla, one word per beat, strokes inside a beat starting with a "
+      "capital, '.' a rest: \"Dha Dhin Dhin Dha | ...\" or \"Thom.DhiKi Nam.DhiKi ...\". Unset: the "
+      "tāla's theka, or a plain sarvalaghu.", "Percussion", nullable=True),
+    P("percussion.nadai", int, 4, "Nadai / gati",
+      "Strokes per beat of the plain sarvalaghu: 4 chatusram, 3 tisram, 5 khandam, 7 misram.",
+      "Percussion", choices=(3, 4, 5, 7)),
+    P("percussion.kit", str, "gm-tabla", "Percussion kit",
+      "Which keys your instrument plays each stroke on: kits/NAME.toml ([strokes] dha = 48 ...). "
+      "gm-tabla stands in with General MIDI congas and bongos.", "Percussion", check=_check_kit),
     P("percussion.tuned", bool, False, "Tuned percussion",
       "The percussion sound is pitched (bells, blocks, marimba): play the pattern's rhythm on "
       "the chord's notes around percussion.octave instead of fixed drum notes.", "Percussion"),

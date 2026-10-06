@@ -94,3 +94,13 @@ groups = [1, 2]
 [talas.sankeerna-chapu]
 tradition = "carnatic"
 groups = [4, 5]
+
+# ---- Sarvalaghu: the mridangam's flowing time-keeping, per nadai (strokes per beat) -----
+# A starting point for a Carnatic tāla with no theka of its own: the first beat of each
+# anga (laghu, drutam), then the other beats. Strokes start with a capital, "." is a rest.
+# Simple and plain on purpose: write your own in a song ([percussion] theka = "...").
+[sarvalaghu]
+3 = ["Thom.Dhi", "Nam.Dhi"]
+4 = ["Thom.DhiKi", "Nam.DhiKi"]
+5 = ["Thom.DhiKiTa", "Nam.DhiKiTa"]
+7 = ["Thom.DhiKiTa.Dhi", "Nam.DhiKiTa.Dhi"]

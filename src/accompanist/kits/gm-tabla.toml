@@ -1,0 +1,18 @@
+# A stand-in for tabla and mridangam on a General MIDI kit (congas and bongos), until your
+# own instrument's kit file is written. Your sampler's keys: `accompanist kitmap percussion`
+# plays them one by one; copy this file to ./kits/NAME.toml and set the notes you hear.
+# Strokes not listed are found through their parts (Dha = Na + Ge) or kin (Ti -> Te -> Na).
+description = "General MIDI congas and bongos standing in for tabla and mridangam"
+
+[strokes]
+na = 62        # mute high conga: the dayan's ringing edge stroke
+tin = 63       # open high conga
+te = 60        # high bongo: the closed dayan stroke
+ge = 64        # low conga: the bayan, open
+ka = 61        # low bongo: the bayan, closed
+tha = 62       # mridangam: right-hand meetu
+dhi = 63
+ki = 60
+thom = 64      # mridangam: left (thoppi), open
+nam = 62
+chapu = 37     # side stick
