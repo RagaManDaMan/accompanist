@@ -51,6 +51,18 @@ class Param:
         }
 
 
+def _check_tala(v: Any) -> None:
+    from . import indian
+    from .config import ConfigError
+
+    if v is None:
+        return
+    try:
+        indian.tala(v)
+    except ConfigError as e:
+        raise ValueError(str(e)) from e
+
+
 def _check_pattern(v: Any) -> None:
     from .config import ConfigError
     from .patterns import load
@@ -784,6 +796,10 @@ PARAMS: list[Param] = [
       "Program change sent when this song is loaded (in a set, or with --song), so MainStage "
       "(or your DAW) switches to the song's sounds: the Program Change number as MainStage "
       "shows it, 1-128 (sent as 0-127 on the wire).", "Song", 1, 128, 1, nullable=True),
+    P("song.tala", str, None, "Tāla",
+      "The song's tāla (run --time-sig rupakam sets it): the band's bars follow it, and an "
+      "Indian piece brings the percussion forward (styles/indic.toml).", "Song",
+      nullable=True, check=_check_tala, live=False),
     P("song.transpose", int, 0, "Song key",
       "Play the song this many semitones up (+) or down (-) from how it is written: its chart, "
       "key palette and root move together (a set's plan: transpose = 2).", "Song", -11, 11, 1,

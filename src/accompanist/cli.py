@@ -1021,6 +1021,9 @@ def _chart_overrides(args) -> dict:
     out = {}
     if getattr(args, "time_sig", None):              # --time-sig 7/8, or a tāla
         out["song"] = {"count": meter_of(args.time_sig)[0]}
+        if args.time_sig.strip().lower() not in METERS:
+            from . import indian
+            out["song"]["tala"] = indian.tala(args.time_sig).name
     if getattr(args, "tempo", None) is not None:
         h["chart_bpm"] = args.tempo
         out.setdefault("song", {})["tempo"] = args.tempo   # --tempo also beats a song file's
@@ -1227,6 +1230,9 @@ def cmd_run(args) -> int:
         print(f"Time: {meter_of(args.time_sig)[1]}")
     if getattr(args, "key", None):
         print(f"Key: {cfg.harmony.keys or cfg.harmony.root}")
+    if cfgmod.is_indic({"song": {"tala": cfg.song.tala}, "harmony": {"keys": cfg.harmony.keys}}):
+        print("An Indian piece: the percussion plays nearly throughout (styles/indic.toml; "
+              "your own [percussion] settings win)")
     if set_songs:
         print(f"Set: {set_title}: " + ", ".join(f"{i + 1}. {s}" for i, s in enumerate(set_songs))
               + "   ([ ] or the arrows: previous / next song)")

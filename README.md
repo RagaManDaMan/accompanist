@@ -396,6 +396,10 @@ accompanist run --key D --mode dorian --time-sig 7/8
 - `--time-sig`: a time signature (3/4, 4/4, 5/4, 6/8, 7/8) or a tāla: misra-chapu and
   rupak in 7 (3+2+2), khanda-chapu and jhaptal in 5, tisra-chapu in 3, rupakam in 3, adi,
   tintal and keherwa in bars of 4, dadra in 6. It says how it took it when the band starts.
+- A rāga (`--mode`, or a rāga in a key palette) or a tāla (`--time-sig`) makes it an Indian
+  piece: the percussion (your mridangam or tabla) plays nearly throughout and steps
+  forward in the gaps, instead of coming and going in spells (styles/indic.toml; your own
+  `[percussion]` settings win).
 - Tab completes all three. In a song file the same are `[harmony] keys = "C sahana"` and
   `[song] count = 7`.
 

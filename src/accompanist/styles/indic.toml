@@ -1,0 +1,10 @@
+# An Indian fusion piece (its key is a rāga, or its time a tāla): the percussion, your
+# mridangam or tabla, plays nearly all the time and steps forward in the gaps, instead of
+# coming and going in spells. Taken automatically for such a piece, under your own
+# settings (config.toml or the song file win); or choose it by name like any style.
+[percussion]
+enabled = true
+presence = 0.85
+spell_bars = 8
+spotlight = 0.5
+triplets = 0.6

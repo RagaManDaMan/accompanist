@@ -500,7 +500,23 @@ def build(path: Optional[str | Path] = None, preset: Optional[str] = None,
         d = _read_toml(Path(path))
     if song:
         d = merge(d, load_song(song))
+    if is_indic(merge(d, overrides or {})):           # a rāga or a tāla: Indian fusion,
+        d = merge(load_style("indic"), d)              # percussion forward (yours win)
     return from_dict(apply_transpose(merge(d, overrides or {})), preset)
+
+
+def is_indic(d: dict) -> bool:
+    """An Indian piece: its key palette names a rāga, or it has a tāla."""
+    from . import indian
+    from .modal import MODES
+
+    if (d.get("song") or {}).get("tala"):
+        return True
+    for part in str((d.get("harmony") or {}).get("keys") or "").split(","):
+        words = part.split()
+        if len(words) == 2 and words[1].lower() not in MODES and indian.find(words[1]):
+            return True
+    return False
 
 
 KEY_NAMES = ("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")

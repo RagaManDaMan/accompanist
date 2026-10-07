@@ -175,3 +175,16 @@ def test_rehearse_keeps_key_and_style_too(tmp_path, monkeypatch):
     assert cli.main(["rehearse", "--song", "waltz"]) == 0
     entry = c.set_plan("gig")["example-waltz"]
     assert entry["transpose"] == 2 and entry["style"] == "swing"
+
+
+def test_a_raga_or_a_tala_brings_the_percussion_forward():
+    plain = c.load(None)
+    raga = c.load(None, overrides={"harmony": {"model": "modal", "keys": "C gowrimanohari"}})
+    tala = c.load(None, overrides={"song": {"tala": "rupakam", "count": 3}})
+    western = c.load(None, overrides={"harmony": {"model": "modal", "keys": "C dorian"}})
+    assert raga.percussion.presence > plain.percussion.presence and raga.percussion.enabled
+    assert tala.percussion.presence > plain.percussion.presence
+    assert western.percussion.presence == plain.percussion.presence
+    mine = c.load(None, overrides={"harmony": {"model": "modal", "keys": "C sahana"},
+                                   "percussion": {"presence": 0.2}})
+    assert mine.percussion.presence == 0.2                                 # yours win
