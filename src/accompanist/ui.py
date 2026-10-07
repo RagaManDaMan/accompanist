@@ -111,11 +111,7 @@ class StageServer:
         def later() -> None:
             time.sleep(WATCHING_S)
             if time.monotonic() - self.last_seen > WATCHING_S:
-                import webbrowser
-                try:
-                    webbrowser.open(self.url)
-                except Exception:
-                    pass
+                open_in_background(self.url)
 
         threading.Thread(target=later, daemon=True).start()
 
@@ -126,6 +122,26 @@ class StageServer:
     def snapshot(self) -> bytes:
         with self._lock:
             return self._snapshot
+
+
+def open_in_background(url: str) -> None:
+    """Open the page without taking the screen from the terminal: on a Mac `open -g` (the
+    browser stays behind); elsewhere the usual way."""
+    import subprocess
+    import sys
+    import webbrowser
+
+    try:
+        if sys.platform == "darwin":
+            subprocess.run(["open", "-g", url], check=True, timeout=10,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+    except Exception:
+        pass
+    try:
+        webbrowser.open(url, autoraise=False)
+    except Exception:
+        pass
 
 
 def lan_address() -> Optional[str]:

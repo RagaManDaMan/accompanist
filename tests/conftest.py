@@ -14,4 +14,6 @@ def _private_home(tmp_path_factory, monkeypatch):
 def _no_browser(monkeypatch):
     opened = []
     monkeypatch.setattr(webbrowser, "open", lambda url, *a, **k: opened.append(url) or True)
+    from accompanist import ui
+    monkeypatch.setattr(ui, "open_in_background", opened.append)
     return opened
