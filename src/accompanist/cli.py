@@ -1722,24 +1722,25 @@ def find_home(args) -> None:
 
 
 ZSH_COMPLETION = r"""
-# accompanist: Tab completes commands, and the names after --song, --set, --preset,
-# --start and --finish. Load with:  eval "$(accompanist completion)"  (in ~/.zshrc)
+# accompanist: Tab completes commands, options, and the names and choices an option takes
+# (songs, sets, presets, styles, starts, finishes...). Everything is asked of the
+# accompanist when you press Tab, so new commands and options never need a new shell.
+# Load with:  eval "$(accompanist completion)"  (in ~/.zshrc)
 _accompanist() {
-  local prev=${words[CURRENT-1]}
-  case $prev in
-    --song)   compadd -- ${(f)"$(accompanist complete songs 2>/dev/null)"}; return ;;
-    --set)    compadd -- ${(f)"$(accompanist complete sets 2>/dev/null)"}; return ;;
-    --preset) compadd -- ${(f)"$(accompanist complete presets 2>/dev/null)"}; return ;;
-    --style)  compadd -- ${(f)"$(accompanist complete styles 2>/dev/null)"}; return ;;
-    --start)  compadd -- count intro drums you drone; return ;;
-    --finish) compadd -- chord button tag ritardando piano-tag random; return ;;
-  esac
+  local -a values
   if (( CURRENT == 2 )); then
     compadd -- ${(f)"$(accompanist complete commands 2>/dev/null)"}
   elif [[ ${words[CURRENT]} == -* ]]; then
     compadd -- ${(f)"$(accompanist complete options ${words[2]} 2>/dev/null)"}
   else
-    _files
+    values=(${(f)"$(accompanist complete value ${words[2]} -- ${words[CURRENT-1]} 2>/dev/null)"})
+    if [[ ${values[1]} == __files__ ]]; then
+      _files
+    elif (( ${#values} )); then
+      compadd -- $values
+    else
+      _files
+    fi
   fi
 }
 (( $+functions[compdef] )) || { autoload -Uz compinit && compinit -i }
@@ -1790,8 +1791,10 @@ def main(argv=None) -> int:
     sp = sub.add_parser("completion", help="Tab completion for zsh: add "
                         "eval \"$(accompanist completion)\" to ~/.zshrc")
     sp = sub.add_parser("complete")             # (for the completion script: names, one a line)
-    sp.add_argument("what", choices=("songs", "sets", "presets", "styles", "commands", "options"))
+    sp.add_argument("what", choices=("songs", "sets", "presets", "styles", "commands", "options",
+                                     "value"))
     sp.add_argument("command", nargs="?", default=None)
+    sp.add_argument("option", nargs="?", default=None)
     sp = sub.add_parser("reckoner", help="how each song starts and finishes (a set, a song, "
                                           "or all songs): settle it before the show")
     sp.add_argument("-c", "--config", default="config.toml")
@@ -1886,6 +1889,23 @@ def main(argv=None) -> int:
             sp = sub.choices.get(args.command)
             names = [o for a in (sp._actions if sp else []) for o in a.option_strings
                      if o.startswith("--")]
+        elif args.what == "value":               # what may follow this option
+            sp = sub.choices.get(args.command)
+            action = next((a for a in (sp._actions if sp else [])
+                           if args.option in a.option_strings), None)
+            named = {"song": cfgmod.available_songs, "set": cfgmod.available_sets,
+                     "preset": cfgmod.available_presets, "style": cfgmod.available_styles}
+            if action is None and args.option == args.command:   # right after the command:
+                names = [str(ch) for a in (sp._actions if sp else [])   # its first word's choices
+                         if not a.option_strings and a.choices for ch in a.choices] or ["__files__"]
+            elif action is None or action.nargs == 0:
+                names = ["__files__"]            # not an option that takes a value
+            elif action.choices:
+                names = [str(c) for c in action.choices]
+            elif action.dest in named:
+                names = named[action.dest]()
+            else:
+                names = ["__files__"]
         else:
             names = {"songs": cfgmod.available_songs, "sets": cfgmod.available_sets,
                      "presets": cfgmod.available_presets,
