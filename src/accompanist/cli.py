@@ -458,7 +458,10 @@ def make_kit(args, out, channel: int) -> int:
     hint = KIT_HINTS.get(args.make.split("-")[0], KIT_HINTS["mridangam"] + "; " + KIT_HINTS["tabla"])
     print(f"Making kits/{args.make}.toml from channel {channel}, notes {args.low}-{args.high}.\n"
           f"Each key plays; type the stroke you hear ({hint}), Enter to skip it, r to hear it "
-          f"again, q to finish.\n")
+          f"again, q to finish.\n"
+          f"Kontakt (Native Instruments India and others): open the instrument's Mapping Window; "
+          f"it names the stroke of each key as it plays. Skip the pattern keys (the lowest, red "
+          f"octave) and the fills: only single strokes.\n")
     strokes: dict[str, list[int]] = {}
     try:
         n = args.low
