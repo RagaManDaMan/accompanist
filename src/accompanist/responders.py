@@ -191,14 +191,17 @@ class PulseResponder:
         self._last_interval = 0
         self.rhythm = "beat"                         # half, beat, double or triplet
         self._period: Optional[float] = None
+        self._walker = None                          # pulse.line walk / two (walking.Walker)
 
     def on_beat(self, now: float, root_pc: int, gain: float = 1.0,
                 bar_position: Optional[int] = None, boost: int = 0, group_start: bool = False,
                 chord: Optional[Voicing] = None, beats_per_bar: Optional[int] = None,
-                scale: Optional[set[int]] = None, period: Optional[float] = None) -> None:
+                scale: Optional[set[int]] = None, period: Optional[float] = None,
+                next_root: Optional[int] = None, beats_to_change: Optional[int] = None) -> None:
         """group_start: a beat that starts a group within the bar (the 4 of 3+2): half an accent.
         chord, beats_per_bar, scale: what the bass shapes are made of (the root alone without);
-        period: the beat's length, for shapes with eighth notes."""
+        period: the beat's length, for shapes with eighth notes; next_root, beats_to_change:
+        the next chord's root and how many beats until it (a chart), for walking."""
         bpb = max(1, beats_per_bar or self.cfg.beats_per_bar)
         pos = self.beat_count % bpb if bar_position is None else bar_position
         self._period = period
@@ -206,6 +209,12 @@ class PulseResponder:
         vel = round(self.cfg.velocity * gain) + accent + boost
         vel = humanize_velocity(min(max(vel, 1), 127), self.cfg.velocity_spread, self.rng)
         root = 12 * (self.cfg.octave + 1) + root_pc
+        line = getattr(self.cfg, "line", "shapes")
+        if line != "shapes" and period is not None:
+            self._walk_beat(now, line, pos, bpb, root_pc, chord, scale, next_root,
+                            beats_to_change, vel, period)
+            self.beat_count += 1
+            return
         note = self._shape_note(root, root_pc, pos, bpb, chord, scale)
         ch = self.cfg.channel - 1
         rhythm = self.rhythm if period is not None else "beat"
@@ -247,6 +256,28 @@ class PulseResponder:
                 t = now + k * period / 3 + lay_back
                 self.out.note_on_at(t, ch, n, soft, off_at=t + length)
         self.beat_count += 1
+
+    def _walk_beat(self, now: float, line: str, pos: int, bpb: int, root_pc: int,
+                   chord: Optional[Voicing], scale: Optional[set[int]], next_root: Optional[int],
+                   beats_to_change: Optional[int], vel: int, period: float) -> None:
+        """pulse.line walk or two: a jazz bassist's line (walking.py)."""
+        from .walking import Walker
+
+        if self._walker is None:
+            self._walker = Walker(12 * (self.cfg.octave + 1), self.shape_rng)
+        pcs = {n % 12 for n in chord.notes} if chord else {root_pc, (root_pc + 7) % 12}
+        if beats_to_change is None:                  # unknown: aim for the root on the next 1
+            beats_to_change = bpb - pos
+        w = self._walker
+        notes = (w.walk(pos, root_pc, pcs, scale, next_root, beats_to_change, self.cfg.rhythm)
+                 if line == "walk" else
+                 w.two(pos, bpb, root_pc, pcs, scale, next_root, beats_to_change, self.cfg.rhythm))
+        ch = self.cfg.channel - 1
+        lay_back = self.rng.uniform(0, self.cfg.timing_ms) / 1000 if self.cfg.timing_ms > 0 else 0.0
+        for n in notes:
+            t = now + n.at * period + lay_back
+            self.out.note_on_at(t, ch, n.pitch, max(1, round(vel * n.level)),
+                                off_at=t + n.length * period)
 
     def _pick_rhythm(self) -> str:
         r = self.cfg.rhythm
@@ -335,6 +366,8 @@ class PulseResponder:
         self.beat_count = 0
         self._shape, self._shape_left, self._last_root = "", 0, None
         self.rhythm = "beat"
+        if self._walker is not None:
+            self._walker.reset()
 
 
 def _generic_shape(bpb: int, rng: random.Random) -> str:

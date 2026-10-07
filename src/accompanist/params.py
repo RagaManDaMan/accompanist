@@ -325,6 +325,13 @@ PARAMS: list[Param] = [
       "Each bass note up to this many ms behind the beat (humanize).", "Pulse", 0, 60, 1),
     P("pulse.velocity_spread", int, 0, "Bass velocity spread",
       "Each bass note up to this much softer or louder.", "Pulse", 0, 40, 1),
+    P("pulse.line", str, "shapes", "Bass line",
+      "shapes: bass shapes (roots, fifths, octaves, steps into the next bar; pulse.movement); "
+      "walk: a jazz walking line, a note every beat, chord tones and scale steps heading for "
+      "the next chord, approached by a half step, a scale step, its fifth or an enclosure "
+      "(pulse.rhythm adds swung skips); two: the two-feel, half notes, root and fifth, with "
+      "pickups. With a chart it knows the next chord; else it heads for the root on the next 1.",
+      "Pulse", choices=("shapes", "walk", "two")),
     P("pulse.movement", float, 0.8, "Bass movement",
       "0 = the root on every beat; higher = bass shapes more often: fifths, thirds, octaves "
       "and a step into the next bar.", "Pulse", 0, 1, 0.05),
@@ -408,7 +415,7 @@ PARAMS: list[Param] = [
       "tāla's theka, or a plain sarvalaghu.", "Percussion", nullable=True),
     P("percussion.nadai", int, 4, "Nadai / gati",
       "Strokes per beat of the plain sarvalaghu: 4 chatusram, 3 tisram, 5 khandam, 7 misram.",
-      "Percussion", choices=(3, 4, 5, 7)),
+      "Percussion", 3, 7, 1, choices=(3, 4, 5, 7)),
     P("percussion.kit", str, "gm-tabla", "Percussion kit",
       "Which keys your instrument plays each stroke on: kits/NAME.toml ([strokes] dha = 48 ...). "
       "gm-tabla stands in with General MIDI congas and bongos.", "Percussion", check=_check_kit),
@@ -567,7 +574,7 @@ PARAMS: list[Param] = [
     P("response.quantize", float, 1.0, "Quantize",
       "With the beat running: 1 = the answer's rhythm on eighth notes, 0 = in your own timing.",
       "Response", 0, 1, 0.05),
-    P("response.variety", float, 0.0, "Variety",
+    P("response.variety", float, 0.15, "Variety",
       "How often to play a variation of your last phrase (moved a scale step, inverted or "
       "reversed) instead of one of your own phrases (0 = never).", "Response", 0, 1, 0.05),
     P("response.rhythm_variety", float, 0.4, "Rhythm variations",
@@ -749,6 +756,9 @@ PARAMS: list[Param] = [
     P("interlude.after_beats", float, 6.0, "Interlude after",
       "Beats of your silence (after the answers) before the band carries the music.",
       "Interlude", 2, 32, 1),
+    P("interlude.after_s", float, 4.0, "Interlude after (seconds)",
+      "...and at least this long: at a fast tempo a few beats is only a breath, not a break.",
+      "Interlude", 0, 30, 0.5),
     P("interlude.turn_bars", int, 4, "Interlude turns",
       "Bars each of piano and guitar leads before handing over.", "Interlude", 1, 16, 1),
     P("interlude.guitar_every_bars", int, 2, "Guitar phrase every",
@@ -812,6 +822,14 @@ PARAMS: list[Param] = [
       "Program change sent when this song is loaded (in a set, or with --song), so MainStage "
       "(or your DAW) switches to the song's sounds: the Program Change number as MainStage "
       "shows it, 1-128 (sent as 0-127 on the wire).", "Song", 1, 128, 1, nullable=True),
+    P("song.tala", str, None, "Tāla",
+      "The song's tāla (run --time-sig rupakam sets it): the band's bars follow it, and an "
+      "Indian piece brings the percussion forward (styles/indic.toml).", "Song",
+      nullable=True, check=_check_tala, live=False),
+    P("song.transpose", int, 0, "Song key",
+      "Play the song this many semitones up (+) or down (-) from how it is written: its chart, "
+      "key palette and root move together (a set's plan: transpose = 2).", "Song", -11, 11, 1,
+      live=False),
     P("song.count", int, None, "Song meter",
       "Beats per bar for the count-in and the band: 3 = waltz, 4, 5 = 3+2, 6 = 6/8, 7 = 3+2+2.",
       "Song", 3, 7, 1, nullable=True),

@@ -97,3 +97,28 @@ def test_a_fast_five_count_is_taken_at_its_tempo_not_capped():
     assert eng.tempo.bpm == pytest.approx(60 / fast, rel=0.02)
     kicks = sorted(t for t, _ in hits(res, 9, 36))
     assert kicks and min(b - a for a, b in zip(kicks, kicks[1:])) < 5 * fast * 1.1
+
+
+def test_a_fast_uneven_count_is_still_one_count():
+    """The owner's misra-chapu count-off: 7 quick taps (~210 bpm), a little uneven."""
+    gaps = [0.22, 0.32, 0.33, 0.28, 0.29, 0.28]
+    t, taps = 1.0, [(1.0, "tap_tempo")]
+    for g in gaps:
+        t += g
+        taps.append((round(t / 0.005) * 0.005, "tap_tempo"))
+    cfg = c.from_dict({"drums": {"enabled": True}, "lock": {"auto": False}, "harmony": {"root": "D"}})
+    res = simulate.run(cfg, onsets=[], actions=taps, total=t + 3)
+    assert res.engine.groove.label().startswith("7")
+
+
+def test_with_a_known_meter_the_taps_only_set_the_tempo():
+    res, _ = count(4, extra={"song": {"count": 7}})
+    assert res.engine.groove.label().startswith("7") and res.engine.locked
+    assert res.engine.tempo.bpm == pytest.approx(100, rel=0.01)
+
+
+def test_with_a_known_meter_a_bar_of_taps_brings_the_band_in_on_time():
+    res, downbeat = count(7, extra={"song": {"count": 7}})
+    kicks = [t for t, _ in hits(res, 9, 36)]
+    assert kicks[0] == pytest.approx(downbeat, abs=0.01)          # on the 1, no waiting
+    assert res.engine.groove.label().startswith("7")

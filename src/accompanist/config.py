@@ -288,6 +288,34 @@ def load_preset(name: str) -> dict:
     raise ConfigError(f"unknown preset '{name}'; available: {', '.join(available_presets()) or '(none)'}")
 
 
+BUILTIN_STYLES = Path(__file__).parent / "styles"
+USER_STYLES = Path("styles")
+# A style pack sets how the band plays, not what or where: these sections only.
+STYLE_SECTIONS = ("pad", "pulse", "drums", "percussion", "piano", "response", "groove",
+                  "dynamics", "interlude", "breaks")
+
+
+def available_styles() -> list[str]:
+    return sorted({p.stem for d in (BUILTIN_STYLES, USER_STYLES) if d.is_dir()
+                   for p in d.glob("*.toml")})
+
+
+def load_style(name: str) -> dict:
+    """A style pack (styles/NAME.toml; ./styles/ over the built-ins): drums, bass, piano,
+    percussion and pad settings for a style of playing."""
+    name = resolve_name(name, available_styles(), "style")
+    for d in (USER_STYLES, BUILTIN_STYLES):
+        p = d / f"{name}.toml"
+        if p.is_file():
+            data = _read_toml(p)
+            bad = set(data) - set(STYLE_SECTIONS)
+            if bad:
+                raise ConfigError(f"style '{name}' ({p}): may only set {', '.join(STYLE_SECTIONS)}, "
+                                  f"not {', '.join(sorted(bad))}")
+            return data
+    raise ConfigError(f"unknown style '{name}'; available: {', '.join(available_styles())}")
+
+
 USER_SETS = Path("sets")
 
 
@@ -316,7 +344,8 @@ def load_set(name: str) -> tuple[str, list[str]]:
 
 # A set list's plan: how each song starts and finishes at this gig ([plan.SONG] in the set's
 # file), over the song file's own [start] and [ending].
-PLAN_KEYS = {"start": ("start", "shape"), "bars": ("start", "bars"), "finish": ("ending", "shape")}
+PLAN_KEYS = {"start": ("start", "shape"), "bars": ("start", "bars"), "finish": ("ending", "shape"),
+             "transpose": ("song", "transpose"), "style": None}
 
 
 def set_plan(name: str) -> dict[str, dict]:
@@ -339,6 +368,11 @@ def set_plan(name: str) -> dict[str, dict]:
             if key not in PLAN_KEYS:
                 raise ConfigError(f"set '{name}' ({p}): [plan.{song}] {key} = ...: use "
                                   f"{', '.join(PLAN_KEYS)}")
+            if key == "style":
+                if not isinstance(value, str) or value not in available_styles():
+                    raise ConfigError(f"set '{name}' ({p}): [plan.{song}] style = {value!r}: "
+                                      f"one of {', '.join(available_styles())}")
+                continue
             section, field_name = PLAN_KEYS[key]
             try:
                 registry.coerce(registry.get(f"{section}.{field_name}"), value)
@@ -352,9 +386,16 @@ def plan_overrides(set_name: Optional[str], song: Optional[str]) -> dict:
     """The set's plan for this song, as config layers ({} if none)."""
     if not set_name or not song:
         return {}
-    entry = set_plan(set_name).get(song, {})
-    out: dict = {}
+    return plan_layers(set_plan(set_name).get(song, {}))
+
+
+def plan_layers(entry: dict) -> dict:
+    """A plan entry (start, bars, finish, transpose, style) as config layers: the style pack
+    first, the rest over it."""
+    out: dict = merge({}, load_style(entry["style"])) if entry.get("style") else {}
     for key, value in entry.items():
+        if key == "style" or value is None:
+            continue
         section, field_name = PLAN_KEYS[key]
         out.setdefault(section, {})[field_name] = value
     return out
@@ -379,7 +420,7 @@ def save_plan(set_name: str, song: str, **entry) -> Path:
     while out and not out[-1].strip():
         out.pop()
     out += ["", f"[plan.{song}]"]
-    for key in ("start", "bars", "finish"):
+    for key in ("start", "bars", "finish", "transpose", "style"):
         if entry.get(key) is not None:
             v = entry[key]
             out.append(f"{key} = {v}" if isinstance(v, int) else f'{key} = "{v}"')
@@ -459,7 +500,55 @@ def build(path: Optional[str | Path] = None, preset: Optional[str] = None,
         d = _read_toml(Path(path))
     if song:
         d = merge(d, load_song(song))
-    return from_dict(merge(d, overrides or {}), preset)
+    if is_indic(merge(d, overrides or {})):           # a rāga or a tāla: Indian fusion,
+        d = merge(load_style("indic"), d)              # percussion forward (yours win)
+    return from_dict(apply_transpose(merge(d, overrides or {})), preset)
+
+
+def is_indic(d: dict) -> bool:
+    """An Indian piece: its key palette names a rāga, or it has a tāla."""
+    from . import indian
+    from .modal import MODES
+
+    if (d.get("song") or {}).get("tala"):
+        return True
+    for part in str((d.get("harmony") or {}).get("keys") or "").split(","):
+        words = part.split()
+        if len(words) == 2 and words[1].lower() not in MODES and indian.find(words[1]):
+            return True
+    return False
+
+
+KEY_NAMES = ("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
+
+
+def apply_transpose(d: dict) -> dict:
+    """song.transpose: the song in another key. Moves a chart (harmony.transpose), the key
+    palette (harmony.keys) and a fixed root (harmony.root) by that many semitones."""
+    t = (d.get("song") or {}).get("transpose") or 0
+    if not isinstance(t, int) or isinstance(t, bool) or not t:
+        return d
+    h = dict(d.get("harmony") or {})
+    h["transpose"] = (h.get("transpose") or 0) + t
+    if abs(h["transpose"]) > 11:                      # an octave or more: the same key
+        h["transpose"] = h["transpose"] % 12 - (12 if h["transpose"] % 12 > 6 else 0)
+    if h.get("keys"):
+        parts = []
+        for part in str(h["keys"]).split(","):
+            words = part.split()
+            try:
+                words[0] = KEY_NAMES[(parse_root(words[0]) + t) % 12]
+            except (ConfigError, IndexError):
+                pass                                   # left as it is: validation says why
+            parts.append(" ".join(words))
+        h["keys"] = ", ".join(parts)
+    root = h.get("root")
+    if isinstance(root, str) and root.lower() != "auto":
+        try:
+            h["root"] = KEY_NAMES[(parse_root(root) + t) % 12]
+        except ConfigError:
+            pass
+    return {**d, "harmony": h}
 
 
 def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:

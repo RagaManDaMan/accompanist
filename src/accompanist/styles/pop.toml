@@ -1,0 +1,16 @@
+# Pop: a real drummer's pop grooves, a light piano, a steady bass, the pad carrying it.
+[drums]
+enabled = true
+style = "pop"
+pattern = "basic"
+[percussion]
+enabled = false
+[piano]
+enabled = true
+comp = 0.3
+voicing = "close"
+[pulse]
+movement = 0.5
+rhythm = 0.3
+[pad]
+feel = 0.5

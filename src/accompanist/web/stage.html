@@ -28,14 +28,14 @@
   .flag.playing { background: var(--go); color: #fff; }
   .flag.muted, .flag.offline { background: var(--stop); color: #fff; }
   .flag.ending, .flag.break { background: var(--accent); color: #111; }
-  .big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
+  .big { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
   .big div { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
              padding: 12px; min-width: 0; }
   .big b { display: block; font-size: clamp(1.4rem, 6vw, 2.4rem); font-weight: 600;
            font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
            text-overflow: ellipsis; }
   .big span { color: var(--dim); font-size: .8rem; }
-  .buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   button { font: inherit; font-weight: 600; color: var(--text); background: var(--panel);
            border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 8px;
            min-height: 64px; cursor: pointer; touch-action: manipulation; }
@@ -49,13 +49,15 @@
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
        font-weight: 600; margin: 26px 2px 8px; }
   .voices { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-  .voice { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 12px;
+  .voice { display: grid; grid-template-columns: 92px 1fr 36px 58px; align-items: center; gap: 12px;
            padding: 12px 14px; border-top: 1px solid var(--line); }
   .voice:first-child { border-top: 0; }
   .voice label { font-weight: 600; }
   .voice output { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
-  .switch { justify-self: end; }
+  .toggle { min-height: 36px; padding: 6px 0; font-size: .8rem; border-radius: 999px; }
+  .toggle.on { background: var(--go); border-color: var(--go); color: #fff; outline: none; }
+  .voice.muted label, .voice.muted output { opacity: .45; }
   .plan { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
   .plan .row { display: grid; grid-template-columns: 92px 1fr; gap: 4px 12px; padding: 12px 14px;
                border-top: 1px solid var(--line); align-items: start; }
@@ -74,7 +76,7 @@
   @media (max-width: 420px) {
     .big { grid-template-columns: repeat(2, 1fr); }
     .big div:last-child { grid-column: span 2; }
-    .voice { grid-template-columns: 78px 1fr 44px; }
+    .voice { grid-template-columns: 70px 1fr 30px 52px; gap: 8px; }
   }
 </style>
 </head>
@@ -120,10 +122,13 @@
     <ol class="setlist" id="setlist"></ol>
   </div>
 
-  <footer>The same keys work here as in the terminal. Changes last for this run.</footer>
+  <footer>The same keys work here as in the terminal. Each voice's slider is its feel
+    (left: steady and exact, right: loose and human); on/off turns the voice on or off.
+    Changes last for this run.</footer>
 </main>
 <script>
 const KEY = new URLSearchParams(location.search).get("k") || "";
+const PAGE_VERSION = "__PAGE_VERSION__";      // a newer accompanist: reload to its page
 const $ = id => document.getElementById(id);
 const KEYS = {" ": "panic_toggle", p: "panic_toggle", r: "resume", t: "tap_tempo",
   l: "lock_toggle", c: "chord_toggle", s: "song_start", f: "finish", b: "break",
@@ -179,17 +184,21 @@ function buildVoices(voices) {
     const name = v.label.replace(/ feel$/, "");
     row.innerHTML = `<label for="${v.key}">${name}</label>
       <input type="range" id="${v.key}" min="${v.min}" max="${v.max}" step="${v.step || 0.01}">
-      <output></output>`;
+      <output></output>
+      <button class="toggle" type="button" ${on ? "" : "hidden"}></button>`;
     const input = row.querySelector("input"), out = row.querySelector("output");
     input.addEventListener("input", () => {
       dragging = v.key; out.textContent = Math.round(input.value * 100);
       post("/set", {key: v.key, value: parseFloat(input.value)});
     });
     input.addEventListener("change", () => { dragging = null; });
-    if (on) {
-      out.style.cursor = "pointer";
-      out.title = "tap: " + on.label;
-      out.addEventListener("click", () => post("/set", {key: on.key, value: !on.value}));
+    if (on) {                                      // on/off: from the latest state, not
+      const t = row.querySelector(".toggle");       // the one this row was built from
+      t.title = on.label;
+      t.addEventListener("click", () => {
+        const now = state.voices.find(o => o.key === on.key);
+        post("/set", {key: on.key, value: !(now ? now.value : on.value)});
+      });
     }
     box.appendChild(row);
   }
@@ -205,6 +214,7 @@ function fillSelect(sel, info) {
 }
 
 function render(s) {
+  if (s.page_version && s.page_version !== PAGE_VERSION) { location.reload(); return; }
   state = s;
   const set = s.set;
   $("title").textContent = s.title || (set && set.songs[set.index]) || "Accompanist";
@@ -233,7 +243,9 @@ function render(s) {
     $("settitle").textContent = set.title || "The set";
     const html = set.cards.map((c, i) => `<li class="${i === set.index ? "now" : ""}">${i + 1}. ${c.title}` +
       `<small>${[c.meter, c.tempo ? Math.round(c.tempo) + " bpm" : "", c.harmony].filter(Boolean).join(" · ")}` +
-      `<br>start: ${c.start_shape} · finish: ${c.finish_shape}</small></li>`).join("");
+      `<br>start: ${c.start_shape} · finish: ${c.finish_shape}` +
+      `${c.transpose ? " · key " + (c.transpose > 0 ? "+" : "") + c.transpose : ""}` +
+      `${c.style ? " · " + c.style : ""}</small></li>`).join("");
     if ($("setlist").innerHTML !== html) $("setlist").innerHTML = html;
   }
   const sig = (s.voices || []).map(v => v.key).join();
@@ -247,7 +259,10 @@ function render(s) {
     if (dragging !== v.key) { input.value = v.value; out.textContent = Math.round(v.value * 100); }
     const off = on && !on.value;
     input.disabled = off;
-    if (off) out.textContent = "off";
+    input.parentElement.classList.toggle("muted", !!off);
+    const t = input.parentElement.querySelector(".toggle");
+    if (on && t) { t.textContent = off ? "off" : "on"; t.classList.toggle("on", !off);
+                   t.setAttribute("aria-pressed", off ? "false" : "true"); }
   }
 }
 

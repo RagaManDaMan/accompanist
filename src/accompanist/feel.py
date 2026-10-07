@@ -61,7 +61,7 @@ MACROS: dict[str, list[tuple[str, tuple]]] = {
     "response.feel": [
         ("response.chance", (1.0, 0.9, 0.6)),            # every pause .. not every pause
         ("response.curate", (0.0, 1.0, 1.0)),            # echo of your last phrase .. curated
-        ("response.variety", (0.0, 0.0, 0.35)),          # exact .. sometimes varied
+        ("response.variety", (0.0, 0.15, 0.35)),         # exact .. sometimes varied
         ("response.quantize", (1.0, 1.0, 0.3)),          # on the grid .. your own timing
         ("response.yield_to_you", (1.0, 1.0, 0.5)),      # stops for you .. gives way partly
         ("response.rhythm_variety", (0.0, 0.4, 0.6)),    # as you played .. 2x, 1/2x, triplets

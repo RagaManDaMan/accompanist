@@ -376,6 +376,33 @@ the likelier (`percussion.triplets`, reaching full after `percussion.triplet_bui
 and past 70% of that it doubles up into eighth-note triplets. Its knob is
 `percussion.feel`.
 
+## Key, mode or rāga, and time, for one run
+
+```
+accompanist run --key C --mode sahana --time-sig misra-chapu --preset voice
+accompanist run --key D --mode dorian --time-sig 7/8
+```
+
+- `--key`: the tonic (or the rāga's Sa): `C`, `F#`, `Bb`. Alone, the band hears the mode
+  from you; `--key "F lydian, D minor"` gives a palette to move between.
+- `--mode`: a mode (major, minor, dorian, lydian, mixolydian, minor-pentatonic, blues...)
+  or a rāga (sahana, kalyani, mohanam, bhairavi...; the 72 melakartas and the janyas in
+  `indian/ragas.toml`). A rāga gives the band its swaras as the key's scale, with Sa as the
+  tonic: the right notes for the answers and the chords. (Its phrases and gamakas, and
+  harmony that stays home on Sa, come with the rāga work later.)
+- `--tempo`: the tempo `s` counts in at. Without one, `s` can't count; tap the beat with
+  `t` instead (with `--time-sig`, any number of taps: they only give the tempo, and the
+  band comes in on the next 1 in your meter).
+- `--time-sig`: a time signature (3/4, 4/4, 5/4, 6/8, 7/8) or a tāla: misra-chapu and
+  rupak in 7 (3+2+2), khanda-chapu and jhaptal in 5, tisra-chapu in 3, rupakam in 3, adi,
+  tintal and keherwa in bars of 4, dadra in 6. It says how it took it when the band starts.
+- A rāga (`--mode`, or a rāga in a key palette) or a tāla (`--time-sig`) makes it an Indian
+  piece: the percussion (your mridangam or tabla) plays nearly throughout and steps
+  forward in the gaps, instead of coming and going in spells (styles/indic.toml; your own
+  `[percussion]` settings win).
+- Tab completes all three. In a song file the same are `[harmony] keys = "C sahana"` and
+  `[song] count = 7`.
+
 ## Typing less
 
 - **Part of a name is enough:** `--song lady`, `--set fusion`, `--preset voice`, as long as
@@ -425,8 +452,13 @@ shape = "tag"      # chord | button | tag | ritardando | piano-tag | random
   finish = "tag"
   ```
 
-  A set's plan comes over the song file's own `[start]` and `[ending]`, so the same song
-  can start one way at one gig and another way at the next. `--set NAME` says which set
+  The menu also moves the **key** (`<` `>` a semitone down or up: the chart, key palette and
+  root move together) and tries a **style pack** (type its name: `jazz-ballad`, `swing`,
+  `latin`, `pop`, `fusion`, or `as-written`), and `k` keeps those too (`transpose = 2`,
+  `style = "latin"`). A style pack (styles/NAME.toml; add your own in ./styles) sets how
+  the drums, bass, piano, percussion and pad play; the sounds stay the song's patch.
+  A set's plan comes over the song file's own settings, so the same song can start one
+  way, in one key and style, at one gig, and another way at the next. `--set NAME` says which set
   (needed only when the song is in more than one); `--start`/`--finish` begin with others.
 - The stage screen shows this song's start and finish (change them there for this run) and
   the set's, song by song.
@@ -446,6 +478,18 @@ number turns it on or off. Changes last for this run.
 - `[ui] enabled = false` (or `run --no-ui`) for none; `ui.open = false` to not open it;
   `ui.port` if 8765 is taken (it tries the next ones itself). If it can't start, the band
   plays on and the keys still work.
+
+## Walking bass
+
+`[pulse] line = "walk"`: the bass walks, a note on every beat, as a jazz bassist does: the
+root when a chord arrives; the beat before a new chord, an approach into its root (a half
+step from below or above, a step of the scale, its fifth, or now and then an enclosure:
+above, then below); between, chord tones and scale steps, never the same note twice,
+heading for where the next root lies. With a chart it knows the next chord; else it heads
+for the root on the next 1. `pulse.rhythm` adds swung "skips" (a ghosted eighth before
+the beat). `line = "two"`: the two-feel, half notes, root then fifth (or an approach),
+with pickups. `line = "shapes"` (default) keeps the bass shapes. The style packs `swing`
+(walk) and `jazz-ballad` (two-feel) use them: `accompanist rehearse --song lady --style swing`.
 
 ## Piano
 

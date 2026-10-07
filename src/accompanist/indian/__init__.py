@@ -49,7 +49,9 @@ DN = ((8, 9), (8, 10), (8, 11), (9, 10), (9, 11), (10, 11))  # D1N1 D1N2 D1N3 D2
 MELA_ALIASES = {
     "todi": 8, "mayamalavagowla": 15, "kiravani": 21, "kharaharapriya": 22,
     "harikambhoji": 28, "shankarabharanam": 29, "kalyani": 65, "subhapantuvarali": 45,
-    "simhendramadhyamam": 57, "shanmukhapriya": 56,
+    "simhendramadhyamam": 57, "shanmukhapriya": 56, "gowrimanohari": 23, "gaurimanohari": 23,
+    "sankarabharanam": 29, "dheerasankarabharanam": 29, "hanumatodi": 8, "natabhairavi": 20,
+    "charukesi": 26, "keeravani": 21, "hemavati": 58, "latangi": 63, "vachaspati": 64,
     # thāts
     "bilawal": 29, "kalyan": 65, "khamaj": 28, "kafi": 22, "asavari": 20,
     "bhairavi-thaat": 8, "bhairav": 15, "purvi": 51, "marwa-thaat": 53, "todi-thaat": 45,
@@ -150,8 +152,37 @@ def talas() -> dict[str, Tala]:
     return out
 
 
+# Spellings vary (Gowri, Gauri, Gouri; Sankarabharanam, Shankarabharanam; Mohanam,
+# Mohanamm): names are also matched on a plain form of their sound.
+_SOUND = (("aa", "a"), ("ee", "i"), ("oo", "u"), ("ow", "ou"), ("au", "ou"), ("w", "v"),
+          ("sh", "s"), ("th", "t"), ("dh", "d"), ("bh", "b"), ("kh", "k"), ("gh", "g"),
+          ("ch", "c"), ("jh", "j"), ("ph", "p"), ("zh", "l"))
+
+
+def plain_name(name: str) -> str:
+    import unicodedata
+
+    s = unicodedata.normalize("NFD", name.lower())
+    s = "".join(c for c in s if c.isalpha() and not unicodedata.combining(c))
+    for a, b in _SOUND:
+        s = s.replace(a, b)
+    out = []
+    for c in s:                                  # doubled letters count once
+        if not out or out[-1] != c:
+            out.append(c)
+    return "".join(out)
+
+
+@lru_cache(maxsize=1)
+def _by_sound() -> dict[str, Raga]:
+    out: dict[str, Raga] = {}
+    for n, r in ragas().items():
+        out.setdefault(plain_name(n), r)
+    return out
+
+
 def raga(name: str) -> Raga:
-    r = ragas().get(name.lower().strip())
+    r = find(name)
     if r is None:
         raise ConfigError(f"unknown rāga '{name}' (see accompanist/indian/ragas.toml, or a "
                           f"melakarta name)")
@@ -167,4 +198,6 @@ def tala(name: str) -> Tala:
 
 
 def find(name: str) -> Optional[Raga]:
-    return ragas().get(name.lower().strip())
+    """A rāga by name, alias, or any common spelling of it."""
+    key = name.lower().strip()
+    return ragas().get(key) or ragas().get(key.replace(" ", "-")) or _by_sound().get(plain_name(name))

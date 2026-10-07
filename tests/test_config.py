@@ -70,3 +70,19 @@ def test_part_of_a_name_is_enough_when_it_is_clear():
     assert c.resolve_name("nothing", names, "song") == "nothing"              # said later
     with pytest.raises(c.ConfigError, match="could be"):
         c.resolve_name("a", names, "song")
+
+
+def test_tab_completion_offers_what_each_option_takes(capsys):
+    from accompanist import cli
+
+    def values(*words):
+        cli.main(["complete", "value", *words])
+        return capsys.readouterr().out.split()
+
+    assert "count" in values("rehearse", "--", "--start")
+    assert "ritardando" in values("rehearse", "--", "--finish")
+    assert "swing" in values("rehearse", "--", "--style")
+    assert "lady-sings-the-blues" in values("rehearse", "--", "--song")
+    assert "voice" in values("run", "--", "--preset")
+    assert values("rehearse", "--", "--once") == ["__files__"]
+    assert {"add", "stats", "ragas"} <= set(values("library", "--", "library"))

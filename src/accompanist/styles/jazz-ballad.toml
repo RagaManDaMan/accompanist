@@ -1,0 +1,20 @@
+# A jazz ballad: brushes-soft swing drums, a pianist comping rootless voicings sparingly,
+# a bass that walks gently, no extra percussion.
+[drums]
+enabled = true
+style = "jazz"
+pattern = "swing"
+swing = 0.33
+velocity = 55
+[percussion]
+enabled = false
+[piano]
+enabled = true
+comp = 0.35
+voicing = "rootless"
+[pulse]
+line = "two"
+movement = 0.9
+rhythm = 0.2
+[pad]
+feel = 0.6

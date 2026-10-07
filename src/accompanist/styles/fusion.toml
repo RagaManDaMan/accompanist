@@ -1,0 +1,16 @@
+# Jazz-fusion: a real drummer's fusion grooves, percussion in spells, the piano comping
+# with colour, the bass busy and varied.
+[drums]
+enabled = true
+style = "jazz/fusion"
+pattern = "basic"
+[percussion]
+enabled = true
+pattern = "latin"
+[piano]
+enabled = true
+comp = 0.45
+voicing = "auto"
+[pulse]
+movement = 0.9
+rhythm = 0.6

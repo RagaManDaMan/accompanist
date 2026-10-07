@@ -57,6 +57,10 @@ def stage_key() -> str:
 class StageServer:
     def __init__(self, port: int, lan: bool = False) -> None:
         self.key = stage_key()
+        # The page this run serves: a tab left open from an earlier run reloads itself when
+        # it differs (else it would keep the old page's code).
+        import hashlib
+        self.page_version = hashlib.sha1(PAGE.read_bytes()).hexdigest()[:12]
         self.last_seen = float("-inf")         # when a page last asked (time.monotonic())
         self.requests: "queue.Queue[tuple[str, Any, Any]]" = queue.Queue()
         self._snapshot = b"{}"
@@ -89,7 +93,7 @@ class StageServer:
 
     def publish(self, state: dict) -> None:
         """The run loop's latest view of the band (any JSON-able dict)."""
-        data = json.dumps(state, default=str).encode()
+        data = json.dumps({**state, "page_version": self.page_version}, default=str).encode()
         with self._lock:
             self._snapshot = data
 
@@ -107,11 +111,7 @@ class StageServer:
         def later() -> None:
             time.sleep(WATCHING_S)
             if time.monotonic() - self.last_seen > WATCHING_S:
-                import webbrowser
-                try:
-                    webbrowser.open(self.url)
-                except Exception:
-                    pass
+                open_in_background(self.url)
 
         threading.Thread(target=later, daemon=True).start()
 
@@ -122,6 +122,26 @@ class StageServer:
     def snapshot(self) -> bytes:
         with self._lock:
             return self._snapshot
+
+
+def open_in_background(url: str) -> None:
+    """Open the page without taking the screen from the terminal: on a Mac `open -g` (the
+    browser stays behind); elsewhere the usual way."""
+    import subprocess
+    import sys
+    import webbrowser
+
+    try:
+        if sys.platform == "darwin":
+            subprocess.run(["open", "-g", url], check=True, timeout=10,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+    except Exception:
+        pass
+    try:
+        webbrowser.open(url, autoraise=False)
+    except Exception:
+        pass
 
 
 def lan_address() -> Optional[str]:
@@ -161,7 +181,8 @@ def _handler(server: StageServer):
                 self._send(403, b"This page needs the address the accompanist printed "
                                 b"(it ends in ?k=...).", "text/plain; charset=utf-8")
             elif path == "/":
-                self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+                page = PAGE.read_bytes().replace(b"__PAGE_VERSION__", server.page_version.encode())
+                self._send(200, page, "text/html; charset=utf-8")
             elif path == "/state":
                 self._send(200, server.snapshot())
             else:

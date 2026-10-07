@@ -1,0 +1,17 @@
+# Medium swing: a real drummer's swing, the piano comping rootless voicings, the bass on
+# every beat with movement.
+[drums]
+enabled = true
+style = "jazz/swing"
+pattern = "swing"
+swing = 0.33
+[percussion]
+enabled = false
+[piano]
+enabled = true
+comp = 0.6
+voicing = "rootless"
+[pulse]
+line = "walk"
+movement = 1.0
+rhythm = 0.1

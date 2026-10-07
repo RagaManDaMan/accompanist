@@ -96,3 +96,13 @@ def test_learnt_profiles_name_the_nearest_raga(tmp_path):
     sung = [(t, k, d) for t, k, d in mohanam if k != 2]                # a little different
     (score, best), _ = book.rank(features(sung), top=2)
     assert best.name == "Mōhanaṁ" and best.label == "Mōhanaṁ (C)" and 0 < score <= 1
+
+
+def test_raga_names_are_found_however_they_are_spelled():
+    same = indian.find("gourimanohari").pitch_classes
+    for spelling in ("gowrimanohari", "Gaurimanohari", "gowri-manohari"):
+        assert indian.find(spelling).pitch_classes == same
+    assert indian.find("pilu").pitch_classes == same                     # as the band takes it
+    assert indian.find("sankarabharanam").pitch_classes == indian.find("shankarabharanam").pitch_classes
+    assert indian.find("mayamalavagaula") is not None
+    assert indian.find("nosuchraga") is None

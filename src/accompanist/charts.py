@@ -396,6 +396,19 @@ class ChartModel:
         if chord is not self._chord:           # a new chord: its colour starts from scratch
             self._chord, self._heard, self._added = chord, Counter(), []
 
+    def upcoming(self, beats: int) -> list[int]:
+        """The bass note (pitch class) of the chart's chord on each of the next `beats` beats,
+        as played (transposed): for a bass line heading for the next chord."""
+        if self.pos is None:
+            return []
+        t = self.cfg.harmony.transpose
+        out = []
+        for k in range(1, beats + 1):
+            chord = self.chart.chord_at(self.pos + k)[0]
+            bass = chord.bass if chord.bass is not None else chord.root
+            out.append((bass + t) % 12)
+        return out
+
     @property
     def position(self) -> Optional[dict]:
         if self.pos is None:

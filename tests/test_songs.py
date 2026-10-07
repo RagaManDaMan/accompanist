@@ -69,7 +69,7 @@ def test_s_counts_in_at_the_song_tempo_and_meter_then_drums_lead():
 
 def test_without_a_song_tempo_s_says_to_count_off():
     ctl = Controller(c.from_dict({}), SafeOutput(RecordingPort()))
-    assert "count off with t" in ctl.do("song_start", 0.0)
+    assert "tap the beat with t" in ctl.do("song_start", 0.0)
 
 
 def test_chart_restart_still_works_as_before():

@@ -21,6 +21,9 @@ from .output import SafeOutput
 
 COUNT_METERS = (3, 4, 5, 6, 7)   # taps in a count-off: the meter
 TAP_RESET_S = 2.5                # a longer gap between taps starts a new count
+COUNT_SLACK_S = 0.1              # a count-off is over only once the next tap is this late (at least).
+                                 # More is kinder to a late tap, but the band's first 1 would come
+                                 # that late too; with a known meter no waiting is needed at all
 
 
 class Controller:
@@ -231,7 +234,8 @@ class Controller:
                 return f"drone: {chord.label()} holds, in free time; s again counts the band in"
             bpm = eng.start_song(now)
             if bpm is None:
-                return "no song tempo to count in at: set [song] tempo, or count off with t"
+                return ("s needs a tempo to count in at: start with --tempo 90 (or [song] "
+                        "tempo), or tap the beat with t and the band comes in after your taps")
             title = self.cfg.song.title
             count = eng._count_total
             then = {"intro": f", then {self.cfg.start.bars} bars of the band before you",
@@ -290,6 +294,15 @@ class Controller:
             return None
         bpm = self._tapped_bpm()
         eng = self.engine
+        meter = self.cfg.song.count
+        if not eng.is_chart and meter and len(self._taps) == meter:
+            self._set_tempo_prior(bpm)               # the song's meter is known: a bar of taps
+            period = 60.0 / bpm                      # is the count, and the band comes in on
+            self._taps = []                          # time, on the next 1 (no waiting)
+            if eng.count_off(meter, bpm, now + period, now):
+                self.events.append(f"counted in at {bpm:.0f} bpm in {meter} "
+                                   f"({eng.groove.label()}, tempo LOCKED)")
+            return bpm
         if eng.is_chart and len(self._taps) >= max(1, eng.harmony.beats_per_bar):
             self._set_tempo_prior(bpm)
             eng.set_tempo(bpm)
@@ -322,9 +335,16 @@ class Controller:
         bpm = self._tapped_bpm()
         period = 60.0 / bpm
         last = self._taps[-1]
-        if now < last + period * (1 + self.cfg.groove.count_wait):
-            return
+        if now < last + period + max(period * self.cfg.groove.count_wait, COUNT_SLACK_S):
+            return                                   # (a fast count needs room for a late tap)
         n, self._taps = len(self._taps), []
+        meter = self.cfg.song.count
+        if meter:                                    # the song's meter is known (--time-sig):
+            self._set_tempo_prior(bpm)               # the taps only give the tempo
+            if self.engine.count_off(meter, bpm, last + period, now):
+                self.events.append(f"counted in at {bpm:.0f} bpm in {meter} "
+                                   f"({self.engine.groove.label()}, tempo LOCKED)")
+            return
         if n not in COUNT_METERS:
             self.events.append(f"counted {n}: count {COUNT_METERS[0]} to {COUNT_METERS[-1]} "
                                f"beats to start the band")

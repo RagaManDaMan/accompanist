@@ -115,7 +115,7 @@ def test_key_palettes_parse_and_reject_nonsense():
 
     assert parse_keys("F lydian, D minor, Bb mixolydian") == [(5, "lydian"), (2, "minor"),
                                                              (10, "mixolydian")]
-    with pytest.raises(c.ConfigError, match="mode one of"):
+    with pytest.raises(c.ConfigError, match="then a mode"):
         c.from_dict({"harmony": {"keys": "F lidian"}})
     with pytest.raises(c.ConfigError, match="tonic and mode"):
         c.from_dict({"harmony": {"keys": "F"}})
@@ -174,3 +174,52 @@ def test_auto_modes_can_be_turned_off():
         m.observe(Onset(i * 0.4, n, 80))
         m.propose(i * 0.4)
     assert m.key_label in ("C minor", "D# major")
+
+
+def test_a_key_can_be_a_raga_with_its_sa():
+    from accompanist import modal
+
+    assert modal.parse_keys("C sahana") == [(0, "sahana")]
+    assert sorted(modal.SCALES["sahana"]) == [0, 2, 4, 5, 7, 9, 10]
+    assert modal.parse_keys("D kalyani")[0][0] == 2
+    with pytest.raises(ValueError, match="rāga"):
+        modal.parse_keys("C nosuchraga")
+
+
+def run_args(**kw):
+    class A:
+        key = mode = time_sig = chart = transpose = tempo = set = song = None
+    a = A()
+    for k, v in kw.items():
+        setattr(a, k, v)
+    return a
+
+
+def test_run_key_and_mode_set_the_key_or_raga():
+    from accompanist import cli, config as c
+
+    assert cli.chart_overrides(run_args(key="C sahana"))["harmony"] == {"model": "modal", "keys": "C sahana"}
+    assert cli.chart_overrides(run_args(key="C", mode="sahana"))["harmony"]["keys"] == "C sahana"
+    assert cli.chart_overrides(run_args(key="D", mode="dorian"))["harmony"]["keys"] == "D dorian"
+    assert cli.chart_overrides(run_args(key="F#"))["harmony"] == {"model": "modal", "root": "F#",
+                                                                  "mode": "auto"}
+    with pytest.raises(c.ConfigError, match="--key too"):
+        cli.chart_overrides(run_args(mode="sahana"))
+
+
+@pytest.mark.parametrize("sig,bar", [("3/4", 3), ("6/8", 6), ("7/8", 7), ("5/4", 5),
+                                     ("rupakam", 3), ("misra-chapu", 7), ("adi", 4),
+                                     ("tintal", 4), ("rupak", 7), ("jhaptal", 5), ("dadra", 6),
+                                     ("khanda-chapu", 5), ("ektal", 4)])
+def test_time_sig_takes_a_meter_or_a_tala(sig, bar):
+    from accompanist import cli
+
+    assert cli.meter_of(sig)[0] == bar
+    assert cli.chart_overrides(run_args(time_sig=sig))["song"]["count"] == bar
+
+
+def test_an_unknown_time_sig_says_what_it_takes():
+    from accompanist import cli, config as c
+
+    with pytest.raises(c.ConfigError, match="time signature"):
+        cli.meter_of("9/16")

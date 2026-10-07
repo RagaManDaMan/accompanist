@@ -298,8 +298,15 @@ class Engine:
                     group = bar_pos in GROUPS.get(bpb, (0,))
                     bass_chord = next((v for v in (self.pad.current, self.proposal, voicing)
                                        if v is not None and v.root_pc == pulse_root), None)
+                    next_root = to_change = None
+                    if hasattr(self.harmony, "upcoming") and not self.chord_held:
+                        for k, pc in enumerate(self.harmony.upcoming(2 * bpb)):
+                            if pc != pulse_root:          # the next chord: its bass, how soon
+                                next_root, to_change = pc, k + 1
+                                break
                     self.pulse.on_beat(now, pulse_root, gain, bar_pos, boost, group,
-                                       bass_chord, bpb, self._scale_pcs(), self.clock.period)
+                                       bass_chord, bpb, self._scale_pcs(), self.clock.period,
+                                       next_root, to_change)
                 if self.cfg.drums.enabled:
                     swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
                              and self.groove.meter and not self.is_chart else None)
@@ -448,7 +455,8 @@ class Engine:
         il = self.cfg.interlude
         resting = (il.enabled and self.last_onset_t is not None and not self.in_break
                    and not self._finish_requested
-                   and now - self.last_onset_t >= il.after_beats * self.clock.period)
+                   and now - self.last_onset_t >= max(il.after_beats * self.clock.period,
+                                                      il.after_s))
         if not resting:
             self._interlude_bar0 = None
             return
