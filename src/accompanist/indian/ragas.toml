@@ -65,6 +65,12 @@ note = "janya of Kharaharapriya (22), vakra; a very close relative of Bageshree 
 arohana = "S R2 G2 M1 D2 N2 S'"
 avarohana = "S' N2 P M1 G2 M1 R2 S"
 
+[ragas.sahana]
+tradition = "carnatic"
+note = "janya of Harikambhoji (28), vakra in both directions; the scale of mixolydian, its life in the phrases (R G M P M D N S, S N D P M G M R G R S)"
+arohana = "S R2 G3 M1 P M1 D2 N2 S'"
+avarohana = "S' N2 D2 P M1 G3 M1 R2 G3 R2 S"
+
 [ragas.anandabhairavi]
 tradition = "carnatic"
 note = "janya of Kharaharapriya (22), vakra ascent; bhashanga: anya swaras (G3, D1) in some phrases (to verify)"

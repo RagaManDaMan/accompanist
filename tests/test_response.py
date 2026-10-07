@@ -254,3 +254,19 @@ def test_an_interlude_solo_strings_phrases_together_to_fill_its_turn():
     r.play_from_memory(0.0, 0.5, {0, 4, 7}, None, 1.0, 0.0, beats=15)
     times = sorted(t for t, *_ in r._queue)
     assert len(times) >= 12 and times[-1] > 4.0                         # several phrases, ~8 s
+
+
+def test_solos_sit_where_you_sing_runs_allowed_leaps_not():
+    from accompanist import config as c
+    from accompanist.output import RecordingPort, SafeOutput
+    from accompanist.response import ResponseResponder
+
+    r = ResponseResponder(c.from_dict({}).response, SafeOutput(RecordingPort()))
+    for i, n in enumerate([50, 52, 53, 55, 57, 53, 52, 50] * 5):          # you, around F3
+        r.hear(i * 0.3, n, 80, 0.5)
+    run = [72, 74, 76, 77, 79, 81, 83, 84, 86, 88]                        # a run, high up
+    out = r.centred(run)
+    assert [b - a for a, b in zip(out, out[1:])] == [b - a for a, b in zip(run, run[1:])]
+    assert abs(sorted(out)[len(out) // 2] - r.register) <= 6               # moved to you
+    slip = r.centred([53, 55, 67 + 12, 57, 55])                            # an octave slip
+    assert max(abs(b - a) for a, b in zip(slip, slip[1:])) <= 12

@@ -49,13 +49,15 @@
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
        font-weight: 600; margin: 26px 2px 8px; }
   .voices { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-  .voice { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 12px;
+  .voice { display: grid; grid-template-columns: 92px 1fr 36px 58px; align-items: center; gap: 12px;
            padding: 12px 14px; border-top: 1px solid var(--line); }
   .voice:first-child { border-top: 0; }
   .voice label { font-weight: 600; }
   .voice output { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
-  .switch { justify-self: end; }
+  .toggle { min-height: 36px; padding: 6px 0; font-size: .8rem; border-radius: 999px; }
+  .toggle.on { background: var(--go); border-color: var(--go); color: #fff; }
+  .voice.muted label, .voice.muted output { opacity: .45; }
   .plan { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
   .plan .row { display: grid; grid-template-columns: 92px 1fr; gap: 4px 12px; padding: 12px 14px;
                border-top: 1px solid var(--line); align-items: start; }
@@ -74,7 +76,7 @@
   @media (max-width: 420px) {
     .big { grid-template-columns: repeat(2, 1fr); }
     .big div:last-child { grid-column: span 2; }
-    .voice { grid-template-columns: 78px 1fr 44px; }
+    .voice { grid-template-columns: 70px 1fr 30px 52px; gap: 8px; }
   }
 </style>
 </head>
@@ -120,7 +122,9 @@
     <ol class="setlist" id="setlist"></ol>
   </div>
 
-  <footer>The same keys work here as in the terminal. Changes last for this run.</footer>
+  <footer>The same keys work here as in the terminal. Each voice's slider is its feel
+    (left: steady and exact, right: loose and human); on/off turns the voice on or off.
+    Changes last for this run.</footer>
 </main>
 <script>
 const KEY = new URLSearchParams(location.search).get("k") || "";
@@ -179,17 +183,21 @@ function buildVoices(voices) {
     const name = v.label.replace(/ feel$/, "");
     row.innerHTML = `<label for="${v.key}">${name}</label>
       <input type="range" id="${v.key}" min="${v.min}" max="${v.max}" step="${v.step || 0.01}">
-      <output></output>`;
+      <output></output>
+      <button class="toggle" type="button" ${on ? "" : "hidden"}></button>`;
     const input = row.querySelector("input"), out = row.querySelector("output");
     input.addEventListener("input", () => {
       dragging = v.key; out.textContent = Math.round(input.value * 100);
       post("/set", {key: v.key, value: parseFloat(input.value)});
     });
     input.addEventListener("change", () => { dragging = null; });
-    if (on) {
-      out.style.cursor = "pointer";
-      out.title = "tap: " + on.label;
-      out.addEventListener("click", () => post("/set", {key: on.key, value: !on.value}));
+    if (on) {                                      // on/off: from the latest state, not
+      const t = row.querySelector(".toggle");       // the one this row was built from
+      t.title = on.label;
+      t.addEventListener("click", () => {
+        const now = state.voices.find(o => o.key === on.key);
+        post("/set", {key: on.key, value: !(now ? now.value : on.value)});
+      });
     }
     box.appendChild(row);
   }
@@ -249,7 +257,10 @@ function render(s) {
     if (dragging !== v.key) { input.value = v.value; out.textContent = Math.round(v.value * 100); }
     const off = on && !on.value;
     input.disabled = off;
-    if (off) out.textContent = "off";
+    input.parentElement.classList.toggle("muted", !!off);
+    const t = input.parentElement.querySelector(".toggle");
+    if (on && t) { t.textContent = off ? "off" : "on"; t.classList.toggle("on", !off);
+                   t.setAttribute("aria-pressed", off ? "false" : "true"); }
   }
 }
 

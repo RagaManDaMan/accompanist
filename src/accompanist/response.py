@@ -26,6 +26,10 @@ MAX_IOI_BEATS = 1.5       # ...and at most this many beats
 LAST_NOTE_BEATS = 1.5     # the answer's last note rings this long
 GATE = 0.9                # notes sound for this share of their interval
 SPAN = 9                  # answer notes stay within this many semitones of the voice's centre
+REGISTER_NOTES = 40       # your register: the middle (median) of your last this many notes;
+REGISTER_SPAN = 17        # answers and solos centre there, ranging up to this far from it
+                          # (an octave and a fourth: room for a run, not the whole fretboard)
+MAX_LEAP = 12             # and no jump between two notes wider than an octave
 BLIP_S = 0.09             # a remembered phrase drops notes shorter than this
 # Rhythmic variations of a phrase (response.rhythm_variety): name -> (interval scale, grid
 # notes per beat). Double time only up to DOUBLE_MAX_BPM, half time only from HALF_MIN_BPM.
@@ -195,6 +199,7 @@ class ResponseResponder:
         self._queue: list[tuple[float, int, int, int, float]] = []   # (t, seq, note, vel, dur)
         self._seq = itertools.count()
         self._sounding: dict[int, float] = {}                       # note -> ends at
+        self._heard: list[int] = []                                 # your recent notes
 
     def hear(self, t: float, note: int, velocity: int, period: float) -> None:
         """You played: the answer gives way (yield_to_you); the note joins your phrase (or
@@ -205,6 +210,41 @@ class ResponseResponder:
             self.phrase_count += 1
         self.phrase.append((t, note, velocity))
         self.last_t = t
+        self._heard = (self._heard + [note])[-REGISTER_NOTES:]
+
+    @property
+    def register(self) -> Optional[float]:
+        """The middle of your recent playing (a median: an octave slip doesn't move it)."""
+        if not self._heard:
+            return None
+        h = sorted(self._heard)
+        return float(h[len(h) // 2])
+
+    def centred(self, pitches: list[int]) -> list[int]:
+        """Tastefully human: the phrase moved by octaves so its middle sits where you sing
+        (response.octave unset) or in that octave. A run may climb or fall an octave or more,
+        as a guitarist's does, but stays within REGISTER_SPAN of the centre, and a note that
+        would jump more than MAX_LEAP from the one before (an octave slip in what was heard,
+        or a phrase stitched from two registers) moves an octave toward it."""
+        centre = self.register if self.cfg.octave is None else 12 * (self.cfg.octave + 1) + 4
+        if centre is None or not pitches:
+            return pitches
+        mid = sorted(pitches)[len(pitches) // 2]
+        shift = round((centre - mid) / 12) * 12
+        out: list[int] = []
+        for p in pitches:
+            p += shift
+            while p > centre + REGISTER_SPAN:
+                p -= 12
+            while p < centre - REGISTER_SPAN:
+                p += 12
+            if out:                                  # continuity over the edge of the span
+                while p - out[-1] > MAX_LEAP:
+                    p -= 12
+                while out[-1] - p > MAX_LEAP:
+                    p += 12
+            out.append(p)
+        return out
 
     def _give_way(self, amount: float) -> None:
         """1: stop at once. 0: carry on. In between: keep that share (1 - amount) of the notes
@@ -260,6 +300,7 @@ class ResponseResponder:
         grid = next_beat is not None
         if self.rng.random() < self.cfg.variety:            # a variation of what you just played
             notes = make_answer(current, chord_pcs, scale_pcs, self.rng, self.cfg, period, gain, grid)
+            notes = [(o, n, v, d) for (o, _, v, d), n in zip(notes, self.centred([x[1] for x in notes]))]
         else:                                               # one of your own phrases
             if self.cfg.curate >= 1 or self.rng.random() < self.cfg.curate:   # an earlier one...
                 phrase, used = self._recall(current, chord_pcs, scale_pcs)
@@ -271,11 +312,7 @@ class ResponseResponder:
         self._schedule(notes, now, period, next_beat)
 
     def _phrase_notes(self, phrase, period: float, gain: float, grid: bool):
-        pitches = [n for _, n, _ in phrase]
-        if self.cfg.octave is not None:                     # a fixed register, contour kept
-            centre = 12 * (self.cfg.octave + 1) + 4
-            shift = round((centre - sum(pitches) / len(pitches)) / 12) * 12
-            pitches = [p + shift for p in pitches]
+        pitches = self.centred([n for _, n, _ in phrase])   # where you sing (or the octave)
         iois = [b[0] - a[0] for a, b in zip(phrase, phrase[1:])]
         rhythm = self._pick_rhythm(period) if grid else None
         scale, per_beat = RHYTHMS.get(rhythm, (1.0, 2))

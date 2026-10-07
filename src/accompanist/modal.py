@@ -65,6 +65,19 @@ TRIAD_KEY_WEIGHT = 0.5
 HOME_KEY_BONUS = 0.15      # the palette's first key is home: ties and slow returns go there
 
 
+def raga_scale(name: str) -> Optional[str]:
+    """A rāga (indian/ragas.toml, or a melakarta) as a scale: its swaras from Sa, added to
+    SCALES under its name. Its name, or None if there is no such rāga."""
+    from . import indian
+
+    r = indian.find(name)
+    if r is None:
+        return None
+    key = name.lower().strip()
+    SCALES.setdefault(key, frozenset(r.pitch_classes))
+    return key
+
+
 def parse_keys(text: str) -> list[tuple[int, str]]:
     """"F lydian, D minor, A harmonic-minor" -> [(5, 'lydian'), (2, 'minor'), ...]."""
     from .config import ConfigError, parse_root
@@ -79,9 +92,11 @@ def parse_keys(text: str) -> list[tuple[int, str]]:
         except ConfigError:
             tonic = None
         mode = words[1].lower()
-        if tonic is None or mode not in MODES:
-            raise ValueError(f"'{part.strip()}': tonic must be a note (F, Bb, C#) and mode one of "
-                             f"{', '.join(MODES)}")
+        if mode not in MODES:
+            mode = raga_scale(mode) or mode            # a rāga: its swaras as the scale
+        if tonic is None or mode not in SCALES:
+            raise ValueError(f"'{part.strip()}': tonic must be a note (F, Bb, C#), then a mode "
+                             f"({', '.join(MODES)}) or a rāga (e.g. 'C sahana', 'D kalyani')")
         out.append((tonic, mode))
     return out
 

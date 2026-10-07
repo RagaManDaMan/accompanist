@@ -376,6 +376,26 @@ the likelier (`percussion.triplets`, reaching full after `percussion.triplet_bui
 and past 70% of that it doubles up into eighth-note triplets. Its knob is
 `percussion.feel`.
 
+## Key, mode or rāga, and time, for one run
+
+```
+accompanist run --key C --mode sahana --time-sig misra-chapu --preset voice
+accompanist run --key D --mode dorian --time-sig 7/8
+```
+
+- `--key`: the tonic (or the rāga's Sa): `C`, `F#`, `Bb`. Alone, the band hears the mode
+  from you; `--key "F lydian, D minor"` gives a palette to move between.
+- `--mode`: a mode (major, minor, dorian, lydian, mixolydian, minor-pentatonic, blues...)
+  or a rāga (sahana, kalyani, mohanam, bhairavi...; the 72 melakartas and the janyas in
+  `indian/ragas.toml`). A rāga gives the band its swaras as the key's scale, with Sa as the
+  tonic: the right notes for the answers and the chords. (Its phrases and gamakas, and
+  harmony that stays home on Sa, come with the rāga work later.)
+- `--time-sig`: a time signature (3/4, 4/4, 5/4, 6/8, 7/8) or a tāla: misra-chapu and
+  rupak in 7 (3+2+2), khanda-chapu and jhaptal in 5, tisra-chapu in 3, rupakam in 3, adi,
+  tintal and keherwa in bars of 4, dadra in 6. It says how it took it when the band starts.
+- Tab completes all three. In a song file the same are `[harmony] keys = "C sahana"` and
+  `[song] count = 7`.
+
 ## Typing less
 
 - **Part of a name is enough:** `--song lady`, `--set fusion`, `--preset voice`, as long as

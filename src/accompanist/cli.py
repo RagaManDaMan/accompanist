@@ -966,16 +966,64 @@ def song_overrides(args, song: str) -> dict:
     return chart_overrides(a)
 
 
+METERS = {"3/4": 3, "3/8": 3, "4/4": 4, "2/2": 4, "5/4": 5, "5/8": 5, "6/8": 6, "6/4": 6,
+          "7/4": 7, "7/8": 7, "12/8": 4}
+
+
+def meter_of(text: str) -> tuple[int, str]:
+    """--time-sig: a time signature (3/4, 6/8, 7/8...) or a tāla (rupakam, misra-chapu,
+    tintal...) -> (beats per bar for the band, what that means, said at the start)."""
+    from . import indian
+
+    t = text.strip().lower()
+    if t in METERS:
+        return METERS[t], t
+    try:
+        tala = indian.tala(t)
+    except cfgmod.ConfigError:
+        raise cfgmod.ConfigError(f"--time-sig '{text}': a time signature ({', '.join(METERS)}) "
+                                 f"or a tāla (adi, rupakam, misra-chapu, khanda-chapu, tintal, "
+                                 f"rupak, jhaptal, ektal, keherwa, dadra...)") from None
+    beats, groups = tala.beats, "+".join(map(str, tala.groups))
+    if tala.name == "rupakam":
+        bar = 3                                      # 2 + 4, felt in 3
+    elif 3 <= beats <= 7:
+        bar = beats
+    else:
+        bar = next(n for n in (4, 3, 7, 5, 6) if beats % n == 0) if any(
+            beats % n == 0 for n in (4, 3, 7, 5, 6)) else 4
+    said = f"{tala.name}: {beats} beats ({groups})"
+    if bar != beats:
+        said += f", played as bars of {bar}"
+    if bar == 5 and tala.groups[0] == 2:
+        said += " (felt 3+2 for now: 2+3 comes with the tāla percussion)"
+    return bar, said
+
+
 def _chart_overrides(args) -> dict:
     h = {}
+    key, mode = getattr(args, "key", None), getattr(args, "mode", None)
+    if mode and not key:
+        raise cfgmod.ConfigError("--mode needs --key too (the tonic, or the rāga's Sa): "
+                                 "--key C --mode sahana")
+    if key:                                          # --key C, --key "C sahana", + --mode
+        words = key.split()
+        if mode:
+            h.update(model="modal", keys=f"{words[0]} {mode}")
+        elif len(words) == 1 and "," not in key:     # a tonic alone: the mode heard from you
+            h.update(model="modal", root=words[0], mode="auto")
+        else:
+            h.update(model="modal", keys=key)
     if getattr(args, "chart", None):
         h.update(model="chart", chart=args.chart)
     if getattr(args, "transpose", None) is not None:
         h["transpose"] = args.transpose
     out = {}
+    if getattr(args, "time_sig", None):              # --time-sig 7/8, or a tāla
+        out["song"] = {"count": meter_of(args.time_sig)[0]}
     if getattr(args, "tempo", None) is not None:
         h["chart_bpm"] = args.tempo
-        out["song"] = {"tempo": args.tempo}          # --tempo also beats a song file's tempo
+        out.setdefault("song", {})["tempo"] = args.tempo   # --tempo also beats a song file's
     if h:
         out["harmony"] = h
     return out
@@ -1175,6 +1223,10 @@ def cmd_run(args) -> int:
     where = cfg.output.port or f"virtual source '{cfg.output.virtual_name}'"
     print(f"Playing to {where}." + (f" Preset: {cfg.preset}." if cfg.preset else ""))
     print(voices_summary(cfg))
+    if getattr(args, "time_sig", None):
+        print(f"Time: {meter_of(args.time_sig)[1]}")
+    if getattr(args, "key", None):
+        print(f"Key: {cfg.harmony.keys or cfg.harmony.root}")
     if set_songs:
         print(f"Set: {set_title}: " + ", ".join(f"{i + 1}. {s}" for i, s in enumerate(set_songs))
               + "   ([ ] or the arrows: previous / next song)")
@@ -1761,6 +1813,18 @@ def main(argv=None) -> int:
                             help="save the (first) audio input to a WAV file")
         if name == "run":
             sp.add_argument("--preset", default=None, help=PRESET_HELP)
+            sp.add_argument("--key", default=None, metavar="C",
+                            help="the tonic (or the rāga's Sa): C, F#, Bb; with --mode, or in one: "
+                                 "\"C sahana\"; several, comma-separated, to move between "
+                                 "(\"F lydian, D minor\")")
+            sp.add_argument("--mode", default=None, metavar="MODE",
+                            help="a mode (major, minor, dorian, lydian, mixolydian, "
+                                 "minor-pentatonic, blues...) or a rāga (sahana, kalyani, "
+                                 "mohanam, bhairavi...): --key C --mode sahana")
+            sp.add_argument("--time-sig", default=None, metavar="METER",
+                            help="a time signature (3/4, 4/4, 5/4, 6/8, 7/8) or a tāla "
+                                 "(adi, rupakam, misra-chapu, khanda-chapu, tintal, rupak, "
+                                 "jhaptal...): the band's bars")
             add_chart_args(sp)
             sp.add_argument("--record-audio", default=None, metavar="FILE.wav",
                             help="also save the (first) audio input to a WAV file")
@@ -1893,8 +1957,18 @@ def main(argv=None) -> int:
             sp = sub.choices.get(args.command)
             action = next((a for a in (sp._actions if sp else [])
                            if args.option in a.option_strings), None)
+            def modes():
+                from . import indian
+                from .modal import MODES
+                return list(MODES) + sorted({r.name for r in indian.ragas().values()})
+
+            def meters():
+                from . import indian
+                return list(METERS) + sorted(n for n, t in indian.talas().items() if n == t.name)
+
             named = {"song": cfgmod.available_songs, "set": cfgmod.available_sets,
-                     "preset": cfgmod.available_presets, "style": cfgmod.available_styles}
+                     "preset": cfgmod.available_presets, "style": cfgmod.available_styles,
+                     "mode": modes, "time_sig": meters}
             if action is None and args.option == args.command:   # right after the command:
                 names = [str(ch) for a in (sp._actions if sp else [])   # its first word's choices
                          if not a.option_strings and a.choices for ch in a.choices] or ["__files__"]
