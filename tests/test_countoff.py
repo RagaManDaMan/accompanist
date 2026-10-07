@@ -115,3 +115,10 @@ def test_with_a_known_meter_the_taps_only_set_the_tempo():
     res, _ = count(4, extra={"song": {"count": 7}})
     assert res.engine.groove.label().startswith("7") and res.engine.locked
     assert res.engine.tempo.bpm == pytest.approx(100, rel=0.01)
+
+
+def test_with_a_known_meter_a_bar_of_taps_brings_the_band_in_on_time():
+    res, downbeat = count(7, extra={"song": {"count": 7}})
+    kicks = [t for t, _ in hits(res, 9, 36)]
+    assert kicks[0] == pytest.approx(downbeat, abs=0.01)          # on the 1, no waiting
+    assert res.engine.groove.label().startswith("7")
