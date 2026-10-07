@@ -57,6 +57,10 @@ def stage_key() -> str:
 class StageServer:
     def __init__(self, port: int, lan: bool = False) -> None:
         self.key = stage_key()
+        # The page this run serves: a tab left open from an earlier run reloads itself when
+        # it differs (else it would keep the old page's code).
+        import hashlib
+        self.page_version = hashlib.sha1(PAGE.read_bytes()).hexdigest()[:12]
         self.last_seen = float("-inf")         # when a page last asked (time.monotonic())
         self.requests: "queue.Queue[tuple[str, Any, Any]]" = queue.Queue()
         self._snapshot = b"{}"
@@ -89,7 +93,7 @@ class StageServer:
 
     def publish(self, state: dict) -> None:
         """The run loop's latest view of the band (any JSON-able dict)."""
-        data = json.dumps(state, default=str).encode()
+        data = json.dumps({**state, "page_version": self.page_version}, default=str).encode()
         with self._lock:
             self._snapshot = data
 
@@ -161,7 +165,8 @@ def _handler(server: StageServer):
                 self._send(403, b"This page needs the address the accompanist printed "
                                 b"(it ends in ?k=...).", "text/plain; charset=utf-8")
             elif path == "/":
-                self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+                page = PAGE.read_bytes().replace(b"__PAGE_VERSION__", server.page_version.encode())
+                self._send(200, page, "text/html; charset=utf-8")
             elif path == "/state":
                 self._send(200, server.snapshot())
             else:

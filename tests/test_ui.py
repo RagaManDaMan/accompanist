@@ -35,7 +35,7 @@ def test_the_page_and_its_state_are_served(stage):
     status, page = call(stage, "/")
     assert status == 200 and b"Count in" in page
     stage.publish({"bpm": 92.0})
-    assert json.loads(call(stage, "/state")[1]) == {"bpm": 92.0}
+    assert json.loads(call(stage, "/state")[1])["bpm"] == 92.0
 
 
 def test_buttons_and_knobs_become_requests_for_the_run_loop(stage):
@@ -82,3 +82,10 @@ def test_a_watching_page_is_noticed(stage):
     call(stage, "/state")
     import time
     assert time.monotonic() - stage.last_seen < 1
+
+
+def test_an_open_tab_from_an_older_run_reloads_to_this_page(stage):
+    status, page = call(stage, "/")
+    assert stage.page_version.encode() in page and b"__PAGE_VERSION__" not in page
+    stage.publish({"bpm": 90.0})
+    assert json.loads(call(stage, "/state")[1])["page_version"] == stage.page_version
