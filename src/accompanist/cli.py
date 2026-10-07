@@ -1960,7 +1960,7 @@ def main(argv=None) -> int:
             def modes():
                 from . import indian
                 from .modal import MODES
-                return list(MODES) + sorted({r.name for r in indian.ragas().values()})
+                return list(MODES) + sorted(indian.ragas())      # every name and spelling
 
             def meters():
                 from . import indian

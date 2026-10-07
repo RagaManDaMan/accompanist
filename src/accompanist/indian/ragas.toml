@@ -71,6 +71,12 @@ note = "janya of Harikambhoji (28), vakra in both directions; the scale of mixol
 arohana = "S R2 G3 M1 P M1 D2 N2 S'"
 avarohana = "S' N2 D2 P M1 G3 M1 R2 G3 R2 S"
 
+[ragas.pilu]
+tradition = "hindustani"
+note = "a light, mixed rāga that wanders between both gandhārs and nishāds; its plainest form shares Gowrimanohari's swaras (S R2 G2 M1 P D2 N3), which is how the band takes it"
+arohana = "S R2 G2 M1 P D2 N3 S'"
+avarohana = "S' N3 D2 P M1 G2 R2 S"
+
 [ragas.anandabhairavi]
 tradition = "carnatic"
 note = "janya of Kharaharapriya (22), vakra ascent; bhashanga: anya swaras (G3, D1) in some phrases (to verify)"
