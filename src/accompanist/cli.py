@@ -1182,7 +1182,7 @@ def cmd_run(args) -> int:
     rec = None
     record = args.record or ("auto" if cfg.output.record and not args.no_record else None)
     if record:
-        rec = Recorder(auto_path(name=args.song) if record == "auto" else record)
+        rec = Recorder(auto_path(name=args.song) if record == "auto" else record, run_args(args))
 
     def heard(t, note, velocity, source):
         ctl.on_note(t, note, velocity)
@@ -1372,7 +1372,7 @@ def cmd_run(args) -> int:
                     if rec:
                         rec.close()
                         takes_made.append(rec.path)
-                        rec = Recorder(auto_path(name=args.song))
+                        rec = Recorder(auto_path(name=args.song), run_args(args))
                     s = cfg.song
                     say(f"Song {song_index + 1}/{len(set_songs)}: {s.title or args.song}"
                         + (f", {s.tempo:g} bpm" if s.tempo else "")
@@ -1432,6 +1432,14 @@ def cmd_run(args) -> int:
         port.close()
         print("\nStopped. All notes off.")
     return 0
+
+
+RUN_ARGS = ("song", "set", "key", "mode", "time_sig", "tempo", "preset", "chart", "transpose")
+
+
+def run_args(args) -> dict:
+    """The options a run was started with (for a take's header)."""
+    return {k: getattr(args, k, None) for k in RUN_ARGS}
 
 
 def open_stage(cfg, args):
@@ -1680,7 +1688,12 @@ def cmd_simulate(args) -> int:
 def cmd_replay(args) -> int:
     from . import simulate
 
+    from .recording import load_run
+
     cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
+    for k, v in load_run(args.take).items():          # set up as the run was (unless you say)
+        if k in RUN_ARGS and getattr(args, k, None) is None:
+            setattr(args, k, v)
     cfg = cfgmod.build(cfg_path, args.preset, chart_overrides(args), args.song)
     # Times are the take's own clock (0 = first note or key press), as shown live in the status line.
     onsets = load_take(args.take)

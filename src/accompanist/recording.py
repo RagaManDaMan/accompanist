@@ -18,12 +18,17 @@ class TakeError(ValueError):
 
 
 class Recorder:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, run: dict | None = None) -> None:
+        """run: how the band was started (song, key, mode, time, tempo, preset...), kept in
+        the header so a replay can be set up the same way."""
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._f = open(self.path, "w", encoding="utf-8")
         self._t0: float | None = None
-        self._f.write(json.dumps({"format": FORMAT, "created": datetime.now().isoformat(timespec="seconds")}) + "\n")
+        head = {"format": FORMAT, "created": datetime.now().isoformat(timespec="seconds")}
+        if run:
+            head["run"] = {k: v for k, v in run.items() if v is not None}
+        self._f.write(json.dumps(head) + "\n")
         self._f.flush()
 
     def note_on(self, t: float, note: int, velocity: int, source: str = "") -> None:
@@ -92,3 +97,14 @@ def load_take(path: str | Path) -> list[tuple[float, int, int]]:
 def load_actions(path: str | Path) -> list[tuple[float, str]]:
     """The control actions recorded in a take, [(t, action)], on the same clock as load_take."""
     return sorted((float(r["t"]), str(r["action"])) for r in _rows(path) if "action" in r)
+
+
+def load_run(path: str | Path) -> dict:
+    """How the band was started for this take ({} for older takes, or if unreadable: the
+    take's own loading says what is wrong with it)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            head = json.loads(f.readline())
+        return head.get("run", {}) if isinstance(head, dict) else {}
+    except (OSError, ValueError):
+        return {}

@@ -104,3 +104,14 @@ def test_startup_summary_names_every_voice_and_its_channel():
     s = voices_summary(c.from_dict({"drums": {"enabled": True, "pattern": "soft"}}))
     assert "pad ch 1 (drone" in s and "bass ch 2" in s and "drums ch 10 (soft)" in s
     assert "drums: off" in voices_summary(c.from_dict({}))
+
+
+def test_a_take_remembers_how_the_band_was_started(tmp_path):
+    from accompanist.recording import Recorder, load_run
+
+    rec = Recorder(tmp_path / "t.jsonl", {"key": "C", "mode": "todi", "time_sig": "adi",
+                                          "tempo": 80.0, "song": None})
+    rec.note_on(1.0, 60, 90)
+    rec.close()
+    assert load_run(tmp_path / "t.jsonl") == {"key": "C", "mode": "todi", "time_sig": "adi",
+                                              "tempo": 80.0}
