@@ -67,6 +67,8 @@ def _check_kit(v: Any) -> None:
     from .config import ConfigError
     from .tala import load_kit
 
+    if v == "auto":
+        return
     try:
         load_kit(v)
     except ConfigError as e:
@@ -416,9 +418,11 @@ PARAMS: list[Param] = [
     P("percussion.nadai", int, 4, "Nadai / gati",
       "Strokes per beat of the plain sarvalaghu: 4 chatusram, 3 tisram, 5 khandam, 7 misram.",
       "Percussion", 3, 7, 1, choices=(3, 4, 5, 7)),
-    P("percussion.kit", str, "gm-tabla", "Percussion kit",
-      "Which keys your instrument plays each stroke on: kits/NAME.toml ([strokes] dha = 48 ...). "
-      "gm-tabla stands in with General MIDI congas and bongos.", "Percussion", check=_check_kit),
+    P("percussion.kit", str, "auto", "Percussion kit",
+      "Which keys your instrument plays each stroke on: kits/NAME.toml ([strokes] dha = 48 ...; "
+      "make one with `accompanist kitmap percussion --make NAME`). auto: kits/mridangam for a "
+      "Carnatic tāla, kits/tabla for a Hindustani one (if you have made them), else gm-tabla, "
+      "General MIDI congas and bongos standing in.", "Percussion", check=_check_kit),
     P("percussion.tuned", bool, False, "Tuned percussion",
       "The percussion sound is pitched (bells, blocks, marimba): play the pattern's rhythm on "
       "the chord's notes around percussion.octave instead of fixed drum notes.", "Percussion"),

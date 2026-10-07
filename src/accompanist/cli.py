@@ -428,6 +428,8 @@ def cmd_kitmap(args) -> int:
     out = SafeOutput(open_output(cfg.output))
     select_patch(out, cfg)
     names = {n: k for k, n in GM_DRUMS.items()}
+    if args.make:
+        return make_kit(args, out, vc.channel)
     print(f"Channel {vc.channel} ({args.voice}): notes {args.low}-{args.high}. Note what you "
           f"hear for each; Ctrl-C to stop.")
     try:
@@ -440,6 +442,51 @@ def cmd_kitmap(args) -> int:
         pass
     finally:
         out.panic()
+    return 0
+
+
+KIT_HINTS = {
+    "mridangam": "tha (or ta), dhi, thom, nam, dheem, chapu, ki, tham, gumki",
+    "tabla": "na (or ta), tin, tun, te, ge, ka, dha, dhin, tit, ke",
+}
+
+
+def make_kit(args, out, channel: int) -> int:
+    """kitmap --make NAME: play each key; you name the stroke you hear; a kit file results."""
+    from .tala import save_kit
+
+    hint = KIT_HINTS.get(args.make.split("-")[0], KIT_HINTS["mridangam"] + "; " + KIT_HINTS["tabla"])
+    print(f"Making kits/{args.make}.toml from channel {channel}, notes {args.low}-{args.high}.\n"
+          f"Each key plays; type the stroke you hear ({hint}), Enter to skip it, r to hear it "
+          f"again, q to finish.\n")
+    strokes: dict[str, list[int]] = {}
+    try:
+        n = args.low
+        while n <= args.high:
+            out.note_on(channel - 1, n, 100)
+            time.sleep(KITMAP_STEP_S)
+            out.note_off(channel - 1, n)
+            answer = input(f"  {n:3d} {note_label(n):<4} stroke? ").strip().lower()
+            if answer == "r":
+                continue
+            if answer == "q":
+                break
+            if answer:
+                for word in answer.replace(",", " ").split():
+                    strokes.setdefault(word, []).append(n)
+            n += 1
+    except (KeyboardInterrupt, EOFError):
+        print()
+    finally:
+        out.panic()
+    if not strokes:
+        print("No strokes named: no kit written.")
+        return 0
+    path = save_kit(args.make, strokes, f"{args.make} on channel {channel}")
+    print(f"\nWrote {path}: {', '.join(strokes)}.\n"
+          + (f"It plays a Carnatic tāla by itself (percussion.kit auto)." if args.make == "mridangam"
+             else f"It plays a Hindustani tāla by itself (percussion.kit auto)." if args.make == "tabla"
+             else f"Use it with [percussion] kit = \"{args.make}\"."))
     return 0
 
 
@@ -1233,6 +1280,7 @@ def cmd_run(args) -> int:
     if cfgmod.is_indic({"song": {"tala": cfg.song.tala}, "harmony": {"keys": cfg.harmony.keys}}):
         print("An Indian piece: the percussion plays nearly throughout (styles/indic.toml; "
               "your own [percussion] settings win)")
+    say_tala(ctl.engine)
     if set_songs:
         print(f"Set: {set_title}: " + ", ".join(f"{i + 1}. {s}" for i, s in enumerate(set_songs))
               + "   ([ ] or the arrows: previous / next song)")
@@ -1440,6 +1488,19 @@ RUN_ARGS = ("song", "set", "key", "mode", "time_sig", "tempo", "preset", "chart"
 def run_args(args) -> dict:
     """The options a run was started with (for a take's header)."""
     return {k: getattr(args, k, None) for k in RUN_ARGS}
+
+
+def say_tala(eng) -> None:
+    """At the start: the tāla the percussion keeps, on which kit (or why it can't)."""
+    if eng.tala_problem:
+        print(f"warning: {eng.tala_problem}: the percussion plays its patterns instead")
+    p = eng.tala_player
+    if p is None:
+        return
+    kit = p.kit.name + (" (General MIDI stand-in: make your own with `accompanist kitmap "
+                        "percussion --make mridangam` or `--make tabla`)" if p.kit.name == "gm-tabla" else "")
+    print(f"Tāla: {p.cycle.tala}, {len(p.cycle.beats)} beats, on the {kit} kit"
+          + (f"; strokes it has no key for: {', '.join(p.missing)}" if p.missing else ""))
 
 
 def open_stage(cfg, args):
@@ -1920,6 +1981,9 @@ def main(argv=None) -> int:
     sp.add_argument("--song", default=None, metavar="NAME", help="switch to this song's patch first")
     sp.add_argument("--low", type=int, default=35, help="first note (default 35)")
     sp.add_argument("--high", type=int, default=81, help="last note (default 81)")
+    sp.add_argument("--make", default=None, metavar="NAME",
+                    help="name each sound as it plays and save them as kits/NAME.toml "
+                         "(mridangam, tabla, khanjira...: a percussion kit for the tālas)")
     sp = sub.add_parser("levels", help="line check: each voice alone, then you; sets each "
                                        "voice's level under you (written into the song)")
     sp.add_argument("-c", "--config", default="config.toml")

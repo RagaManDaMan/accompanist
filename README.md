@@ -376,6 +376,34 @@ the likelier (`percussion.triplets`, reaching full after `percussion.triplet_bui
 and past 70% of that it doubles up into eighth-note triplets. Its knob is
 `percussion.feel`.
 
+## Tāla percussion: your mridangam and tabla
+
+With a tāla (`--time-sig misra-chapu`, `[song] tala = "adi"`, or `[percussion] tala`), the
+percussion keeps the tāla instead of its latin patterns: the theka of a Hindustani tāla
+(tintal, ektal, jhaptal, rupak, keherwa, dadra...) or a plain sarvalaghu for a Carnatic
+one (adi, rupakam, the cāpus, any sūlādi tāla) in `percussion.nadai` (4 chatusram, 3
+tisram, 5 khandam, 7 misram), the sam on the song's 1, accented, the vibhāg / anga starts
+a little, khālī beats lighter. It follows your dynamics and steps forward in the gaps.
+
+**Your instrument's keys.** Load your mridangam (or tabla) on the percussion channel and run
+
+```
+accompanist kitmap percussion --make mridangam
+accompanist kitmap percussion --make tabla
+```
+
+Each key plays; type the stroke you hear (tha, dhi, thom, nam, dheem, chapu, ki...; na,
+tin, tun, te, ge, ka, dha, dhin...), Enter to skip, `r` to hear it again, `q` to finish.
+That writes `kits/mridangam.toml` (or `kits/tabla.toml`), and from then on a Carnatic tāla
+plays your mridangam and a Hindustani one your tabla by itself (`percussion.kit = "auto"`;
+or name any kit). A stroke the kit has no key for is played through its parts (Dha = Na +
+Ge) or its nearest kin, so any theka plays on any kit. Until you make one, General MIDI
+congas and bongos stand in.
+
+**Your own cycle.** `[percussion] theka = "Thom.DhiKi Nam.DhiKi ..."`: one word per beat,
+strokes inside a beat each starting with a capital, `.` a rest. The plain sarvalaghu is a
+starting point, written to be corrected: `src/accompanist/indian/talas.toml`.
+
 ## Key, mode or rāga, and time, for one run
 
 ```

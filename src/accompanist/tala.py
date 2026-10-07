@@ -85,6 +85,36 @@ def load_kit(name: str) -> Kit:
                       f"./kits/NAME.toml with [strokes] dha = 48 ...)")
 
 
+AUTO_KITS = {"carnatic": "mridangam", "hindustani": "tabla"}
+
+
+def available_kits() -> list[str]:
+    return sorted({p.stem for d in (USER_KITS, BUILTIN_KITS) if d.is_dir() for p in d.glob("*.toml")})
+
+
+def kit_for(name: str, tradition: str) -> str:
+    """percussion.kit auto: your mridangam kit for a Carnatic tāla, your tabla for a
+    Hindustani one (kits/mridangam.toml, kits/tabla.toml), else the General MIDI stand-in."""
+    if name != "auto":
+        return name
+    mine = AUTO_KITS.get(tradition)
+    return mine if mine and (USER_KITS / f"{mine}.toml").is_file() else "gm-tabla"
+
+
+def save_kit(name: str, strokes: dict[str, list[int]], description: str = "") -> Path:
+    """Write ./kits/NAME.toml from {stroke: [notes]}."""
+    USER_KITS.mkdir(exist_ok=True)
+    p = USER_KITS / f"{name}.toml"
+    lines = [f"# {description or name}: made with `accompanist kitmap percussion --make {name}`.",
+             "# Each stroke and the key(s) your instrument plays it on.",
+             f'description = "{description or name}"', "", "[strokes]"]
+    for stroke, notes in strokes.items():
+        lines.append(f"{stroke} = {notes[0] if len(notes) == 1 else notes}")
+    p.write_text("\n".join(lines) + "\n")
+    load_kit(name)                                   # it must read back
+    return p
+
+
 def parse_beats(text: str) -> list[list[str]]:
     """'Dha Dhin | DhaGe TiRaKiTa' -> [['Dha'], ['Dhin'], ['Dha', 'Ge'], ['Ti', 'Ra', 'Ki', 'Ta']]."""
     beats = []
@@ -118,12 +148,12 @@ class Cycle:
     khali: frozenset[int]                  # 0-based open beats
 
 
-def cycle_for(cfg: Any) -> Cycle:
+def cycle_for(cfg: Any, name: Optional[str] = None) -> Cycle:
     """The song's cycle: its theka, the tāla's, or sarvalaghu in its nadai."""
     from . import indian
 
     p = cfg.percussion
-    t = indian.tala(p.tala)
+    t = indian.tala(name or p.tala or cfg.song.tala)
     if p.theka:
         beats = parse_beats(p.theka)
     elif t.theka:
@@ -140,15 +170,20 @@ def cycle_for(cfg: Any) -> Cycle:
 class TalaPlayer:
     """Plays the cycle, beat by beat, on the percussion channel."""
 
-    def __init__(self, cfg: Any, out, seed: int = 0) -> None:
+    def __init__(self, cfg: Any, out, seed: int = 0, tala: Optional[str] = None) -> None:
         self.cfg, self.out = cfg.percussion, out
-        self.cycle = cycle_for(cfg)
-        self.kit = load_kit(self.cfg.kit)
+        self.cycle = cycle_for(cfg, tala)
+        self.kit = load_kit(kit_for(self.cfg.kit, self.tradition(cfg, tala)))
         self.rng = random.Random(seed + 37)
         self._queue: list = []
         self._seq = itertools.count()
         self.missing = sorted({s for b in self.cycle.beats for s in b
                                if s != "." and not self.kit.notes(s)})
+
+    @staticmethod
+    def tradition(cfg: Any, tala: Optional[str]) -> str:
+        from . import indian
+        return indian.tala(tala or cfg.percussion.tala or cfg.song.tala).tradition
 
     def on_beat(self, beat_t: float, period: float, gain: float, form_beat: int) -> None:
         c, cyc = self.cfg, self.cycle

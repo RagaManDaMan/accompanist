@@ -63,6 +63,16 @@ class Engine:
         self.pulse = PulseResponder(cfg.pulse, out, cfg.harmony.seed)
         self.drums = DrumResponder(cfg.drums, out, cfg.harmony.seed)
         self.percussion = DrumResponder(cfg.percussion, out, cfg.harmony.seed + 7)
+        self.tala_player = None                   # a tāla on the percussion (tala.py)
+        self.tala_problem: Optional[str] = None
+        tala_name = cfg.percussion.tala or cfg.song.tala
+        if tala_name and cfg.percussion.enabled:
+            from .config import ConfigError
+            from .tala import TalaPlayer
+            try:
+                self.tala_player = TalaPlayer(cfg, out, cfg.harmony.seed, tala_name)
+            except ConfigError as e:              # never stop the band: the patterns play
+                self.tala_problem = f"tāla percussion off: {e}"
         self._percussion_on = False               # in a spell when the percussion plays
         self._spell_rng = random.Random(cfg.harmony.seed + 31)
         self.response = ResponseResponder(cfg.response, out, cfg.harmony.seed)
@@ -314,12 +324,15 @@ class Engine:
                         self._choose_drums()
                     self.drums.on_beat(beat_t, self.clock.period, gain, form_beat, swing, boost,
                                        bpb, self.dynamics.busyness(now))
-                if self.cfg.percussion.enabled and bar_pos == 0:
+                if self.tala_player is not None and self.cfg.percussion.enabled:
+                    lift = 1 + SPOTLIGHT_LIFT * self.cfg.percussion.spotlight * self.dynamics.quiet(now)
+                    self.tala_player.on_beat(beat_t, self.clock.period, gain * lift, form_beat)
+                elif self.cfg.percussion.enabled and bar_pos == 0:
                     self._percussion_spell(form_beat // max(1, bpb), now)
-                if self.cfg.percussion.enabled:
+                if self.cfg.percussion.enabled and self.tala_player is None:
                     self.percussion.pitches = self._tuned_pitches()
                     self._triplet_figure(beat_t, now, form_beat, bar_pos, bpb, gain)
-                if (self.cfg.percussion.enabled and self._percussion_on
+                if (self.cfg.percussion.enabled and self._percussion_on and self.tala_player is None
                         and self.beat_count >= self._figure_until):
                     swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
                              and self.groove.meter and not self.is_chart else None)
@@ -333,6 +346,8 @@ class Engine:
                 self.beat_count += 1
             self.drums.tick(now)
             self.percussion.tick(now)
+            if self.tala_player is not None:
+                self.tala_player.tick(now)
 
     def _bar(self, beat: int) -> tuple[int, int, int, bool]:
         """(beats per bar, position in the bar, beats since a downbeat, groove heard clearly)
@@ -589,6 +604,8 @@ class Engine:
     def _reset_drums(self) -> None:
         self.drums.reset()
         self.percussion.reset()
+        if self.tala_player is not None:
+            self.tala_player.reset()
 
     def _choose_drums(self) -> None:
         """Keep your drum pattern if its cycle fits the meter heard; else one that does."""
