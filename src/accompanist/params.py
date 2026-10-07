@@ -536,7 +536,7 @@ PARAMS: list[Param] = [
     P("response.quantize", float, 1.0, "Quantize",
       "With the beat running: 1 = the answer's rhythm on eighth notes, 0 = in your own timing.",
       "Response", 0, 1, 0.05),
-    P("response.variety", float, 0.0, "Variety",
+    P("response.variety", float, 0.15, "Variety",
       "How often to play a variation of your last phrase (moved a scale step, inverted or "
       "reversed) instead of one of your own phrases (0 = never).", "Response", 0, 1, 0.05),
     P("response.rhythm_variety", float, 0.4, "Rhythm variations",
@@ -718,6 +718,9 @@ PARAMS: list[Param] = [
     P("interlude.after_beats", float, 6.0, "Interlude after",
       "Beats of your silence (after the answers) before the band carries the music.",
       "Interlude", 2, 32, 1),
+    P("interlude.after_s", float, 4.0, "Interlude after (seconds)",
+      "...and at least this long: at a fast tempo a few beats is only a breath, not a break.",
+      "Interlude", 0, 30, 0.5),
     P("interlude.turn_bars", int, 4, "Interlude turns",
       "Bars each of piano and guitar leads before handing over.", "Interlude", 1, 16, 1),
     P("interlude.guitar_every_bars", int, 2, "Guitar phrase every",

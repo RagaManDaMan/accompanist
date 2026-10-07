@@ -30,6 +30,13 @@ REGISTER_NOTES = 40       # your register: the middle (median) of your last this
 REGISTER_SPAN = 17        # answers and solos centre there, ranging up to this far from it
                           # (an octave and a fourth: room for a run, not the whole fretboard)
 MAX_LEAP = 12             # and no jump between two notes wider than an octave
+# Your phrase is over after a pause: response.gap_beats (at least min_gap_s), and at least
+# this many times your recent typical time between notes, so long sung notes and slow
+# phrases aren't cut into single notes (the band hears only where notes start).
+PHRASE_IOI_FACTOR = 1.6
+PHRASE_IOI_NOTES = 12     # (the typical time: the median of this many recent intervals)
+PHRASE_IOI_MAX_S = 4.0    # ...counting only intervals shorter than this (not the rests)
+MAX_PHRASE_GAP_S = 2.5    # but never waiting longer than this
 BLIP_S = 0.09             # a remembered phrase drops notes shorter than this
 # Rhythmic variations of a phrase (response.rhythm_variety): name -> (interval scale, grid
 # notes per beat). Double time only up to DOUBLE_MAX_BPM, half time only from HALF_MIN_BPM.
@@ -200,6 +207,7 @@ class ResponseResponder:
         self._seq = itertools.count()
         self._sounding: dict[int, float] = {}                       # note -> ends at
         self._heard: list[int] = []                                 # your recent notes
+        self._iois: list[float] = []                                # ...and their spacing
 
     def hear(self, t: float, note: int, velocity: int, period: float) -> None:
         """You played: the answer gives way (yield_to_you); the note joins your phrase (or
@@ -208,6 +216,8 @@ class ResponseResponder:
         if self.answered or (self.last_t is not None and t - self.last_t >= self._gap(period)):
             self.phrase, self.answered = [], False
             self.phrase_count += 1
+        if self.last_t is not None and 0 < t - self.last_t < PHRASE_IOI_MAX_S:
+            self._iois = (self._iois + [t - self.last_t])[-PHRASE_IOI_NOTES:]
         self.phrase.append((t, note, velocity))
         self.last_t = t
         self._heard = (self._heard + [note])[-REGISTER_NOTES:]
@@ -263,7 +273,11 @@ class ResponseResponder:
         heapq.heapify(self._queue)
 
     def _gap(self, period: float) -> float:
-        return max(self.cfg.gap_beats * period, self.cfg.min_gap_s)
+        gap = max(self.cfg.gap_beats * period, self.cfg.min_gap_s)
+        if len(self._iois) >= 4:                    # your pace: long notes, slow phrases
+            typical = sorted(self._iois)[len(self._iois) // 2]
+            gap = max(gap, min(PHRASE_IOI_FACTOR * typical, MAX_PHRASE_GAP_S))
+        return gap
 
     def _remember(self, phrase: list[tuple[float, int, int]]) -> None:
         phrase = clean_phrase(phrase)

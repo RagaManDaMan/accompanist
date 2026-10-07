@@ -1039,7 +1039,7 @@ def add_chart_args(sp) -> None:
     sp.add_argument("--transpose", type=int, default=None, metavar="N",
                     help="transpose the chart N semitones (-11..11)")
     sp.add_argument("--tempo", type=float, default=None, metavar="BPM",
-                    help="the chart's count-in tempo (default: typical for its style)")
+                    help="the tempo s counts in at (a song's or a chart's; a chart without it: a typical tempo for its style)")
 
 
 PRESET_HELP = "layer a preset (presets/NAME.toml) under your config; see `accompanist params`"

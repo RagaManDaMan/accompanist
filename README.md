@@ -390,6 +390,9 @@ accompanist run --key D --mode dorian --time-sig 7/8
   `indian/ragas.toml`). A rāga gives the band its swaras as the key's scale, with Sa as the
   tonic: the right notes for the answers and the chords. (Its phrases and gamakas, and
   harmony that stays home on Sa, come with the rāga work later.)
+- `--tempo`: the tempo `s` counts in at. Without one, `s` can't count; tap the beat with
+  `t` instead (with `--time-sig`, any number of taps: they only give the tempo, and the
+  band comes in on the next 1 in your meter).
 - `--time-sig`: a time signature (3/4, 4/4, 5/4, 6/8, 7/8) or a tāla: misra-chapu and
   rupak in 7 (3+2+2), khanda-chapu and jhaptal in 5, tisra-chapu in 3, rupakam in 3, adi,
   tintal and keherwa in bars of 4, dadra in 6. It says how it took it when the band starts.

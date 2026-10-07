@@ -455,7 +455,8 @@ class Engine:
         il = self.cfg.interlude
         resting = (il.enabled and self.last_onset_t is not None and not self.in_break
                    and not self._finish_requested
-                   and now - self.last_onset_t >= il.after_beats * self.clock.period)
+                   and now - self.last_onset_t >= max(il.after_beats * self.clock.period,
+                                                      il.after_s))
         if not resting:
             self._interlude_bar0 = None
             return
