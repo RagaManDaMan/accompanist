@@ -36,6 +36,8 @@ FILLER_DEGREES = (0, 5, 3, 4, 0, 3, 5, 1)
 # Ending shapes; a piano tag's notes (beats of the bar) and softness; a ritardando's last
 # chord rings this much longer (a fermata).
 ENDING_SHAPES = ("chord", "button", "tag", "ritardando", "piano-tag")
+MORA_MIN_PULSES = 12      # an ending mōrā is at least this long (else it waits a cycle)...
+MORA_MAX_BEATS = 8        # ...and starts no more than this many beats before its sam
 PIANO_TAG_BEATS = {3: (0, 1), 4: (0, 2), 6: (0, 3)}
 PIANO_TAG_SOFT = 0.6
 FERMATA = 1.5
@@ -98,6 +100,7 @@ class Engine:
         self._intro_held = False                  # the intro holds the home chord
         self.droning = False                      # start.shape drone: the home chord, free time
         self._end_intro_next = False
+        self._mora_target: Optional[int] = None   # an ending mōrā: the beat of its sam
         self._low_conf_since: Optional[float] = None   # unlocked pulse: when confidence dropped
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
@@ -276,7 +279,21 @@ class Engine:
                         self.drums.fill_requested = True
                     if self._intro_left == 0:
                         self._end_intro_next = True
-                if self._finish_requested and bar_pos == 0 and self._ending_bar(bpb, now):
+                if self._finish_requested and self._ending_shape == "mora":
+                    if self._mora_target is None:     # start it when the sam is near enough
+                        beats = self.tala_player.beats_to_sam(form_beat)
+                        nadai = max(1, self.cfg.percussion.nadai)
+                        if beats * nadai < MORA_MIN_PULSES:
+                            beats += len(self.tala_player.cycle.beats)
+                        if beats <= max(MORA_MAX_BEATS, -(-MORA_MIN_PULSES // nadai)):
+                            self.tala_player.play_mora(beat_t, self.clock.period, beats,
+                                                       self.dynamics.follow_gain())
+                            self._mora_target = self.beat_count + beats
+                    elif self.beat_count >= self._mora_target:   # the sam: the band ends
+                        self._mora_target = None
+                        self._play_ending(beat_t, now)
+                        break
+                elif self._finish_requested and bar_pos == 0 and self._ending_bar(bpb, now):
                     self._play_ending(beat_t, now)            # the end: one last chord
                     break
                 if self._rit_step != 1.0:                     # a ritardando: each beat longer
@@ -317,8 +334,9 @@ class Engine:
                     self.pulse.on_beat(now, pulse_root, gain, bar_pos, boost, group,
                                        bass_chord, bpb, self._scale_pcs(), self.clock.period,
                                        next_root, to_change)
-                if self.cfg.drums.enabled:
-                    swing = (self.groove.swing if self.cfg.groove.auto and self.cfg.groove.auto_drums
+                if self.cfg.drums.enabled and self._mora_target is None:   # (a mōrā: the
+                    swing = (self.groove.swing if self.cfg.groove.auto        # mridangam alone)
+                             and self.cfg.groove.auto_drums
                              and self.groove.meter and not self.is_chart else None)
                     if self.drums.pattern_name is None and self.groove.pinned:
                         self._choose_drums()
@@ -326,6 +344,12 @@ class Engine:
                                        bpb, self.dynamics.busyness(now))
                 if self.tala_player is not None and self.cfg.percussion.enabled:
                     lift = 1 + SPOTLIGHT_LIFT * self.cfg.percussion.spotlight * self.dynamics.quiet(now)
+                    pc = self.cfg.percussion
+                    if (pc.moras > 0 and not self._finish_requested and beat_t >= self.tala_player.busy_until
+                            and self.tala_player.beats_to_sam(form_beat) == pc.mora_beats
+                            and self._spell_rng.random() < pc.moras):   # a mōrā marks the sam
+                        self.tala_player.play_mora(beat_t, self.clock.period, pc.mora_beats,
+                                                   gain * lift)
                     self.tala_player.on_beat(beat_t, self.clock.period, gain * lift, form_beat)
                 elif self.cfg.percussion.enabled and bar_pos == 0:
                     self._percussion_spell(form_beat // max(1, bpb), now)
@@ -717,7 +741,12 @@ class Engine:
         shape = self.cfg.ending.shape
         if shape == "random":
             shape = self._ending_rng.choice(ENDING_SHAPES)
+        if shape == "tihai":
+            shape = "mora"                            # the same design, its Hindustani name
+        if shape == "mora" and self.tala_player is None:
+            shape = "chord"                           # no tāla: no mōrā to land
         self._ending_shape = shape
+        self._mora_target = None
         if self.cfg.ending.fill and shape in ("chord", "button"):
             self.drums.fill_requested = True
         return True
@@ -807,6 +836,8 @@ class Engine:
         chord = self._ending_chord(now)
         self.response.cancel()
         self.piano.final_chord(now, chord, self.clock.period)
+        if self.tala_player is not None:              # a mōrā's tām lands with the band
+            self.tala_player.tick(max(now, beat_t))
         self._reset_drums()
         if chord is not None:
             if self.cfg.pad.enabled:
@@ -818,7 +849,7 @@ class Engine:
                 self.out.note_on(p.channel - 1, root, min(127, p.velocity + p.accent))
                 self.out.note_off_at(now + ring, p.channel - 1, root)
         for cfg, notes in ((self.cfg.drums, ("kick", "crash")),
-                           (self.cfg.percussion, ("conga_low",))):
+                           (self.cfg.percussion, () if self.tala_player else ("conga_low",))):
             if cfg.enabled:
                 for name in notes:
                     self.out.note_on(cfg.channel - 1, GM_DRUMS[name], min(127, cfg.velocity + cfg.accent))

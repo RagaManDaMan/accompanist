@@ -100,3 +100,62 @@ def test_a_kit_file_keeps_each_key_once(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     tala.save_kit("k", {"taka": [48, 48, 54]})
     assert tala.load_kit("k").strokes["taka"] == (48, 54)
+
+
+def test_a_mora_is_three_statements_two_gaps_landing_exactly():
+    import random
+
+    from accompanist import solkattu
+
+    rng = random.Random(0)
+    for total in range(7, 40):
+        m = solkattu.mora(total, rng)
+        assert m[-1] == (total, "tām", True)                     # sealed on the sam
+        assert max(at for at, _, _ in m[:-1]) < total
+        assert sum(1 for _, _, accent in m[:-1] if accent) == 3  # three statements
+    for total in (12, 16, 20, 28):                               # Nelson: short statements
+        s, g = solkattu.mora_shapes(total)[0]                    # take a sounded gap of 2+
+        assert 3 * s + 2 * g == total and (s >= 5 or g >= 2)
+
+
+def test_solkattu_weights_and_strokes():
+    from accompanist import solkattu
+
+    assert solkattu.pulses("ta ka di mi , tām ta3") == 4 + 1 + 2 + 3
+    assert solkattu.stroke("ta") == "tha" and solkattu.stroke("ṭa") == "ta"   # dental, retroflex
+    assert solkattu.stroke("tām") == "tam" and solkattu.stroke("mi") == "tom"
+
+
+@pytest.mark.parametrize("name,count", [("adi", 4), ("misra-chapu", 7), ("rupakam", 3),
+                                        ("tintal", 4)])
+def test_f_ends_the_song_with_a_mora_on_the_sam(name, count):
+    cfg = c.from_dict({"percussion": {"enabled": True}, "drums": {"enabled": True},
+                       "ending": {"shape": "mora"}, "harmony": {"root": "C"},
+                       "song": {"tala": name, "count": count, "tempo": 90}})
+    P, one = 60 / 90, 1 + (count + 1) * 60 / 90
+    notes = [(one + i * P, 60 + (i % 5) * 2, 80) for i in range(10)]
+    res = simulate.run(cfg, onsets=notes, actions=[(1.0, "song_start"), (one + 11.3 * P, "finish")],
+                       total=one + 40 * P)
+    tl = res.timeline
+    bass = [t for t, m in tl if m.type == "note_on" and m.velocity and m.channel == cfg.pulse.channel - 1]
+    perc = [t for t, m in tl if m.type == "note_on" and m.velocity
+            and m.channel == cfg.percussion.channel - 1]
+    beats, cycle = (bass[-1] - one) / P, len(res.engine.tala_player.cycle.beats)
+    assert res.engine.finished and abs(beats / cycle - round(beats / cycle)) < 0.01   # on a sam
+    assert abs(perc[-1] - bass[-1]) < 0.02                                           # tām with it
+
+
+def test_now_and_then_a_mora_marks_the_sam():
+    cfg = c.from_dict({"percussion": {"enabled": True, "moras": 1.0, "mora_beats": 3},
+                       "drums": {"enabled": False}, "harmony": {"root": "C"},
+                       "song": {"tala": "adi", "count": 4, "tempo": 90}})
+    res = simulate.run(cfg, onsets=[], actions=[(1.0, "song_start")], total=25)
+    assert res.engine.tala_player.mora_text and "tām" in res.engine.tala_player.mora_text
+
+
+def test_without_a_tala_a_mora_finish_is_a_last_chord():
+    cfg = c.from_dict({"ending": {"shape": "tihai"}, "harmony": {"root": "C"},
+                       "drums": {"enabled": True}, "song": {"tempo": 90, "count": 4}})
+    res = simulate.run(cfg, onsets=[(4.0 + i * 0.66, 60, 80) for i in range(8)],
+                       actions=[(1.0, "song_start"), (8.0, "finish")], total=20)
+    assert res.engine.finished and res.engine._ending_shape == "chord"

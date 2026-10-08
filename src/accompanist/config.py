@@ -292,7 +292,7 @@ BUILTIN_STYLES = Path(__file__).parent / "styles"
 USER_STYLES = Path("styles")
 # A style pack sets how the band plays, not what or where: these sections only.
 STYLE_SECTIONS = ("pad", "pulse", "drums", "percussion", "piano", "response", "groove",
-                  "dynamics", "interlude", "breaks")
+                  "dynamics", "interlude", "breaks", "ending")
 
 
 def available_styles() -> list[str]:

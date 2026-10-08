@@ -223,19 +223,55 @@ class TalaPlayer:
         self.carnatic = self.tradition(cfg, tala) == "carnatic"
         self.missing = sorted({s for b in self.cycle.beats for s in b
                                if s != "." and not self.kit.notes(s, self.carnatic)})
+        self.instrument = "mridangam" if self.carnatic else "tabla"
+        self.busy_until = float("-inf")              # a mōrā is playing: no theka till then
+        self.mora_text: Optional[str] = None         # the last mōrā, as spoken
 
     @staticmethod
     def tradition(cfg: Any, tala: Optional[str]) -> str:
         from . import indian
         return indian.tala(tala or cfg.percussion.tala or cfg.song.tala).tradition
 
+    def beats_to_sam(self, form_beat: int) -> int:
+        """Beats from this one (included) to the next sam."""
+        n = len(self.cycle.beats)
+        return n - form_beat % n
+
+    def play_mora(self, beat_t: float, period: float, beats: int, gain: float,
+                  close: bool = True) -> int:
+        """A mōrā from this beat, `beats` beats long, landing on the sam that follows (its
+        tām on it, with close). The theka rests meanwhile. Returns its length in pulses."""
+        from . import solkattu
+
+        nadai = max(1, self.cfg.nadai)
+        total = beats * nadai
+        design = solkattu.mora(total, self.rng, close)
+        step = period / nadai
+        top = self.cfg.velocity * gain + self.cfg.accent
+        spoken = []
+        for at, syl, accent in design:
+            spoken.append(syl or ",")
+            if syl is None:
+                continue
+            vel = humanize_velocity(min(max(round(top if accent else top * INSIDE), 1), 127),
+                                    self.cfg.velocity_spread, self.rng)
+            stroke = solkattu.stroke(syl, self.instrument)
+            for note in self.kit.pick(stroke, self.rng, self.carnatic):
+                heapq.heappush(self._queue, (beat_t + at * step, next(self._seq), note, vel))
+        self.busy_until = beat_t + total * step + (step / 2 if close else -step / 2)
+        self.mora_text = " ".join(spoken)
+        return total
+
     def on_beat(self, beat_t: float, period: float, gain: float, form_beat: int) -> None:
+        if beat_t < self.busy_until:                       # a mōrā is speaking
+            return
         c, cyc = self.cfg, self.cycle
         pos = form_beat % len(cyc.beats)
         strokes = cyc.beats[pos]
         level = c.velocity * gain
         if pos == 0:
-            level += c.accent                              # the sam
+            level += c.accent * c.sam_accent               # the sam: lightly (Nelson: a
+                                                           # tāla has no built-in accent)
         elif pos in cyc.group_starts:
             level += c.accent / 2
         if pos in cyc.khali:
@@ -260,3 +296,4 @@ class TalaPlayer:
 
     def reset(self) -> None:
         self._queue.clear()
+        self.busy_until = float("-inf")

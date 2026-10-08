@@ -418,6 +418,16 @@ PARAMS: list[Param] = [
     P("percussion.nadai", int, 4, "Nadai / gati",
       "Strokes per beat of the plain sarvalaghu: 4 chatusram, 3 tisram, 5 khandam, 7 misram.",
       "Percussion", 3, 7, 1, choices=(3, 4, 5, 7)),
+    P("percussion.sam_accent", float, 0.3, "Sam accent",
+      "How much the sam is stressed in the tāla's time-keeping (0-1, of percussion.accent): "
+      "a tāla has no built-in accent; the stress comes from the phrases and the mōrās that "
+      "land there.", "Percussion", 0, 1, 0.05),
+    P("percussion.moras", float, 0.0, "Mōrās",
+      "Now and then (this chance per cycle) the percussion ends a cycle with a mōrā landing "
+      "on the sam, marking the time as a mridangist marks a song's sections (0 = never).",
+      "Percussion", 0, 1, 0.05),
+    P("percussion.mora_beats", int, 3, "Mōrā length",
+      "Beats a cycle's mōrā takes (the last beats before the sam).", "Percussion", 2, 16, 1),
     P("percussion.kit", str, "auto", "Percussion kit",
       "Which keys your instrument plays each stroke on: kits/NAME.toml ([strokes] dha = 48 ...; "
       "make one with `accompanist kitmap percussion --make NAME`). auto: kits/mridangam for a "
@@ -797,8 +807,10 @@ PARAMS: list[Param] = [
       "How f ends the song: chord (the last chord rings and fades), button (one short, tight "
       "hit), tag (the band plays ending.tag_bars more bars, then the last chord), ritardando "
       "(slows over ending.rit_bars bars into a held last chord), piano-tag (the band drops "
-      "out for a bar of soft piano, then the last chord), or random.", "Ending",
-      choices=("chord", "button", "tag", "ritardando", "piano-tag", "random")),
+      "out for a bar of soft piano, then the last chord), mora (with a tāla: the percussion plays "
+      "a mōrā that lands on the sam, where the band ends; tihai: the same, by its Hindustani "
+      "name), or random.", "Ending",
+      choices=("chord", "button", "tag", "ritardando", "piano-tag", "mora", "tihai", "random")),
     P("ending.tag_bars", int, 4, "Tag length", "Bars the band plays on before a tag ending's "
       "last chord.", "Ending", 1, 16, 1),
     P("ending.rit_bars", int, 2, "Ritardando length", "Bars over which a ritardando slows.",

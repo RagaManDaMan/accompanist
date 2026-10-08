@@ -8,3 +8,7 @@ presence = 0.85
 spell_bars = 8
 spotlight = 0.5
 triplets = 0.6
+moras = 0.12           # now and then a mōrā marks the sam
+
+[ending]
+shape = "mora"         # f: the percussion lands the song on the sam with a mōrā (tihai)

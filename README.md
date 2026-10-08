@@ -400,6 +400,23 @@ or name any kit). A stroke the kit has no key for is played through its parts (D
 Ge) or its nearest kin, so any theka plays on any kit. Until you make one, General MIDI
 congas and bongos stand in.
 
+**Mōrās that land on the sam.** The percussion speaks solkattu (`solkattu.py`): syllables
+counted in pulses, four to a beat (`percussion.nadai`), and the mōrā, (statement) [gap]
+(statement) [gap] (statement), 3s + 2g pulses, calculated to end exactly on the sam,
+short statements taking a sounded gap of tām (D. P. Nelson's *Solkattu Manual*; the
+phrase blocks and weights of the korvai-calculator and KorvaiSheets tools). Each syllable
+is played as a stroke through `indian/solkattu.toml` (ta = tha, ka = ki, di = dhi, mi =
+tom, tām = tam...: a starting point, per instrument, to correct). Uses:
+
+- `[ending] shape = "mora"` (or `"tihai"`): `f` and the percussion plays a mōrā landing on
+  the next sam (the kit drums rest so it speaks), where the whole band ends, its tām with
+  the last chord. An Indian piece ends this way unless you choose otherwise.
+- `percussion.moras`: now and then (this chance per cycle) a short mōrā marks the sam
+  (`percussion.mora_beats` long), as a mridangist marks a song's sections (an Indian
+  piece: 0.12).
+- The sam itself is only lightly stressed (`percussion.sam_accent`): a tāla has no built-in
+  accent; the stress comes from the phrases and the designs that land there.
+
 **Your own cycle.** `[percussion] theka = "Thom.DhiKi Nam.DhiKi ..."`: one word per beat,
 strokes inside a beat each starting with a capital, `.` a rest. The plain sarvalaghu is a
 starting point, written to be corrected: `src/accompanist/indian/talas.toml`.

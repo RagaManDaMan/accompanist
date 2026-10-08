@@ -1,0 +1,27 @@
+# How each spoken syllable is played. Spoken patterns follow a logic of the voice, played
+# ones a logic of the hand (D. P. Nelson), and every school and instrument differs (a
+# ghatam player has his own sol for the pot's sounds), so this is a starting point:
+# correct it, and add a table per instrument. The strokes are named as in your kit file
+# (kits/NAME.toml); a stroke the kit doesn't have is found through its kin.
+
+[strokes.mridangam]
+ta = "tha"
+ka = "ki"
+di = "dhi"
+mi = "tom"
+"ṭa" = "ta"
+tom = "tom"
+nam = "nam"
+din = "dhim"
+gi = "ki"
+ki = "ki"
+"ṇa" = "nam"
+na = "nam"
+jo = "dhim"
+"ṇu" = "nam"
+nu = "nam"
+ku = "ku"
+"tām" = "tam"
+tam = "tam"
+taam = "tam"
+dheem = "dhim"
