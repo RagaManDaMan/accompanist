@@ -436,6 +436,12 @@ PARAMS: list[Param] = [
       "syllable two pulses, ta3 three), each written up to the sam it lands on (a tām is added "
       "on the sam). k (or the korvai action) plays the next one, started so that it lands; "
       "none written: one made up for the tāla.", "Percussion", nullable=True),
+    P("percussion.spell_cycles", int, 2, "Mridangam spell",
+      "With a tāla, the percussion comes and goes (percussion.presence of the cycles, 1 = "
+      "always): a spell lasts this many cycles.", "Percussion", 1, 16, 1),
+    P("percussion.licks", float, 0.7, "Licks",
+      "How often a mridangam spell ends with a lick landing on the sam: a mōrā, now and then "
+      "a korvai.", "Percussion", 0, 1, 0.05),
     P("percussion.mora_beats", int, 3, "Mōrā length",
       "Beats a cycle's mōrā takes (the last beats before the sam).", "Percussion", 2, 16, 1),
     P("percussion.kit", str, "auto", "Percussion kit",

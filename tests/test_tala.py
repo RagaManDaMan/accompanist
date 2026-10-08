@@ -34,7 +34,8 @@ def test_a_theka_of_the_wrong_length_says_so():
 
 
 def run_tala(name, count, **perc):
-    cfg = c.from_dict({"percussion": {"enabled": True, **perc}, "drums": {"enabled": False},
+    cfg = c.from_dict({"percussion": {"enabled": True, "presence": 1.0, **perc},
+                       "drums": {"enabled": False},
                        "song": {"tala": name, "count": count, "tempo": 100},
                        "harmony": {"root": "C"}})
     res = simulate.run(cfg, onsets=[], actions=[(1.0, "song_start")], total=16)
@@ -229,7 +230,8 @@ def test_the_percussion_breathes_while_you_are_busy():
 
 
 def korvai_run(korvais=None, finish=False, count=4, tala_name="adi"):
-    cfg = c.from_dict({"percussion": {"enabled": True, "korvais": korvais, "moras": 0},
+    cfg = c.from_dict({"percussion": {"enabled": True, "korvais": korvais, "moras": 0,
+                                      "presence": 1.0},
                        "drums": {"enabled": False}, "harmony": {"root": "C"},
                        "ending": {"shape": "korvai"},
                        "song": {"tala": tala_name, "count": count, "tempo": 90}})
@@ -262,3 +264,22 @@ def test_without_a_written_korvai_one_is_made_up_and_f_can_end_with_it():
             and m.channel == cfg.pulse.channel - 1]
     beats = (bass[-1] - one) / P
     assert abs(beats / 8 - round(beats / 8)) < 0.01              # the band ends on a sam
+
+
+def test_in_a_fusion_band_the_mridangam_comes_and_goes_with_licks():
+    cfg = c.from_dict({"percussion": {"enabled": True, "presence": 0.4, "spell_cycles": 2,
+                                      "licks": 1.0, "breathe": 0.0},
+                       "drums": {"enabled": True}, "harmony": {"root": "C"},
+                       "song": {"tala": "adi", "count": 4, "tempo": 120}})
+    P, one = 0.5, 1 + 5 * 0.5
+    res = simulate.run(cfg, onsets=[(one + i, 60 + i % 5, 80) for i in range(80)],
+                       actions=[(1.0, "song_start")], total=one + 64 * 8 * P)
+    perc = [t for t, m in res.timeline if m.type == "note_on" and m.velocity
+            and m.channel == cfg.percussion.channel - 1 and t >= one]
+    import collections
+    per = collections.Counter(int((t - one) // (8 * P)) for t in perc)
+    playing = sum(1 for k in range(64) if per.get(k, 0) > 2)     # (a lone tām is a lick's end)
+    assert 0.2 < playing / 64 < 0.6                        # about presence of the cycles
+    assert res.engine.tala_player.mora_text or res.engine.tala_player.design_text   # licks
+    kit = [t for t, m in res.timeline if m.type == "note_on" and m.channel == 9 and t > one]
+    assert len({int((t - one) // (8 * P)) for t in kit}) > 60  # the kit keeps time throughout

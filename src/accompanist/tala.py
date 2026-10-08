@@ -301,12 +301,13 @@ class TalaPlayer:
         return total
 
     def on_beat(self, beat_t: float, period: float, gain: float, form_beat: int,
-                busy: float = 0.0) -> None:
+                busy: float = 0.0, theka: bool = True) -> None:
         """busy (0-1, how busily you sing or play): the busier you are, the more the strokes
-        between the beats drop out, leaving you room (percussion.breathe)."""
+        between the beats drop out, leaving you room (percussion.breathe). theka False: only
+        a korvai or mōrā already on its way plays (the mridangam is out of its spell)."""
         if self._start_pending(beat_t, period, form_beat, gain):
             return                                         # a korvai begins
-        if beat_t < self.busy_until:                       # a mōrā is speaking
+        if beat_t < self.busy_until or not theka:          # a mōrā is speaking, or resting
             return
         c, cyc = self.cfg, self.cycle
         pos = form_beat % len(cyc.beats)

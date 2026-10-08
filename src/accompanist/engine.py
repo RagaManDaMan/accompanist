@@ -38,6 +38,7 @@ FILLER_DEGREES = (0, 5, 3, 4, 0, 3, 5, 1)
 ENDING_SHAPES = ("chord", "button", "tag", "ritardando", "piano-tag")
 MORA_MIN_PULSES = 12      # an ending mōrā is at least this long (else it waits a cycle)...
 MORA_MAX_BEATS = 8        # ...and starts no more than this many beats before its sam
+KORVAI_SHARE = 0.3        # of the licks ending a mridangam spell, this share are korvais
 PIANO_TAG_BEATS = {3: (0, 1), 4: (0, 2), 6: (0, 3)}
 PIANO_TAG_SOFT = 0.6
 FERMATA = 1.5
@@ -103,6 +104,8 @@ class Engine:
         self._mora_target: Optional[int] = None   # an ending mōrā: the beat of its sam
         self.counted = False                      # the band has been counted in (s, or taps)
         self._korvai_index = 0                    # the next written korvai
+        self._tala_on, self._tala_left = False, 0  # the mridangam's spell (fusion: now and then)
+        self._tala_lick: Optional[str] = None      # the lick that ends it
         self._low_conf_since: Optional[float] = None   # unlocked pulse: when confidence dropped
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
@@ -361,13 +364,15 @@ class Engine:
                 if self.tala_player is not None and self.cfg.percussion.enabled:
                     lift = 1 + SPOTLIGHT_LIFT * self.cfg.percussion.spotlight * self.dynamics.quiet(now)
                     pc = self.cfg.percussion
-                    if (pc.moras > 0 and not self._finish_requested and beat_t >= self.tala_player.busy_until
+                    on = self._tala_spell(form_beat, beat_t, gain * lift)
+                    if (on and pc.moras > 0 and not self._finish_requested
+                            and beat_t >= self.tala_player.busy_until
                             and self.tala_player.beats_to_sam(form_beat) == pc.mora_beats
                             and self._spell_rng.random() < pc.moras):   # a mōrā marks the sam
                         self.tala_player.play_mora(beat_t, self.clock.period, pc.mora_beats,
                                                    gain * lift)
                     self.tala_player.on_beat(beat_t, self.clock.period, gain * lift, form_beat,
-                                             self.dynamics.busyness(now))
+                                             self.dynamics.busyness(now), on)
                 elif self.cfg.percussion.enabled and bar_pos == 0:
                     self._percussion_spell(form_beat // max(1, bpb), now)
                 if self.cfg.percussion.enabled and self.tala_player is None:
@@ -1046,6 +1051,34 @@ class Engine:
             return None
         self.chord_held, self.frozen, self.droning = True, chord, True
         return chord
+
+    def _tala_spell(self, form_beat: int, beat_t: float, gain: float) -> bool:
+        """Is the mridangam in a spell? Like the piano's licks, it comes and goes in a fusion
+        band (percussion.presence; 1 = always): at a sam it may come in for
+        percussion.spell_cycles cycles, and its spell often ends with a lick that lands on the
+        sam: a mōrā, now and then a korvai (percussion.licks)."""
+        pc, tp = self.cfg.percussion, self.tala_player
+        if pc.presence >= 1:
+            return True
+        cycle = len(tp.cycle.beats)
+        if form_beat % cycle == 0:                         # a sam: decide the next cycles
+            if self._tala_left > 0:
+                self._tala_left -= 1
+            else:
+                n = max(1, pc.spell_cycles)               # presence = share of the cycles
+                self._tala_on = self._spell_rng.random() < pc.presence / (pc.presence + n * (1 - pc.presence))
+                self._tala_left = max(1, pc.spell_cycles) - 1 if self._tala_on else 0
+                self._tala_lick = None
+            if self._tala_on and self._tala_left == 0 and not self._finish_requested:
+                if self._spell_rng.random() < pc.licks:    # the spell's last cycle: a lick
+                    self._tala_lick = "korvai" if self._spell_rng.random() < KORVAI_SHARE else "mora"
+                    if self._tala_lick == "korvai" and tp.pending is None:
+                        self.request_korvai()
+        if (self._tala_on and self._tala_lick == "mora" and beat_t >= tp.busy_until
+                and tp.beats_to_sam(form_beat) == pc.mora_beats):
+            self._tala_lick = None
+            tp.play_mora(beat_t, self.clock.period, pc.mora_beats, gain)
+        return self._tala_on
 
     def request_korvai(self) -> str:
         """A korvai on the percussion, landing on a sam: the song's next written one

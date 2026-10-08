@@ -1,16 +1,17 @@
-# An Indian fusion piece (its key is a rāga, or its time a tāla): the percussion, your
-# mridangam or tabla, plays nearly all the time and steps forward in the gaps, instead of
-# coming and going in spells. Taken automatically for such a piece, under your own
-# settings (config.toml or the song file win); or choose it by name like any style.
+# An Indian fusion piece (its key is a rāga, or its time a tāla): a carnatic-jazz fusion
+# band, not a carnatic ensemble. The kit keeps time; the mridangam (or tabla) comes and
+# goes, as the piano's licks do: a spell of sarvalaghu for a couple of cycles, often ending
+# with a mōrā or korvai landing on the sam, then out again. Taken automatically for such a
+# piece, under your own settings (config.toml or the song file win).
 [percussion]
 enabled = true
 breathe = 0.8          # room for you: fewer strokes while you sing
 nadai = 2              # a slower sarvalaghu: two strokes to the beat
-presence = 0.85
-spell_bars = 8
+presence = 0.35         # a fusion band: the mridangam comes and goes, as the piano does
+spell_cycles = 2
+licks = 0.7             # a spell often ends with a mōrā or korvai on the sam
 spotlight = 0.5
 triplets = 0.6
-moras = 0.12           # now and then a mōrā marks the sam
 
 [drums]
 pattern = "sparse"     # the kit stays out of the mridangam's way
