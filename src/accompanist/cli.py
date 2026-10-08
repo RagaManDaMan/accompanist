@@ -156,16 +156,13 @@ def cmd_monitor(args) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        if writer is not None:                       # first: the recording must be saved
+            writer.close()
+            print(f"\nSaved {writer.path}: try `accompanist listen {writer.path}`")
         for p in ports:
             p.close()
         for a in audios:
             a.close()
-        for b in bodies:
-            b.close()
-        guard.summary()
-        if writer is not None:
-            writer.close()
-            print(f"\nSaved {writer.path}: try `accompanist listen {writer.path}`")
     return 0
 
 
