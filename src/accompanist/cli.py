@@ -1079,6 +1079,8 @@ def _chart_overrides(args) -> dict:
     if getattr(args, "transpose", None) is not None:
         h["transpose"] = args.transpose
     out = {}
+    if getattr(args, "start", None) and getattr(args, "cmd", None) == "run":
+        out["start"] = {"shape": args.start}
     if getattr(args, "time_sig", None):              # --time-sig 7/8, or a tāla
         out["song"] = {"count": meter_of(args.time_sig)[0]}
         if args.time_sig.strip().lower() not in METERS:
@@ -1495,7 +1497,8 @@ def cmd_run(args) -> int:
     return 0
 
 
-RUN_ARGS = ("song", "set", "key", "mode", "time_sig", "tempo", "preset", "chart", "transpose")
+RUN_ARGS = ("song", "set", "key", "mode", "time_sig", "tempo", "preset", "chart", "transpose",
+            "start")
 
 
 def run_args(args) -> dict:
@@ -1921,6 +1924,10 @@ def main(argv=None) -> int:
                             help="a mode (major, minor, dorian, lydian, mixolydian, "
                                  "minor-pentatonic, blues...) or a rāga (sahana, kalyani, "
                                  "mohanam, bhairavi...): --key C --mode sahana")
+            sp.add_argument("--start", default=None,
+                            choices=("count", "intro", "drums", "you", "drone"),
+                            help="how the song starts; you: no s needed, the band comes in by "
+                                 "itself once it has your tempo (else the beat waits for s or t)")
             sp.add_argument("--time-sig", default=None, metavar="METER",
                             help="a time signature (3/4, 4/4, 5/4, 6/8, 7/8) or a tāla "
                                  "(adi, rupakam, misra-chapu, khanda-chapu, tintal, rupak, "

@@ -925,10 +925,10 @@ class Engine:
 
     @property
     def waits_for_start(self) -> bool:
-        """A song that gives its tempo (and doesn't start with you) starts on s or a count:
-        before that, you sing or play freely (an ālāp) over the pad, and no beat starts."""
-        return (not self.is_chart and self.cfg.song.tempo is not None
-                and self.cfg.start.shape != "you")
+        """The beat starts on s or a tap count (t): before that you sing or play freely (an
+        ālāp) over the pad, however steady you are. Only start.shape "you" lets the band
+        come in by itself once it has your tempo."""
+        return not self.is_chart and self.cfg.start.wait and self.cfg.start.shape != "you"
 
     def count_in(self, last_tap: float) -> None:
         """After tapping the tempo: the taps were the count-in, the next beat is bar 1, and

@@ -182,3 +182,16 @@ def test_in_a_raga_every_guitar_note_stays_in_it():
     assert all(p % 12 in gowri for p in out)
     r.key = (0, "major")                                  # elsewhere: quick passing notes stay
     assert r.in_key([60, 61, 62], [0.1, 0.1], None, {0, 2, 4, 5, 7, 9, 11}, 0.6)[1] == 61
+
+
+def test_without_a_tempo_too_the_beat_waits_for_s_or_taps():
+    steady = [(1.0 + i * 0.5, (60, 62, 64, 65)[i % 4], 80) for i in range(60)]
+    cfg = c.from_dict({"drums": {"enabled": True}, "harmony": {"root": "C"}})
+    taps = [(20.0 + i * 0.5, "tap_tempo") for i in range(4)]
+    res = simulate.run(cfg, onsets=steady, actions=taps, total=30)
+    drums = [t for t, m in res.timeline if m.type == "note_on" and m.velocity and m.channel == 9]
+    assert drums and min(drums) >= 20.0                                  # only after the taps
+    cfg = c.from_dict({"drums": {"enabled": True}, "harmony": {"root": "C"},
+                       "start": {"shape": "you"}})                       # unless you start it
+    res = simulate.run(cfg, onsets=steady, total=30)
+    assert any(m.channel == 9 for t, m in res.timeline if m.type == "note_on" and t < 20)

@@ -799,6 +799,10 @@ PARAMS: list[Param] = [
       "the band comes in when it has your tempo; drone: s holds the home chord in free time "
       "(for an alap), and s again counts the band in.", "Start",
       choices=("count", "intro", "drums", "you", "drone")),
+    P("start.wait", bool, True, "Wait for s",
+      "The beat (drums, percussion, bass) waits for s or a tap count (t): before it you sing "
+      "or play freely over the pad. Off: the band comes in by itself once it has your tempo "
+      "(as start.shape you does for one song).", "Start"),
     P("start.bars", int, 4, "Intro bars",
       "How long an intro or drums start lasts before you come in (bars).", "Start", 1, 16, 1),
 

@@ -2,7 +2,7 @@ import pytest
 from accompanist import config as c, simulate
 
 
-UNLOCKED = {"lock": {"auto": False}}   # these tests are about the free (unlocked) behaviour
+UNLOCKED = {"lock": {"auto": False}, "start": {"wait": False}}   # the free (unlocked), listening band
 
 
 @pytest.fixture(scope="module")
