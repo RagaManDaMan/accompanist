@@ -94,7 +94,13 @@ def cmd_monitor(args) -> int:
     from .audio_io import AudioInput, WavWriter
     from .audio_notes import NoteTracker, db_of
 
-    cfg = cfgmod.load(args.config)
+    cfg = cfgmod.load(args.config, getattr(args, "preset", None))
+    if getattr(args, "input", None):                 # just one input (by its name)
+        chosen = [i for i in cfg.inputs if args.input.lower() in (i.name or "").lower()]
+        if not chosen:
+            raise cfgmod.ConfigError(f"no input named '{args.input}' in the config; inputs: "
+                                     + ", ".join(i.name or i.port or i.audio or "?" for i in cfg.inputs))
+        cfg.inputs[:] = chosen
     if args.record_audio and not any(i.is_audio for i in cfg.inputs):
         raise cfgmod.ConfigError("--record-audio needs an audio input in the config, e.g.\n"
                                  "  [[inputs]]\n  name = \"sax\"\n  audio = \"Scarlett Solo\"\n"
@@ -1830,6 +1836,10 @@ def main(argv=None) -> int:
         if name == "monitor":
             sp.add_argument("--record-audio", default=None, metavar="FILE.wav",
                             help="save the (first) audio input to a WAV file")
+            sp.add_argument("--input", default=None, metavar="NAME",
+                            help="only this input (by its name in config.toml, e.g. steel)")
+            sp.add_argument("--preset", default=None, help="e.g. voice: hear a voice or a slide "
+                                                           "as held notes, not every glide")
         if name == "run":
             sp.add_argument("--preset", default=None, help=PRESET_HELP)
             sp.add_argument("--key", default=None, metavar="C",
