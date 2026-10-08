@@ -102,6 +102,7 @@ class Engine:
         self._end_intro_next = False
         self._mora_target: Optional[int] = None   # an ending mōrā: the beat of its sam
         self.counted = False                      # the band has been counted in (s, or taps)
+        self._korvai_index = 0                    # the next written korvai
         self._low_conf_since: Optional[float] = None   # unlocked pulse: when confidence dropped
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
@@ -286,7 +287,15 @@ class Engine:
                         self.drums.fill_requested = True
                     if self._intro_left == 0:
                         self._end_intro_next = True
-                if self._finish_requested and self._ending_shape == "mora":
+                if self._finish_requested and self._ending_shape == "korvai":
+                    tp = self.tala_player
+                    if tp.pending is None and tp.design_end_t is None:
+                        self.request_korvai()             # (queued: it starts when it must)
+                    elif tp.design_end_t is not None and beat_t >= tp.design_end_t - 0.01:
+                        tp.design_end_t = None
+                        self._play_ending(beat_t, now)    # its sam: the band ends there
+                        break
+                elif self._finish_requested and self._ending_shape == "mora":
                     if self._mora_target is None:     # start it when the sam is near enough
                         beats = self.tala_player.beats_to_sam(form_beat)
                         nadai = max(1, self.cfg.percussion.nadai)
@@ -752,6 +761,8 @@ class Engine:
             shape = self._ending_rng.choice(ENDING_SHAPES)
         if shape == "tihai":
             shape = "mora"                            # the same design, its Hindustani name
+        if shape == "korvai" and self.tala_player is None:
+            shape = "chord"
         if shape == "mora" and self.tala_player is None:
             shape = "chord"                           # no tāla: no mōrā to land
         self._ending_shape = shape
@@ -1035,6 +1046,31 @@ class Engine:
             return None
         self.chord_held, self.frozen, self.droning = True, chord, True
         return chord
+
+    def request_korvai(self) -> str:
+        """A korvai on the percussion, landing on a sam: the song's next written one
+        (percussion.korvais, one a line), else one made up. Returns what happens."""
+        from . import solkattu
+
+        p = self.tala_player
+        if p is None:
+            return "a korvai needs a tāla (--time-sig adi, or [song] tala)"
+        if self.muted or not self.clock.running:
+            return "a korvai needs the band playing (s first)"
+        if p.pending is not None:
+            return "a korvai is already on its way"
+        written = [k.strip() for k in (self.cfg.percussion.korvais or "").splitlines() if k.strip()]
+        if written:
+            text = written[self._korvai_index % len(written)]
+            self._korvai_index += 1
+            design, total = solkattu.design(text)
+        else:
+            design, total = solkattu.korvai(len(p.cycle.beats) * max(1, self.cfg.percussion.nadai),
+                                            p.rng)
+            text = " ".join(s or "," for _, s, _ in design)
+        p.queue_design(design, total, text)
+        p.design_end_t = None
+        return f"korvai ({total} pulses, landing on a sam): {text}"
 
     def _click(self, t: float, first: bool) -> None:
         d = self.cfg.drums

@@ -431,6 +431,11 @@ PARAMS: list[Param] = [
       "Now and then (this chance per cycle) the percussion ends a cycle with a mōrā landing "
       "on the sam, marking the time as a mridangist marks a song's sections (0 = never).",
       "Percussion", 0, 1, 0.05),
+    P("percussion.korvais", str, None, "Your korvais",
+      "Your korvais in solkattu, one a line (ta ka di mi , tām ...: commas are rests, a long "
+      "syllable two pulses, ta3 three), each written up to the sam it lands on (a tām is added "
+      "on the sam). k (or the korvai action) plays the next one, started so that it lands; "
+      "none written: one made up for the tāla.", "Percussion", nullable=True),
     P("percussion.mora_beats", int, 3, "Mōrā length",
       "Beats a cycle's mōrā takes (the last beats before the sam).", "Percussion", 2, 16, 1),
     P("percussion.kit", str, "auto", "Percussion kit",
@@ -830,7 +835,8 @@ PARAMS: list[Param] = [
       "out for a bar of soft piano, then the last chord), mora (with a tāla: the percussion plays "
       "a mōrā that lands on the sam, where the band ends; tihai: the same, by its Hindustani "
       "name), or random.", "Ending",
-      choices=("chord", "button", "tag", "ritardando", "piano-tag", "mora", "tihai", "random")),
+      choices=("chord", "button", "tag", "ritardando", "piano-tag", "mora", "tihai", "korvai",
+               "random")),
     P("ending.tag_bars", int, 4, "Tag length", "Bars the band plays on before a tag ending's "
       "last chord.", "Ending", 1, 16, 1),
     P("ending.rit_bars", int, 2, "Ritardando length", "Bars over which a ritardando slows.",

@@ -192,6 +192,8 @@ class Controller:
             return ""
         if action == "break":
             return eng.request_break()
+        if action == "korvai":
+            return eng.request_korvai()
         if action == "finish":
             if eng._finish_requested or eng._ending is not None:
                 return "already finishing"

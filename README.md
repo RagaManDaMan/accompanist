@@ -417,6 +417,24 @@ tom, tām = tam...: a starting point, per instrument, to correct). Uses:
 - The sam itself is only lightly stressed (`percussion.sam_accent`): a tāla has no built-in
   accent; the stress comes from the phrases and the designs that land there.
 
+**Korvais.** `k` (or the stage screen's Korvai button, or a pedal mapped to `korvai`)
+plays a korvai on the percussion, started at the moment that makes it land on a sam. Write
+your own in the song, in solkattu, one a line, each written up to the sam it lands on (a
+tām is added on the sam):
+
+```toml
+[percussion]
+korvais = """
+ta ka di mi ta ki ṭa tām , , ta ka di mi ta ki ṭa tām , , ta ka di mi ta ki ṭa
+ta di ki ṭa tom , ta di ki ṭa tom , ta di ki ṭa tom
+"""
+```
+
+Commas are rests, a long syllable (tām, dheem) two pulses, `ta3` three; pulses are
+`percussion.nadai` to a beat. `k` plays them in turn; with none written, it makes one up
+for the tāla (a phrase stated twice, then a mōrā to the sam). `[ending] shape = "korvai"`:
+`f` ends the song with one, the band stopping together on its sam.
+
 **Your own cycle.** `[percussion] theka = "Thom.DhiKi Nam.DhiKi ..."`: one word per beat,
 strokes inside a beat each starting with a capital, `.` a rest. The plain sarvalaghu is a
 starting point, written to be corrected: `src/accompanist/indian/talas.toml`.

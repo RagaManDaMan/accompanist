@@ -13,7 +13,8 @@ from typing import Any, Optional
 
 METERS = {3: "3/4", 4: "4/4", 5: "5/4", 6: "6/8", 7: "7/8 (3+2+2)"}
 START_SHAPES = ("count", "intro", "drums", "you", "drone")
-FINISH_SHAPES = ("chord", "button", "tag", "ritardando", "piano-tag", "mora", "tihai", "random")
+FINISH_SHAPES = ("chord", "button", "tag", "ritardando", "piano-tag", "mora", "tihai", "korvai",
+                 "random")
 
 
 def describe_start(cfg: Any) -> str:
@@ -51,6 +52,8 @@ def describe_finish(cfg: Any) -> str:
         "random": "f: one of chord, button, tag, ritardando or piano-tag, chosen then",
         "mora": "f: the percussion plays a mōrā (tihai) that lands on the sam, where the band "
                 "ends together (with a tāla; else a last chord)",
+        "korvai": "f: the percussion plays a korvai (yours, else one made up) that lands on the "
+                  "sam, where the band ends together (with a tāla; else a last chord)",
         "tihai": "f: the percussion plays a tihai that lands on the sam, where the band ends "
                  "together (with a tāla; else a last chord)",
     }.get(e.shape, e.shape)

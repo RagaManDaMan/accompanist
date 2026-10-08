@@ -103,6 +103,7 @@
     <button data-action="chord_toggle" id="hold">Hold chord<small>c</small></button>
     <button data-action="song_prev" data-confirm id="prev">◀ Song<small>[</small></button>
     <button data-action="tap_tempo">Tap tempo<small>t</small></button>
+    <button data-action="korvai">Korvai<small>k</small></button>
     <button data-action="song_next" data-confirm id="next">Song ▶<small>]</small></button>
   </section>
 
@@ -131,7 +132,7 @@ const KEY = new URLSearchParams(location.search).get("k") || "";
 const PAGE_VERSION = "__PAGE_VERSION__";      // a newer accompanist: reload to its page
 const $ = id => document.getElementById(id);
 const KEYS = {" ": "panic_toggle", p: "panic_toggle", r: "resume", t: "tap_tempo",
-  l: "lock_toggle", c: "chord_toggle", s: "song_start", f: "finish", b: "break",
+  l: "lock_toggle", c: "chord_toggle", s: "song_start", f: "finish", b: "break", k: "korvai",
   "]": "song_next", ArrowRight: "song_next", "[": "song_prev", ArrowLeft: "song_prev"};
 const CONFIRM_MS = 2000;
 let state = null, pending = null, dragging = null, lastOk = 0;

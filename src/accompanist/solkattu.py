@@ -160,3 +160,30 @@ def stroke(syllable: str, instrument: str = "mridangam") -> str:
     bare = {k: v for k, v in table.items() if plain(k) == k}     # entries written plainly
     p = plain(s)
     return bare.get(p) or bare.get(p.replace("h", "")) or syllable
+
+
+def design(text: str, close: bool = True) -> tuple[list[tuple[int, Optional[str], bool]], int]:
+    """A written design (a korvai: solkattu text up to the sam) -> ([(pulse, syllable,
+    accented)], pulses up to the sam). The first syllable after each rest, and the closing
+    tām on the sam (with close), are accented."""
+    out: list[tuple[int, Optional[str], bool]] = []
+    at, after_rest = 0, True
+    for syl, w in parse(text):
+        out.append((at, syl, syl is not None and after_rest))
+        after_rest = syl is None or plain(syl) in ("tam", "taam", "tham")
+        at += w
+    if close:
+        out.append((at, "tām", True))
+    return out, at
+
+
+def korvai(cycle: int, rng: random.Random) -> tuple[list[tuple[int, Optional[str], bool]], int]:
+    """A korvai made up on the spot, for a cycle of `cycle` pulses: a first part (a phrase
+    stated twice, each closed with tām), then a mōrā that takes it to a sam (the whole lasts
+    a whole number of cycles). Returns (design, pulses)."""
+    s = rng.choice((5, 6, 7))
+    first = f"{statement(s, rng)} tām , {statement(s, rng)} tām ,"
+    part, n = design(first, close=False)
+    total = cycle * max(1, -(-(n + MIN_MORA + 5) // cycle))       # whole cycles, room for a mōrā
+    m = mora(total - n, rng)
+    return part + [(n + at, syl, acc) for at, syl, acc in m], total

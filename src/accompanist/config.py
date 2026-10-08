@@ -36,7 +36,7 @@ PLANNED_ROLES = ("pitch_contour", "voice")
 ACTIONS = ("panic", "resume", "panic_toggle", "lock", "unlock", "lock_toggle", "chord_hold",
            "chord_release",
            "chord_toggle", "song_start", "chart_restart", "tap_tempo", "finish", "break",
-           "song_next", "song_prev")
+           "song_next", "song_prev", "korvai")
 
 BUILTIN_PRESETS = Path(__file__).parent / "presets"
 USER_PRESETS = Path("presets")

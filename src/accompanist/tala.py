@@ -226,6 +226,9 @@ class TalaPlayer:
         self.instrument = "mridangam" if self.carnatic else "tabla"
         self.busy_until = float("-inf")              # a mōrā is playing: no theka till then
         self.mora_text: Optional[str] = None         # the last mōrā, as spoken
+        self.pending = None                          # a korvai waiting for its start
+        self.design_text: Optional[str] = None       # the last korvai played
+        self.design_end_t: Optional[float] = None    # the sam it lands on
 
     @staticmethod
     def tradition(cfg: Any, tala: Optional[str]) -> str:
@@ -236,6 +239,41 @@ class TalaPlayer:
         """Beats from this one (included) to the next sam."""
         n = len(self.cycle.beats)
         return n - form_beat % n
+
+    def queue_design(self, design: list, total: int, text: str = "") -> None:
+        """A design (a korvai) to play so that it ends on a sam: it starts on whichever
+        beat (or pulse within it) that takes."""
+        self.pending = (design, total, text)
+
+    def _start_pending(self, beat_t: float, period: float, form_beat: int, gain: float) -> bool:
+        """At a beat: if the pending design must start within it to end on a sam, start it."""
+        if self.pending is None:
+            return False
+        design, total, text = self.pending
+        nadai = max(1, self.cfg.nadai)
+        cycle = len(self.cycle.beats) * nadai
+        to_sam = self.beats_to_sam(form_beat) * nadai
+        lead = (to_sam - total) % cycle                    # pulses from this beat to its start
+        if lead >= nadai:
+            return False
+        self.pending = None
+        self._schedule(design, beat_t + lead * period / nadai, period / nadai, gain)
+        self.busy_until = beat_t + (lead + total) * period / nadai + period / (2 * nadai)
+        self.design_end_t = beat_t + (lead + total) * period / nadai    # its sam
+        self.design_text = text
+        return True
+
+    def _schedule(self, design: list, start: float, step: float, gain: float) -> None:
+        from . import solkattu
+
+        top = self.cfg.velocity * gain + self.cfg.accent
+        for at, syl, accent in design:
+            if syl is None:
+                continue
+            vel = humanize_velocity(min(max(round(top if accent else top * INSIDE), 1), 127),
+                                    self.cfg.velocity_spread, self.rng)
+            for note in self.kit.pick(solkattu.stroke(syl, self.instrument), self.rng, self.carnatic):
+                heapq.heappush(self._queue, (start + at * step, next(self._seq), note, vel))
 
     def play_mora(self, beat_t: float, period: float, beats: int, gain: float,
                   close: bool = True) -> int:
@@ -266,6 +304,8 @@ class TalaPlayer:
                 busy: float = 0.0) -> None:
         """busy (0-1, how busily you sing or play): the busier you are, the more the strokes
         between the beats drop out, leaving you room (percussion.breathe)."""
+        if self._start_pending(beat_t, period, form_beat, gain):
+            return                                         # a korvai begins
         if beat_t < self.busy_until:                       # a mōrā is speaking
             return
         c, cyc = self.cfg, self.cycle
@@ -301,3 +341,4 @@ class TalaPlayer:
     def reset(self) -> None:
         self._queue.clear()
         self.busy_until = float("-inf")
+        self.pending = None

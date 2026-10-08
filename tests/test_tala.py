@@ -226,3 +226,39 @@ def test_the_percussion_breathes_while_you_are_busy():
     for b in range(8):
         p.on_beat(b * 0.6, 0.6, 1.0, b, busy=0.0)
     assert busy_hits == 8 and len(p._queue) > busy_hits            # only the beats, then all
+
+
+def korvai_run(korvais=None, finish=False, count=4, tala_name="adi"):
+    cfg = c.from_dict({"percussion": {"enabled": True, "korvais": korvais, "moras": 0},
+                       "drums": {"enabled": False}, "harmony": {"root": "C"},
+                       "ending": {"shape": "korvai"},
+                       "song": {"tala": tala_name, "count": count, "tempo": 90}})
+    P, one = 60 / 90, 1 + (count + 1) * 60 / 90
+    notes = [(one + i * P, 60 + (i % 5) * 2, 80) for i in range(8)]
+    act = [(1.0, "song_start"), (one + 5.2 * P, "finish" if finish else "korvai")]
+    res = simulate.run(cfg, onsets=notes, actions=act, total=one + 60 * P)
+    return cfg, res, one, P
+
+
+def test_your_korvai_lands_its_tam_on_a_sam():
+    text = "ta ka di mi ta ki ṭa tām , , ta ka di mi ta ki ṭa tām , , ta ka di mi ta ki ṭa"
+    cfg, res, one, P = korvai_run(text)
+    p = res.engine.tala_player
+    assert p.design_text == text
+    from accompanist import solkattu
+    _, total = solkattu.design(text)
+    perc = sorted(t for t, m in res.timeline if m.type == "note_on" and m.velocity
+                  and m.channel == cfg.percussion.channel - 1)
+    end = p.busy_until - P / 8                                   # where its tām fell
+    beats = (end - one) / P
+    assert abs(beats / 8 - round(beats / 8)) < 0.01              # on a sam of adi
+    assert any(abs(t - end) < 0.02 for t in perc)
+
+
+def test_without_a_written_korvai_one_is_made_up_and_f_can_end_with_it():
+    cfg, res, one, P = korvai_run(finish=True)
+    assert res.engine.finished and res.engine.tala_player.design_text
+    bass = [t for t, m in res.timeline if m.type == "note_on" and m.velocity
+            and m.channel == cfg.pulse.channel - 1]
+    beats = (bass[-1] - one) / P
+    assert abs(beats / 8 - round(beats / 8)) < 0.01              # the band ends on a sam
