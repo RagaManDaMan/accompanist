@@ -1269,7 +1269,8 @@ def cmd_run(args) -> int:
             print(f"Listening to audio '{a.name}' input {icfg.audio_channel} as '{icfg.name or icfg.audio}' "
                   f"(gate {cfg.audio.gate_db:g} dB"
                   + (f", heard as {icfg.preset}" if icfg.preset else "")
-                  + ("" if icfg.lead else ", under your lead: not answered") + ")")
+                  + ("" if icfg.lead is True else ", leads when your other lead is quiet"
+                     if icfg.lead == "alone" else ", under your lead: not answered") + ")")
             if args.record_audio and wav is None:
                 wav = WavWriter(args.record_audio, a.sample_rate)
     for icfg in cfg.inputs:

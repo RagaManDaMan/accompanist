@@ -594,6 +594,10 @@ PARAMS: list[Param] = [
     P("response.rhythm_variety", float, 0.4, "Rhythm variations",
       "How often a phrase is played in double time, half time or triplets instead of as you "
       "played it (0 = never).", "Response", 0, 1, 0.05),
+    P("response.lead_quiet_s", float, 8.0, "Second lead after",
+      "An input with lead = \"alone\" (a lap steel you play while singing) leads, its phrases "
+      "learnt and answered, once no lead input (your voice) has been heard this long.",
+      "Response", 1, 60, 1),
     P("response.warmup_s", float, 20.0, "Listen first",
       "The guitar listens this long (seconds from your first note) before it answers, so its "
       "first phrases are made of yours, not stock ones.", "Response", 0, 120, 1),

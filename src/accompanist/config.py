@@ -112,7 +112,8 @@ class InputCfg:
     audio_channel: int = 1          # audio: which input of the interface (1-based)
     muse: Optional[str] = None      # ...or a Muse headband's Bluetooth address (body signals)
     preset: Optional[str] = None    # audio: this input's own hearing (e.g. voice, steel)
-    lead: bool = True               # its phrases are what the guitar learns and answers
+    lead: Any = True                # its phrases are what the guitar learns and answers:
+                                    # true, false, or "alone" (only while no lead is heard)
 
     @property
     def is_audio(self) -> bool:
@@ -592,9 +593,10 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         if "muse" in item:
             item = {**item, "role": item.get("role", "body")}
         inp = InputCfg(**item)
-        if not isinstance(inp.lead, bool):
-            raise ConfigError(f"inputs[{i}]: lead = true or false (the guitar learns and answers "
-                              f"this input's phrases)")
+        if not isinstance(inp.lead, bool) and inp.lead != "alone":
+            raise ConfigError(f"inputs[{i}]: lead = true, false or \"alone\" (the guitar learns "
+                              f"and answers this input's phrases: always, never, or only while "
+                              f"no other lead is heard)")
         if inp.preset is not None:
             if inp.audio is None:
                 raise ConfigError(f"inputs[{i}]: preset = \"{inp.preset}\" is for an audio input "

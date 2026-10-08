@@ -137,7 +137,7 @@ class Engine:
         self._auto_armed = True
 
     # ---- listening -------------------------------------------------------
-    def on_note(self, t: float, note: int, velocity: int, lead: bool = True) -> None:
+    def on_note(self, t: float, note: int, velocity: int, lead=True) -> None:
         """A note-on from a note_source input. Listening continues even while muted.
         lead=False (inputs.lead: say a lap steel under your voice): it sets the tempo, the
         harmony and the dynamics, and the guitar gives way to it, but its notes don't join the

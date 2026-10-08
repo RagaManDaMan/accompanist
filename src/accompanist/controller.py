@@ -45,7 +45,7 @@ class Controller:
         if self.t0 is None:
             self.t0 = t
 
-    def on_note(self, t: float, note: int, velocity: int, lead: bool = True) -> None:
+    def on_note(self, t: float, note: int, velocity: int, lead=True) -> None:
         self._started(t)
         self.engine.on_note(t, note, velocity, lead)
 

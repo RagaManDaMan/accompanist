@@ -210,11 +210,20 @@ class ResponseResponder:
         self._heard: list[int] = []                                 # your recent notes
         self._iois: list[float] = []                                # ...and their spacing
         self.first_t: Optional[float] = None                        # when you began
+        self._lead_t: Optional[float] = None                        # last note of a lead
+        self._busy_t: Optional[float] = None                        # last note of anyone
 
-    def hear(self, t: float, note: int, velocity: int, period: float, lead: bool = True) -> None:
+    def hear(self, t: float, note: int, velocity: int, period: float, lead=True) -> None:
         """You played: the answer gives way (yield_to_you); the note joins your phrase (or
-        starts one). lead=False: give way only (another instrument under your lead)."""
+        starts one). lead=False: give way only (another instrument under your lead);
+        lead="alone": it leads only while no lead input has been heard for
+        response.lead_quiet_s (the steel between your songs, not under your singing)."""
         self._give_way(self.cfg.yield_to_you)
+        self._busy_t = t                                    # anyone playing: no answer yet
+        if lead == "alone":
+            lead = self._lead_t is None or t - self._lead_t >= self.cfg.lead_quiet_s
+        elif lead:
+            self._lead_t = t
         if not lead:
             return
         if self.answered or (self.last_t is not None and t - self.last_t >= self._gap(period)):
@@ -324,8 +333,9 @@ class ResponseResponder:
             self.out.note_on(ch, note, vel)
             self.out.note_off_at(t + dur, ch, note)
             self._sounding[note] = t + dur
-        if (self.answered or self.last_t is None or now - self.last_t < self._gap(period)
-                or len(self.phrase) < self.cfg.min_notes):
+        if (self.answered or self.last_t is None
+                or now - max(self.last_t, self._busy_t or self.last_t) < self._gap(period)
+                or len(self.phrase) < self.cfg.min_notes):          # (wait for everyone's pause)
             return
         self.answered = True                                # your phrase is over
         if self.first_t is None or now - self.first_t < self.cfg.warmup_s:

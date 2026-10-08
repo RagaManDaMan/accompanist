@@ -115,3 +115,23 @@ def test_a_second_instrument_under_your_lead_is_not_answered():
     for i in range(6):
         ctl.on_note(5.0 + i * 0.3, 60 + i, 80)                    # your voice
     assert [n for _, n, _ in ctl.engine.response.phrase] == [60, 61, 62, 63, 64, 65]
+
+
+def test_the_steel_leads_only_while_your_voice_is_quiet():
+    from accompanist.controller import Controller
+    from accompanist.output import RecordingPort, SafeOutput
+
+    cfg = c.from_dict({"response": {"enabled": True, "warmup_s": 0, "lead_quiet_s": 8},
+                       "harmony": {"root": "C"}})
+    ctl = Controller(cfg, SafeOutput(RecordingPort()))
+    r = ctl.engine.response
+    for i in range(4):
+        ctl.on_note(1.0 + i * 0.3, 60 + i, 80)                    # you sing
+    for i in range(4):
+        ctl.on_note(2.5 + i * 0.3, 72 + i, 80, lead="alone")      # steel under your voice
+    assert [n for _, n, _ in r.phrase] == [60, 61, 62, 63]        # the voice's phrase only
+    ctl.tick(3.6)
+    assert not r.answered                                         # nobody has paused yet
+    for i in range(4):
+        ctl.on_note(20.0 + i * 0.3, 74 + i, 80, lead="alone")     # steel alone, voice quiet
+    assert [n for _, n, _ in r.phrase] == [74, 75, 76, 77]        # now the steel leads
