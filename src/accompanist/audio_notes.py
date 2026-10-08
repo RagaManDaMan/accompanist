@@ -138,6 +138,8 @@ class NoteTracker:
             self._levels.popleft()
         now_level = self._levels[-1][1]
         events: list[AudioEvent] = []
+        if f0 is not None and not (math.isfinite(f0) and f0 > 0):
+            f0 = None                                     # a degenerate frame: no pitch
         if f0 is None:                                    # silence or no clear pitch
             if self._quiet_since is None:
                 self._quiet_since = t

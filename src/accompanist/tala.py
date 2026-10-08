@@ -262,7 +262,10 @@ class TalaPlayer:
         self.mora_text = " ".join(spoken)
         return total
 
-    def on_beat(self, beat_t: float, period: float, gain: float, form_beat: int) -> None:
+    def on_beat(self, beat_t: float, period: float, gain: float, form_beat: int,
+                busy: float = 0.0) -> None:
+        """busy (0-1, how busily you sing or play): the busier you are, the more the strokes
+        between the beats drop out, leaving you room (percussion.breathe)."""
         if beat_t < self.busy_until:                       # a mōrā is speaking
             return
         c, cyc = self.cfg, self.cycle
@@ -276,8 +279,9 @@ class TalaPlayer:
             level += c.accent / 2
         if pos in cyc.khali:
             level *= KHALI_SOFT
+        keep_inside = 1.0 - self.cfg.breathe * busy
         for i, s in enumerate(strokes):
-            if s == ".":
+            if s == "." or (i > 0 and self.rng.random() > keep_inside):
                 continue
             t = beat_t + i * period / len(strokes)
             if c.timing_ms > 0 and i:

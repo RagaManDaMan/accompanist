@@ -195,3 +195,34 @@ def test_without_a_tempo_too_the_beat_waits_for_s_or_taps():
                        "start": {"shape": "you"}})                       # unless you start it
     res = simulate.run(cfg, onsets=steady, total=30)
     assert any(m.channel == 9 for t, m in res.timeline if m.type == "note_on" and t < 20)
+
+
+def test_a_degenerate_pitch_frame_is_silence_not_a_crash():
+    import numpy as np
+
+    from accompanist import audio_notes
+
+    tr = audio_notes.NoteTracker(c.from_dict({}).audio, 48000)
+    orig = audio_notes.yin
+    try:
+        audio_notes.yin = lambda *a, **k: (0.0, 1.0)            # what crashed a run (log2 of 0)
+        tr.process(np.full(4096, 0.2, dtype=np.float32), 0.0)
+    finally:
+        audio_notes.yin = orig
+
+
+def test_the_percussion_breathes_while_you_are_busy():
+    import random
+
+    from accompanist.output import RecordingPort, SafeOutput
+
+    cfg = c.from_dict({"song": {"tala": "adi"}, "percussion": {"breathe": 1.0}})
+    p = tala.TalaPlayer(cfg, SafeOutput(RecordingPort()))
+    p.rng = random.Random(0)
+    for b in range(8):
+        p.on_beat(b * 0.6, 0.6, 1.0, b, busy=1.0)
+    busy_hits = len(p._queue)
+    p.reset()
+    for b in range(8):
+        p.on_beat(b * 0.6, 0.6, 1.0, b, busy=0.0)
+    assert busy_hits == 8 and len(p._queue) > busy_hits            # only the beats, then all

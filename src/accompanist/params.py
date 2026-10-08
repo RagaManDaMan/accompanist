@@ -416,8 +416,13 @@ PARAMS: list[Param] = [
       "capital, '.' a rest: \"Dha Dhin Dhin Dha | ...\" or \"Thom.DhiKi Nam.DhiKi ...\". Unset: the "
       "tāla's theka, or a plain sarvalaghu.", "Percussion", nullable=True),
     P("percussion.nadai", int, 4, "Nadai / gati",
-      "Strokes per beat of the plain sarvalaghu: 4 chatusram, 3 tisram, 5 khandam, 7 misram.",
-      "Percussion", 3, 7, 1, choices=(3, 4, 5, 7)),
+      "Strokes per beat of the plain sarvalaghu (and pulses of a mōrā): 2 slow, 4 chatusram, "
+      "3 tisram, 5 khandam, 7 misram.",
+      "Percussion", 2, 7, 1, choices=(2, 3, 4, 5, 7)),
+    P("percussion.breathe", float, 0.7, "Percussion breathes",
+      "While you sing or play busily, this share of the strokes between the beats drops out, "
+      "leaving room; when you rest it fills again (0 = always every stroke).",
+      "Percussion", 0, 1, 0.05),
     P("percussion.sam_accent", float, 0.3, "Sam accent",
       "How much the sam is stressed in the tāla's time-keeping (0-1, of percussion.accent): "
       "a tāla has no built-in accent; the stress comes from the phrases and the mōrās that "

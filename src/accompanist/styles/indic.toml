@@ -4,11 +4,17 @@
 # settings (config.toml or the song file win); or choose it by name like any style.
 [percussion]
 enabled = true
+breathe = 0.8          # room for you: fewer strokes while you sing
+nadai = 2              # a slower sarvalaghu: two strokes to the beat
 presence = 0.85
 spell_bars = 8
 spotlight = 0.5
 triplets = 0.6
 moras = 0.12           # now and then a mōrā marks the sam
+
+[drums]
+pattern = "sparse"     # the kit stays out of the mridangam's way
+velocity = 55
 
 [pulse]
 movement = 1.0         # the harmony moves little in a rāga: the bass moves more,

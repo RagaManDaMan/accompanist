@@ -357,7 +357,8 @@ class Engine:
                             and self._spell_rng.random() < pc.moras):   # a mōrā marks the sam
                         self.tala_player.play_mora(beat_t, self.clock.period, pc.mora_beats,
                                                    gain * lift)
-                    self.tala_player.on_beat(beat_t, self.clock.period, gain * lift, form_beat)
+                    self.tala_player.on_beat(beat_t, self.clock.period, gain * lift, form_beat,
+                                             self.dynamics.busyness(now))
                 elif self.cfg.percussion.enabled and bar_pos == 0:
                     self._percussion_spell(form_beat // max(1, bpb), now)
                 if self.cfg.percussion.enabled and self.tala_player is None:
