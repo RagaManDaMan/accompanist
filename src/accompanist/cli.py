@@ -941,7 +941,8 @@ def cmd_listen(args) -> int:
     from .recording import Recorder
 
     cfg_path = args.config or ("config.toml" if Path("config.toml").exists() else None)
-    cfg = cfgmod.load(cfg_path) if cfg_path else cfgmod.from_dict({})
+    cfg = (cfgmod.load(cfg_path, args.preset) if cfg_path
+           else cfgmod.from_dict({}, args.preset))
     samples, rate = read_wav(args.audio, args.channel)
     tracker = NoteTracker(cfg.audio, rate)
     events = []
@@ -2039,6 +2040,7 @@ def main(argv=None) -> int:
     sp.add_argument("-c", "--config", default=None, help="default: ./config.toml if present, else defaults")
     sp.add_argument("--save-take", default=None, metavar="FILE.jsonl",
                     help="also save the notes heard as a take, for `replay`")
+    sp.add_argument("--preset", default=None, help="e.g. voice (a voice or a slide)")
     sp = sub.add_parser("params", help="list every setting (with --json: the schema a UI is built from)")
     sp.add_argument("--json", action="store_true")
     sp.add_argument("--primary", action="store_true",

@@ -1,0 +1,10 @@
+# Lap steel (or any slide: bottleneck guitar, Hawaiian, a mohan veena): like a voice, it
+# glides through every pitch between notes, so only a pitch held long enough (and near
+# enough to a note) counts. Tuned on the owner's first lap steel recording: the sax
+# settings heard 100 notes, 43 of them slide fragments under 0.15 s; these hear 44.
+# Use: accompanist run --preset steel   (or monitor / listen --preset steel)
+
+[audio]
+min_note_ms = 130       # a held pitch, not the slide through it
+cents_tolerance = 35    # slide intonation and vibrato wander a little
+release_ms = 160        # a steel note rings and decays: don't cut it on the dip
