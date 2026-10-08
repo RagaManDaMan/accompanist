@@ -30,6 +30,7 @@ REGISTER_NOTES = 40       # your register: the middle (median) of your last this
 REGISTER_SPAN = 17        # answers and solos centre there, ranging up to this far from it
                           # (an octave and a fourth: room for a run, not the whole fretboard)
 MAX_LEAP = 12             # and no jump between two notes wider than an octave
+HELD_BEATS = 0.5          # outside a rāga, only notes held this long are kept in the key
 # Your phrase is over after a pause: response.gap_beats (at least min_gap_s), and at least
 # this many times your recent typical time between notes, so long sung notes and slow
 # phrases aren't cut into single notes (the band hears only where notes start).
@@ -230,6 +231,23 @@ class ResponseResponder:
         h = sorted(self._heard)
         return float(h[len(h) // 2])
 
+    def in_key(self, pitches: list[int], iois: list[float], chord_pcs, scale_pcs,
+               period: float) -> list[int]:
+        """Notes outside the key (a slip in what was heard, a phrase from another key) moved
+        to the nearest note of the scale or chord. In a rāga every note; otherwise only held
+        ones (half a beat or more): a quick chromatic passing note is jazz, a held one is a
+        wrong note."""
+        allowed = set(scale_pcs or ()) | set(chord_pcs or ())
+        if not allowed:
+            return pitches
+        from .modal import MODES
+        raga = self.key is not None and self.key[1] not in MODES
+        out = []
+        for i, p in enumerate(pitches):
+            held = i >= len(iois) or iois[i] >= HELD_BEATS * period
+            out.append(_nearest_in(p, allowed) if (raga or held) and p % 12 not in allowed else p)
+        return out
+
     def centred(self, pitches: list[int]) -> list[int]:
         """Tastefully human: the phrase moved by octaves so its middle sits where you sing
         (response.octave unset) or in that octave. A run may climb or fall an octave or more,
@@ -321,12 +339,15 @@ class ResponseResponder:
             else:                                           # ...or an echo of the last one
                 phrase, used = current[: self.cfg.max_notes], None
             self._last_used = used
-            notes = self._phrase_notes(phrase, period, gain, grid)
+            notes = self._phrase_notes(phrase, period, gain, grid, chord_pcs, scale_pcs)
         self._remember(current)
         self._schedule(notes, now, period, next_beat)
 
-    def _phrase_notes(self, phrase, period: float, gain: float, grid: bool):
+    def _phrase_notes(self, phrase, period: float, gain: float, grid: bool,
+                      chord_pcs=None, scale_pcs=None):
         pitches = self.centred([n for _, n, _ in phrase])   # where you sing (or the octave)
+        pitches = self.in_key(pitches, [b[0] - a[0] for a, b in zip(phrase, phrase[1:])],
+                              chord_pcs, scale_pcs, period)
         iois = [b[0] - a[0] for a, b in zip(phrase, phrase[1:])]
         rhythm = self._pick_rhythm(period) if grid else None
         scale, per_beat = RHYTHMS.get(rhythm, (1.0, 2))
@@ -387,7 +408,8 @@ class ResponseResponder:
             if not phrase:
                 break
             self._last_used = used
-            part = self._phrase_notes(phrase, period, gain, next_beat is not None)
+            part = self._phrase_notes(phrase, period, gain, next_beat is not None, chord_pcs,
+                                      scale_pcs)
             if not part:
                 break
             start = end + (SOLO_BREATH_BEATS * period if notes else 0.0)

@@ -347,7 +347,9 @@ class PulseResponder:
             return options[0]
         if degree == "3":
             third = chord.third if chord and chord.third else None
-            return third if third else fifth         # an open chord: no third to play
+            if not third and scale:                  # an open chord (sus2, add9: a rāga's
+                third = next((i for i in (3, 4) if (root_pc + i) % 12 in scale), None)
+            return third if third else fifth         # pad): the scale's third, passing
         if degree == "7":
             for i in (10, 11):
                 if (root_pc + i) % 12 in (pcs | (scale or set())):

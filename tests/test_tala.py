@@ -159,3 +159,26 @@ def test_without_a_tala_a_mora_finish_is_a_last_chord():
     res = simulate.run(cfg, onsets=[(4.0 + i * 0.66, 60, 80) for i in range(8)],
                        actions=[(1.0, "song_start"), (8.0, "finish")], total=20)
     assert res.engine.finished and res.engine._ending_shape == "chord"
+
+
+def test_a_song_with_a_tempo_waits_for_s_however_steady_the_singing():
+    cfg = c.from_dict({"percussion": {"enabled": True}, "drums": {"enabled": True},
+                       "harmony": {"root": "C"}, "song": {"tala": "adi", "count": 4, "tempo": 90}})
+    steady = [(1.0 + i * 0.5, (60, 62, 64, 65)[i % 4], 80) for i in range(60)]   # 120 bpm, clear
+    res = simulate.run(cfg, onsets=steady, actions=[(20.0, "song_start")], total=30)
+    beat = [t for t, m in res.timeline if m.type == "note_on" and m.velocity
+            and m.channel in (cfg.drums.channel - 1, cfg.percussion.channel - 1, cfg.pulse.channel - 1)]
+    assert beat and min(beat) >= 20.0                     # nothing before s: sing in the open
+
+
+def test_in_a_raga_every_guitar_note_stays_in_it():
+    from accompanist.output import RecordingPort, SafeOutput
+    from accompanist.response import ResponseResponder
+
+    r = ResponseResponder(c.from_dict({}).response, SafeOutput(RecordingPort()))
+    r.key = (0, "gowrimanohari")
+    gowri = {0, 2, 3, 5, 7, 9, 11}
+    out = r.in_key([60, 61, 63, 66, 68], [0.1] * 4, None, gowri, 0.6)
+    assert all(p % 12 in gowri for p in out)
+    r.key = (0, "major")                                  # elsewhere: quick passing notes stay
+    assert r.in_key([60, 61, 62], [0.1, 0.1], None, {0, 2, 4, 5, 7, 9, 11}, 0.6)[1] == 61

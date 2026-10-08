@@ -101,6 +101,7 @@ class Engine:
         self.droning = False                      # start.shape drone: the home chord, free time
         self._end_intro_next = False
         self._mora_target: Optional[int] = None   # an ending mōrā: the beat of its sam
+        self.counted = False                      # the band has been counted in (s, or taps)
         self._low_conf_since: Optional[float] = None   # unlocked pulse: when confidence dropped
         if self.is_chart and getattr(self.harmony, "default_bpm", None):
             self.tempo.set_bpm(self.harmony.default_bpm)
@@ -240,6 +241,9 @@ class Engine:
             active = self.tempo.confidence >= p.min_confidence and idle <= p.idle_stop_s
         if not self.is_chart and not self.locked:
             active = active and voicing is not None
+        if self.waits_for_start and not self.counted:  # a song with a tempo: the beat waits
+            active = self._count_in_left > 0          # for s (or a tap count), however
+                                                      # steady your singing before it
         if active and not self.clock.running and self.last_onset_t is not None and not self.is_chart:
             self.restart_form()
             fit = self.tempo.beat_reference(now)
@@ -267,7 +271,7 @@ class Engine:
                     self._count_in_left -= 1
                     if self._count_in_left == 0:
                         self.restart_form()                   # the next beat is bar 1
-                        self.song_playing = True
+                        self.song_playing = self.counted = True
                         if self._count_meter:                 # a song's meter, like a count-off
                             self.groove.pin(self._count_meter)
                         self._begin_intro(now, bpb)
@@ -708,6 +712,7 @@ class Engine:
         """Kill switch: silence now and stay silent until resume(). Also ends both locks, and
         stops a chart (start it again with a count-in)."""
         self.song_playing, self._count_in_left = False, 0
+        self.counted = False                   # after a panic, the beat waits for s again
         self._intro_left, self._intro_shape, self._end_intro_next = 0, None, False
         self._intro_held = self.droning = False
         self._finish_requested, self._ending, self.finished = False, None, False
@@ -918,6 +923,13 @@ class Engine:
         if hasattr(self.harmony, "restart"):
             self.harmony.restart()
 
+    @property
+    def waits_for_start(self) -> bool:
+        """A song that gives its tempo (and doesn't start with you) starts on s or a count:
+        before that, you sing or play freely (an ālāp) over the pad, and no beat starts."""
+        return (not self.is_chart and self.cfg.song.tempo is not None
+                and self.cfg.start.shape != "you")
+
     def count_in(self, last_tap: float) -> None:
         """After tapping the tempo: the taps were the count-in, the next beat is bar 1, and
         the tempo locks so the band keeps playing before you do."""
@@ -929,7 +941,7 @@ class Engine:
             self.clock.start(last_tap, self.tempo.period)
         self._count_in_left = 0
         self.restart_form()
-        self.song_playing = True
+        self.song_playing = self.counted = True
         self.lock(last_tap, settle=False)
 
     def count_off(self, beats: int, bpm: float, downbeat_t: float, now: float) -> bool:
@@ -942,6 +954,7 @@ class Engine:
         self.restart_form()
         self.groove.pin(beats)
         self.lock(now, settle=False)
+        self.counted = True
         return True
 
     def start_song(self, now: float) -> Optional[float]:

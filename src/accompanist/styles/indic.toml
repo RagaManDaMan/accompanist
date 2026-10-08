@@ -10,5 +10,9 @@ spotlight = 0.5
 triplets = 0.6
 moras = 0.12           # now and then a mōrā marks the sam
 
+[pulse]
+movement = 1.0         # the harmony moves little in a rāga: the bass moves more,
+shape_bars = 1         # a new shape every bar, through the rāga's swaras
+
 [ending]
 shape = "mora"         # f: the percussion lands the song on the sam with a mōrā (tihai)
