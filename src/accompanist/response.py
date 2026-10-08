@@ -209,6 +209,7 @@ class ResponseResponder:
         self._sounding: dict[int, float] = {}                       # note -> ends at
         self._heard: list[int] = []                                 # your recent notes
         self._iois: list[float] = []                                # ...and their spacing
+        self.first_t: Optional[float] = None                        # when you began
 
     def hear(self, t: float, note: int, velocity: int, period: float) -> None:
         """You played: the answer gives way (yield_to_you); the note joins your phrase (or
@@ -217,6 +218,8 @@ class ResponseResponder:
         if self.answered or (self.last_t is not None and t - self.last_t >= self._gap(period)):
             self.phrase, self.answered = [], False
             self.phrase_count += 1
+        if self.first_t is None:
+            self.first_t = t
         if self.last_t is not None and 0 < t - self.last_t < PHRASE_IOI_MAX_S:
             self._iois = (self._iois + [t - self.last_t])[-PHRASE_IOI_NOTES:]
         self.phrase.append((t, note, velocity))
@@ -254,7 +257,8 @@ class ResponseResponder:
         as a guitarist's does, but stays within REGISTER_SPAN of the centre, and a note that
         would jump more than MAX_LEAP from the one before (an octave slip in what was heard,
         or a phrase stitched from two registers) moves an octave toward it."""
-        centre = self.register if self.cfg.octave is None else 12 * (self.cfg.octave + 1) + 4
+        centre = (self.register + self.cfg.above_you if self.register is not None else None) \
+            if self.cfg.octave is None else 12 * (self.cfg.octave + 1) + 4
         if centre is None or not pitches:
             return pitches
         mid = sorted(pitches)[len(pitches) // 2]
@@ -322,6 +326,9 @@ class ResponseResponder:
                 or len(self.phrase) < self.cfg.min_notes):
             return
         self.answered = True                                # your phrase is over
+        if self.first_t is None or now - self.first_t < self.cfg.warmup_s:
+            self._remember(clean_phrase(self.phrase) or list(self.phrase))
+            return                                          # still listening to you
         current = clean_phrase(self.phrase) or list(self.phrase)
         if self.partner is not None and self.partner.claim(current):
             self._remember(current)
