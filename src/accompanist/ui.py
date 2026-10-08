@@ -32,23 +32,24 @@ from typing import Any, Optional
 PAGE = Path(__file__).parent / "web" / "stage.html"
 PORT_TRIES = 10            # the port taken: try the next ones
 MAX_BODY = 4096            # requests are tiny
-KEY_FILE = Path("~/.accompanist/ui-key").expanduser()
+def key_file() -> Path:
+    return Path("~/.accompanist/ui-key").expanduser()
 WATCHING_S = 2.5           # a page left open reconnects within this long (it asks 5 times a second)
 
 
 def stage_key() -> str:
     """The page's key, the same each run (so open pages reconnect); made once."""
     try:
-        key = KEY_FILE.read_text().strip()
+        key = key_file().read_text().strip()
         if key:
             return key
     except OSError:
         pass
     key = secrets.token_urlsafe(9)
     try:
-        KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        KEY_FILE.write_text(key)
-        KEY_FILE.chmod(0o600)
+        key_file().parent.mkdir(parents=True, exist_ok=True)
+        key_file().write_text(key)
+        key_file().chmod(0o600)
     except OSError:
         pass
     return key

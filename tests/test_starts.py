@@ -99,6 +99,7 @@ def test_the_reckoner_says_how_each_song_starts_and_finishes():
 
 def a_set(tmp_path, monkeypatch, extra=""):
     monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.toml").write_text("")           # its own folder, never the real one
     (tmp_path / "sets").mkdir()
     f = tmp_path / "sets" / "gig.toml"
     f.write_text('# my gig\ntitle = "Gig"\nsongs = ["example-waltz", "example-seven"]\n' + extra)

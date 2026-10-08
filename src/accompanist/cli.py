@@ -1755,7 +1755,9 @@ def cmd_params(args) -> int:
     return 0
 
 
-HOME_NOTE = Path("~/.accompanist/home").expanduser()   # where your config.toml lives
+def home_note() -> Path:
+    """Where the path of your accompanist folder is kept (looked up each time: HOME may move)."""
+    return Path("~/.accompanist/home").expanduser()
 PATH_ARGS = ("take", "paths", "record_audio", "record", "wav", "file")
 
 
@@ -1767,16 +1769,17 @@ def find_home(args) -> None:
     here = Path.cwd()
     if Path("config.toml").exists():
         try:
-            if not HOME_NOTE.exists() or HOME_NOTE.read_text().strip() != str(here):
-                HOME_NOTE.parent.mkdir(parents=True, exist_ok=True)
-                HOME_NOTE.write_text(str(here))
+            note = home_note()
+            if not note.exists() or note.read_text().strip() != str(here):
+                note.parent.mkdir(parents=True, exist_ok=True)
+                note.write_text(str(here))
         except OSError:
             pass
         return
     if getattr(args, "config", "config.toml") not in ("config.toml", None):
         return                                   # -c given: as typed
     try:
-        home = Path(HOME_NOTE.read_text().strip())
+        home = Path(home_note().read_text().strip())
     except OSError:
         return
     if not (home / "config.toml").is_file() or home == here:
