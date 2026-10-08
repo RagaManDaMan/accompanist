@@ -87,6 +87,11 @@ def note_label(note: int) -> str:
     return cfgmod.note_name(note)
 
 
+def kontakt_label(note: int) -> str:
+    """The note as Kontakt, Logic and MainStage name it (middle C, 60, is C3 there)."""
+    return cfgmod.NOTE_NAMES[note % 12] + str(note // 12 - 2)
+
+
 def cmd_monitor(args) -> int:
     """Show what the configured inputs hear: MIDI messages, and notes heard in audio."""
     import numpy as np
@@ -469,7 +474,8 @@ def make_kit(args, out, channel: int) -> int:
             out.note_on(channel - 1, n, 100)
             time.sleep(KITMAP_STEP_S)
             out.note_off(channel - 1, n)
-            answer = input(f"  {n:3d} {note_label(n):<4} stroke? ").strip().lower()
+            answer = input(f"  {n:3d} {note_label(n):<4} (Kontakt {kontakt_label(n):<4}) "
+                           f"stroke? ").strip().lower()
             if answer == "r":
                 continue
             if answer == "q":
