@@ -72,6 +72,7 @@ def test_kit_auto_takes_your_mridangam_for_a_carnatic_tala(tmp_path, monkeypatch
 
 def test_kitmap_make_names_each_key_into_a_kit(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.toml").write_text("")           # its own folder, never the real one
     answers = iter(["tha", "", "r", "thom", "dhi nam", "q"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     monkeypatch.setattr(cli, "open_output", lambda cfg: RecordingPort())
@@ -80,3 +81,22 @@ def test_kitmap_make_names_each_key_into_a_kit(tmp_path, monkeypatch):
                      "--high", "50"]) == 0
     kit = tala.load_kit("mridangam")
     assert kit.strokes == {"tha": (40,), "thom": (42,), "dhi": (43,), "nam": (43,)}
+
+
+def test_spellings_meet_and_several_keys_are_alternatives():
+    import random
+
+    kit = tala.Kit("m", {"tom": (60, 69), "dhim": (55,), "tam": (53,), "tin": (57,)})
+    assert kit.choices("Thom") == [(60, 69)] and kit.choices("Dheem") == [(55,)]
+    assert kit.choices("Tham") == [(53,)]
+    rng = random.Random(1)
+    picks = {kit.pick("Thom", rng) for _ in range(30)}
+    assert picks == {(60,), (69,)}                          # one at a time, varied
+    assert kit.notes("Dhi", kin_first=True) == (57,)         # a mridangam Dhi: one stroke
+    assert len(kit.notes("Dhi")) == 2                        # a tabla Dhi: two
+
+
+def test_a_kit_file_keeps_each_key_once(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tala.save_kit("k", {"taka": [48, 48, 54]})
+    assert tala.load_kit("k").strokes["taka"] == (48, 54)

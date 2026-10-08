@@ -37,32 +37,74 @@ KIN = {"ti": "te", "ta": "na", "ra": "te", "re": "te", "tu": "tin", "tun": "tin"
        "ke": "ka", "ki": "te", "ghe": "ge", "gi": "ge", "ga": "ge", "kda": "ka",
        "tin": "na", "te": "na", "ka": "ge",
        "tha": "na", "nam": "na", "dhi": "tin", "thom": "ge", "chapu": "na", "cha": "chapu",
-       "gumki": "thom", "dheem": "dhin", "tham": "dha", "na": "tha", "ge": "thom"}
+       "gumki": "thom", "dheem": "dhin", "tham": "dha", "na": "tha", "ge": "thom",
+    "tom": "thom", "tim": "tin", "dim": "dhin", "tam": "tham", "nom": "nam"}
 BEAT_FIRST, INSIDE = 1.0, 0.8     # the stroke on the beat, and the ones between
 KHALI_SOFT = 0.85                 # khālī beats a little lighter
 
 
+_FOLD = (("th", "t"), ("dh", "d"), ("kh", "k"), ("gh", "g"), ("bh", "b"), ("ee", "i"),
+         ("ii", "i"), ("oo", "u"), ("aa", "a"))
+
+
+def fold(stroke: str) -> str:
+    """A stroke's plain sound, so spellings meet: Thom = Tom, Dheem = Dhim, Tham = Tam."""
+    s = "".join(c for c in stroke.lower() if c.isalpha())
+    for a, b in _FOLD:
+        s = s.replace(a, b)
+    out: list[str] = []
+    for c in s:
+        if not out or out[-1] != c:
+            out.append(c)
+    return "".join(out)
+
+
 @dataclass(frozen=True)
 class Kit:
+    """strokes: each stroke's keys. Several keys for one stroke are alternatives (the same
+    stroke sampled more than once): one of them plays each time, as a player varies."""
     name: str
     strokes: dict[str, tuple[int, ...]]
 
-    def notes(self, stroke: str, _seen: Optional[set] = None) -> tuple[int, ...]:
-        """The keys for a stroke (empty if nothing fits)."""
-        s = stroke.lower()
+    def _own(self, s: str) -> tuple[int, ...]:
         if s in self.strokes:
             return self.strokes[s]
+        f = fold(s)
+        return next((v for k, v in self.strokes.items() if fold(k) == f), ())
+
+    def choices(self, stroke: str, _seen: Optional[set] = None,
+                kin_first: bool = False) -> list[tuple[int, ...]]:
+        """What to play for a stroke: one tuple of alternative keys per part (Dha: Na's, then
+        Ge's). Empty if nothing fits. kin_first (a mridangam): a stroke's nearest kin before
+        its tabla parts (a mridangam Dhi is one stroke, a tabla Dhi two)."""
+        s = stroke.lower()
+        own = self._own(s)
+        if own:
+            return [own]
         seen = _seen or set()
         if s in seen:
-            return ()
+            return []
         seen.add(s)
+        kin = KIN.get(s) or KIN.get(fold(s))
+        if kin_first and kin:
+            found = self.choices(kin, set(seen), kin_first)
+            if found:
+                return found
         if s in PARTS:
-            parts = [self.notes(p, set(seen)) for p in PARTS[s]]
+            parts = [self.choices(p, set(seen), kin_first) for p in PARTS[s]]
             if all(parts):
-                return tuple(n for p in parts for n in p)
-        if s in KIN:
-            return self.notes(KIN[s], seen)
-        return ()
+                return [alt for p in parts for alt in p]
+        if kin:
+            return self.choices(kin, seen, kin_first)
+        return []
+
+    def notes(self, stroke: str, kin_first: bool = False) -> tuple[int, ...]:
+        """One key per part (the first alternative): for checks and tests."""
+        return tuple(alts[0] for alts in self.choices(stroke, kin_first=kin_first))
+
+    def pick(self, stroke: str, rng, kin_first: bool = False) -> tuple[int, ...]:
+        """The keys to play this time: one alternative per part, varied."""
+        return tuple(rng.choice(alts) for alts in self.choices(stroke, kin_first=kin_first))
 
 
 def load_kit(name: str) -> Kit:
@@ -74,7 +116,7 @@ def load_kit(name: str) -> Kit:
             data = _read_toml(p)
             strokes = {}
             for k, v in (data.get("strokes") or {}).items():
-                notes = tuple(v) if isinstance(v, list) else (v,)
+                notes = tuple(dict.fromkeys(v)) if isinstance(v, list) else (v,)
                 if not all(isinstance(n, int) and 0 <= n <= 127 for n in notes):
                     raise ConfigError(f"kit '{name}' ({p}): {k} = {v!r}: a MIDI note 0-127 "
                                       f"(or a list of them)")
@@ -109,6 +151,7 @@ def save_kit(name: str, strokes: dict[str, list[int]], description: str = "") ->
              "# Each stroke and the key(s) your instrument plays it on.",
              f'description = "{description or name}"', "", "[strokes]"]
     for stroke, notes in strokes.items():
+        notes = list(dict.fromkeys(notes))             # each key once
         lines.append(f"{stroke} = {notes[0] if len(notes) == 1 else notes}")
     p.write_text("\n".join(lines) + "\n")
     load_kit(name)                                   # it must read back
@@ -177,8 +220,9 @@ class TalaPlayer:
         self.rng = random.Random(seed + 37)
         self._queue: list = []
         self._seq = itertools.count()
+        self.carnatic = self.tradition(cfg, tala) == "carnatic"
         self.missing = sorted({s for b in self.cycle.beats for s in b
-                               if s != "." and not self.kit.notes(s)})
+                               if s != "." and not self.kit.notes(s, self.carnatic)})
 
     @staticmethod
     def tradition(cfg: Any, tala: Optional[str]) -> str:
@@ -204,7 +248,7 @@ class TalaPlayer:
                 t += self.rng.uniform(-c.timing_ms, c.timing_ms) / 1000
             vel = humanize_velocity(min(max(round(level * (BEAT_FIRST if i == 0 else INSIDE)), 1),
                                         127), c.velocity_spread, self.rng)
-            for note in self.kit.notes(s):
+            for note in self.kit.pick(s, self.rng, self.carnatic):
                 heapq.heappush(self._queue, (t, next(self._seq), note, vel))
 
     def tick(self, now: float) -> None:
