@@ -111,6 +111,8 @@ class InputCfg:
     audio: Optional[str] = None     # ...substring of an audio input device's name
     audio_channel: int = 1          # audio: which input of the interface (1-based)
     muse: Optional[str] = None      # ...or a Muse headband's Bluetooth address (body signals)
+    preset: Optional[str] = None    # audio: this input's own hearing (e.g. voice, steel)
+    lead: bool = True               # its phrases are what the guitar learns and answers
 
     @property
     def is_audio(self) -> bool:
@@ -578,7 +580,8 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
     for i, item in enumerate(d.get("inputs") or []):
         if not isinstance(item, dict):
             raise ConfigError(f"inputs[{i}] must be a table ([[inputs]])")
-        allowed_in = {"port", "role", "name", "channel", "audio", "audio_channel", "muse"}
+        allowed_in = {"port", "role", "name", "channel", "audio", "audio_channel", "muse", "preset",
+                      "lead"}
         if set(item) - allowed_in:
             raise ConfigError(f"inputs[{i}] unknown key(s) {sorted(set(item) - allowed_in)}; "
                               f"allowed: {sorted(allowed_in)}")
@@ -589,6 +592,16 @@ def from_dict(d: Optional[dict], preset: Optional[str] = None) -> Config:
         if "muse" in item:
             item = {**item, "role": item.get("role", "body")}
         inp = InputCfg(**item)
+        if not isinstance(inp.lead, bool):
+            raise ConfigError(f"inputs[{i}]: lead = true or false (the guitar learns and answers "
+                              f"this input's phrases)")
+        if inp.preset is not None:
+            if inp.audio is None:
+                raise ConfigError(f"inputs[{i}]: preset = \"{inp.preset}\" is for an audio input "
+                                  f"(how it is heard)")
+            if "audio" not in load_preset(inp.preset):
+                raise ConfigError(f"inputs[{i}]: preset '{inp.preset}' has no [audio] settings "
+                                  f"(use one made for hearing an input: voice, steel)")
         if not isinstance(inp.audio_channel, int) or isinstance(inp.audio_channel, bool) or inp.audio_channel < 1:
             raise ConfigError(f"inputs[{i}]: audio_channel must be 1 or more (the input number)")
         if inp.role in PLANNED_ROLES:
@@ -669,3 +682,20 @@ def load(path: str | Path, preset: Optional[str] = None, overrides: Optional[dic
     """config.toml, layered over a preset, under a song; `overrides` (e.g. command-line flags)
     win."""
     return build(path, preset, overrides, song)
+
+
+def audio_for(cfg: "Config", icfg: InputCfg):
+    """The audio settings one input is heard with: the run's [audio], and over it the
+    input's own preset (inputs.preset: a voice and a lap steel in the same run, each
+    heard its own way)."""
+    import dataclasses
+
+    if not icfg.preset:
+        return cfg.audio
+    values = {}
+    for k, v in load_preset(icfg.preset).get("audio", {}).items():
+        try:
+            values[k] = registry.coerce(registry.get(f"audio.{k}"), v)
+        except (KeyError, ValueError) as e:
+            raise ConfigError(f"preset '{icfg.preset}' [audio] {k}: {e}") from None
+    return dataclasses.replace(cfg.audio, **values)

@@ -211,10 +211,12 @@ class ResponseResponder:
         self._iois: list[float] = []                                # ...and their spacing
         self.first_t: Optional[float] = None                        # when you began
 
-    def hear(self, t: float, note: int, velocity: int, period: float) -> None:
+    def hear(self, t: float, note: int, velocity: int, period: float, lead: bool = True) -> None:
         """You played: the answer gives way (yield_to_you); the note joins your phrase (or
-        starts one)."""
+        starts one). lead=False: give way only (another instrument under your lead)."""
         self._give_way(self.cfg.yield_to_you)
+        if not lead:
+            return
         if self.answered or (self.last_t is not None and t - self.last_t >= self._gap(period)):
             self.phrase, self.answered = [], False
             self.phrase_count += 1

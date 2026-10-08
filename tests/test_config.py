@@ -86,3 +86,32 @@ def test_tab_completion_offers_what_each_option_takes(capsys):
     assert "voice" in values("run", "--", "--preset")
     assert values("rehearse", "--", "--once") == ["__files__"]
     assert {"add", "stats", "ragas"} <= set(values("library", "--", "library"))
+
+
+def test_each_audio_input_can_be_heard_its_own_way():
+    cfg = c.from_dict({"inputs": [{"name": "voice", "audio": "Scarlett", "audio_channel": 1},
+                                  {"name": "steel", "audio": "Scarlett", "audio_channel": 2,
+                                   "preset": "steel", "lead": False}]}, "voice")
+    voice, steel = cfg.inputs
+    assert c.audio_for(cfg, voice).min_note_ms == 130 and c.audio_for(cfg, voice).release_ms == 110
+    assert c.audio_for(cfg, steel).release_ms == 160 and steel.lead is False
+    with pytest.raises(c.ConfigError, match="no \\[audio\\]"):
+        c.from_dict({"inputs": [{"audio": "x", "preset": "ambient"}]})
+    with pytest.raises(c.ConfigError, match="lead"):
+        c.from_dict({"inputs": [{"audio": "x", "lead": "yes"}]})
+
+
+def test_a_second_instrument_under_your_lead_is_not_answered():
+    from accompanist import simulate
+
+    cfg = c.from_dict({"response": {"enabled": True, "warmup_s": 0, "chance": 1.0},
+                       "harmony": {"root": "C"}})
+    from accompanist.controller import Controller
+    from accompanist.output import RecordingPort, SafeOutput
+    ctl = Controller(cfg, SafeOutput(RecordingPort()))
+    for i in range(6):
+        ctl.on_note(1.0 + i * 0.3, 72 + i, 80, lead=False)        # the steel, under you
+    assert ctl.engine.response.phrase == []
+    for i in range(6):
+        ctl.on_note(5.0 + i * 0.3, 60 + i, 80)                    # your voice
+    assert [n for _, n, _ in ctl.engine.response.phrase] == [60, 61, 62, 63, 64, 65]

@@ -137,8 +137,11 @@ class Engine:
         self._auto_armed = True
 
     # ---- listening -------------------------------------------------------
-    def on_note(self, t: float, note: int, velocity: int) -> None:
-        """A note-on from a note_source input. Listening continues even while muted."""
+    def on_note(self, t: float, note: int, velocity: int, lead: bool = True) -> None:
+        """A note-on from a note_source input. Listening continues even while muted.
+        lead=False (inputs.lead: say a lap steel under your voice): it sets the tempo, the
+        harmony and the dynamics, and the guitar gives way to it, but its notes don't join the
+        phrases the guitar learns and answers."""
         self.tempo.on_onset(t)
         self.harmony.observe(Onset(t, note, velocity))
         self.dynamics.observe(t, velocity)
@@ -147,7 +150,7 @@ class Engine:
             self._solo_since = t                      # soloing again after a rest
         self.last_onset_t, self.last_note = t, note
         self.clock.hint(t, self.cfg.pulse.hint_window)
-        self.response.hear(t, note, velocity, self.tempo.period)   # stops any answer at once
+        self.response.hear(t, note, velocity, self.tempo.period, lead)   # stops any answer
         self.piano.hear(t)
         if self.clock.running and not self.is_chart:           # where it fell against the beat
             x = (t - self.clock.next_beat) / self.clock.period

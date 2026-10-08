@@ -122,7 +122,7 @@ def cmd_monitor(args) -> int:
         if icfg.is_audio:
             a = AudioInput(icfg, audio_q)
             audios.append(a)
-            trackers[id(icfg)] = NoteTracker(cfg.audio, a.sample_rate)
+            trackers[id(icfg)] = NoteTracker(cfgmod.audio_for(cfg, icfg), a.sample_rate)
             print(f"Listening to audio '{a.name}' input {icfg.audio_channel} at {a.sample_rate:g} Hz "
                   f"as '{icfg.name or icfg.audio}' (gate {cfg.audio.gate_db:g} dB)")
             if args.record_audio and writer is None:
@@ -351,7 +351,7 @@ def cmd_practice(args) -> int:
     for icfg in inputs:
         a = AudioInput(icfg, q)
         audios.append(a)
-        trackers[id(icfg)] = NoteTracker(cfg.audio, a.sample_rate)
+        trackers[id(icfg)] = NoteTracker(cfgmod.audio_for(cfg, icfg), a.sample_rate)
         events[id(icfg)] = []
     tags = list(args.tag) + ["practice"]
     session = f"practice {time.strftime('%Y-%m-%d %H:%M')}"
@@ -1246,8 +1246,10 @@ def cmd_run(args) -> int:
     if record:
         rec = Recorder(auto_path(name=args.song) if record == "auto" else record, run_args(args))
 
+    lead_of = {i.name or i.audio: i.lead for i in cfg.inputs if i.is_audio}
+
     def heard(t, note, velocity, source):
-        ctl.on_note(t, note, velocity)
+        ctl.on_note(t, note, velocity, lead_of.get(source, True))
         if rec:
             rec.note_on(t, note, velocity, source)
 
@@ -1262,9 +1264,12 @@ def cmd_run(args) -> int:
                       f"({str(e).splitlines()[0]}): carrying on without it")
                 continue
             audios.append(a)
-            feeds[id(icfg)] = AudioFeed(cfg.audio, a.sample_rate, heard, icfg.name or icfg.audio)
+            feeds[id(icfg)] = AudioFeed(cfgmod.audio_for(cfg, icfg), a.sample_rate, heard,
+                                        icfg.name or icfg.audio)
             print(f"Listening to audio '{a.name}' input {icfg.audio_channel} as '{icfg.name or icfg.audio}' "
-                  f"(gate {cfg.audio.gate_db:g} dB)")
+                  f"(gate {cfg.audio.gate_db:g} dB"
+                  + (f", heard as {icfg.preset}" if icfg.preset else "")
+                  + ("" if icfg.lead else ", under your lead: not answered") + ")")
             if args.record_audio and wav is None:
                 wav = WavWriter(args.record_audio, a.sample_rate)
     for icfg in cfg.inputs:
@@ -1342,7 +1347,7 @@ def cmd_run(args) -> int:
                     try:
                         if msg.type == "note_on" and msg.velocity > 0:
                             if icfg.role == "note_source":
-                                ctl.on_note(t, msg.note, msg.velocity)
+                                ctl.on_note(t, msg.note, msg.velocity, icfg.lead)
                                 if rec:
                                     rec.note_on(t, msg.note, msg.velocity, icfg.name or icfg.port)
                             else:                          # a control input: its notes are commands

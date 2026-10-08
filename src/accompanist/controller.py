@@ -45,9 +45,9 @@ class Controller:
         if self.t0 is None:
             self.t0 = t
 
-    def on_note(self, t: float, note: int, velocity: int) -> None:
+    def on_note(self, t: float, note: int, velocity: int, lead: bool = True) -> None:
         self._started(t)
-        self.engine.on_note(t, note, velocity)
+        self.engine.on_note(t, note, velocity, lead)
 
     def on_midi(self, t: float, kind: str, number: int, value: int) -> tuple[Optional[str], Optional[str]]:
         """A controller message: kind 'cc', 'pc' (program change) or 'note' (a note from a
